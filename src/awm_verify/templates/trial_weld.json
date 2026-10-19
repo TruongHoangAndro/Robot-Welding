@@ -1,0 +1,16 @@
+{
+  "record_type": "trial_weld",
+  "program_rev": "P###",
+  "operator": "",
+  "date": "YYYY-MM-DD",
+  "result": "PASS | FAIL",
+  "speed_override_pct": 100,
+  "seams": [
+    {
+      "seam_id": "S01",
+      "result": "PASS | FAIL",
+      "note": ""
+    }
+  ],
+  "notes": "Coupon / first part; visual + leg size check per WPS."
+}

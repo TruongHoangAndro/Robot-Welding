@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>awm_verify</name>
+  <version>0.1.0</version>
+  <description>APLSMN601 M7 verification and release (A71 simulate on mock hardware + report, A72 / A73 record CLI, A74 release lock) and the offline chain runner (run_chain).</description>
+  <maintainer email="truongxhoang@apillis.com">Truong Hoang</maintainer>
+  <license>Proprietary</license>
+
+  <exec_depend>awm_core</exec_depend>
+  <exec_depend>awm_cad</exec_depend>
+  <exec_depend>awm_seam</exec_depend>
+  <exec_depend>awm_process</exec_depend>
+  <exec_depend>awm_path</exec_depend>
+  <exec_depend>awm_program</exec_depend>
+  <exec_depend>awm_bringup</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>control_msgs</exec_depend>
+  <exec_depend>trajectory_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>ur_description</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

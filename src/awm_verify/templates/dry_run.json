@@ -1,0 +1,16 @@
+{
+  "record_type": "dry_run",
+  "program_rev": "P###",
+  "operator": "",
+  "date": "YYYY-MM-DD",
+  "result": "PASS | FAIL",
+  "speed_override_pct": 25,
+  "seams": [
+    {
+      "seam_id": "S01",
+      "result": "PASS | FAIL",
+      "note": ""
+    }
+  ],
+  "notes": "Reduced speed, arc / laser OFF (REQ-002)."
+}

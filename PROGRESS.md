@@ -20,8 +20,8 @@ Read this first after a restart. Continue from the first open task. Plan: `PLAN.
 | T11 awm_path MoveIt | done | plate 2/2, pipe 2 arcs 2/2, unreachable + TCP-mismatch negative tests (sim) |
 | T12 awm_program pure | done | constant-speed + trapezoid timing (6 tests) |
 | T13 awm_program MoveIt | done | stored joint path reuse + FK check, events, stale-calibration test (4 sim tests) |
-| T14 awm_verify | open | |
-| T15 end-to-end | open | |
+| T14 awm_verify | done | static checks, replay on mock hw, records, release + lock (9 tests) |
+| T15 end-to-end | done | run_chain: plate (2 seams) + pipe (3 arcs) PASS + released (simulation); 360 deg seam rejected at A4 (3 e2e tests) |
 | T16 docs | open | |
 
 ## Last error
