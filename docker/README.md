@@ -40,5 +40,6 @@ pythonocc-core lives in the host conda env `awm_occ`, mounted at the same path. 
 | IPC namespace | private |
 | privileged | no |
 | user | host uid:gid, HOME=/tmp/awm_home |
+| init | `--init` (reaps processes of stopped launches; added after the first container was created — recreate to get it) |
 
 Never stop, modify or exec into `ros2_jazzy_dev_env` for writing.

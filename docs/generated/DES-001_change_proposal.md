@@ -70,3 +70,34 @@ jobs/<PartNo>_<PartRev>/
 | 2 | Header | Status "Draft", Reviewed by "[TBD]" but "Approved by" filled | Leave Approved by empty until review |
 | 3 | §3–§8 | Figures `APLSMN601-DES-001_figures/*.png` not delivered with the .md | Add the folder next to the document |
 | 4 | DES-003 xlsx | Level-1 status shows `#REF!`; stray rows "Paramter collision / Collison list" and "Web UI - Later"; D16 missing in Data Items; D09/D10 format "URScript / ROS2 trajectory" vs JSON in DES-001 | Fix in DES-003 Rev 0.2 |
+
+## CP-5 Partial seams (A22 start / end) in D04
+
+DES-003 lists "start / end" as a seam attribute (A22). Implemented as optional `range_m`
+[s_start, s_end] (arc length along the edge chain, weld direction) in `seams.json`, set from start /
+end picks. Reason found in testing: a full 360° pipe-to-flange seam is not reachable from a fixed
+UR5e base with the 45° torch (the robot-side arc puts the wrist over the base axis); it is welded
+as three arcs with their own approach. Proposal: add `range_m` to the D04 description in §5.1 and
+note in §2.2 that seam splitting (or a positioner, Phase 2) is the answer to orbital seams.
+
+## CP-6 D07 contains the checked joint path
+
+DES-003 A44 outputs a "joint path"; DES-001 §5.1 describes D07 only as poses. Implemented:
+`path.json` keeps the tool poses in the part frame (design rule 3) **and** the joint path that M4
+checked, tied to the calibration hash. M6 reuses that joint path after an FK check against the
+transformed poses (A61) instead of re-solving IK (IK solvers are stochastic; re-solving could pick
+another branch than the verified one). A calibration change makes path.json stale (hash) → M4
+re-runs. Proposal: add to §4.3 / §5.1.
+
+## CP-7 Kinematics: two groups on the same chain
+
+`weld_arm` (Cartesian paths, OMPL) uses KDL: deterministic tracking of the 2 mm Cartesian steps.
+`weld_arm_search` uses pick_ik (global) only to find IK branches of approach poses. pick_ik for
+the Cartesian paths gave 2/3–4/5 success on the pipe arcs; KDL 10/10. Proposal: §4.3 says "MoveIt2
++ pick_ik"; change to "MoveIt2 (pick_ik for IK search, KDL for Cartesian paths)".
+
+## CP-8 Verification resolution
+
+move_group validates time-parameterised waypoints only; a full test run found a torch↔part contact
+between waypoints of an OMPL air move. M6 and A71 now check every segment densely (≤ 0.02 rad per
+step). Proposal: §6 / §12 Correctness: "dense collision check of the complete program".

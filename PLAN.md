@@ -145,7 +145,21 @@ WeldEvent.action, PlcStatus.msg, Alarm.msg) as v0 so later runtime packages can 
 
 ## 7. Reuse map (demo → new) — see `docs/generated/demo_discovery.md` for code locations
 
-Filled after discovery; see §7 below in this file (updated) and PROGRESS.md.
+The demo is ROS 2 Jazzy C++/Python with hard-coded seams. Its logic was used as reference; no file
+was copied verbatim (the demo code depends on assembly-mode data, absolute paths and a dual-robot
+model). Findings fixed by the new design:
+
+| Demo file (hold_and_weld_*) | New file | Findings fixed |
+|---|---|---|
+| planning/occt loader + seam_extractor_occt.py | awm_geometry/occ_io.py, topology.py, sampling.py | F03 (no hard-coded seams), F04 (pythonocc in conda env), units mm→m explicit, OCC 8 API (`topods.Edge`, `brepbndlib.Add`, no `HashCode`), arc-length sampling, edge orientation respected |
+| planning/weld_planner.py (torch frame) | awm_path/poses.py | right-handed tool frame (demo z-flip bug), work / travel angle from WPS, approach / retract along the torch axis |
+| application/welder_action_server.cpp (planning part) | awm_path/motion.py, planner.py | F01 (100 % Cartesian, was 35 %), F07 (collision check on every segment, no blind fallbacks, no broad ACM), F12 groundwork |
+| application/welder_action_server.cpp (execution part) | awm_program/generator.py (offline), awm_verify/replay.py (sim) | ADR-05 offline/online split, F12 constant TCP speed, F14 calibration hash in program |
+| application/dual_robot_coordinator.cpp | — (M8 out of scope) | F02: seam ids only from seams.json / program |
+| description/robot2_welder.xacro, welding_torch_prefix.xacro, ur5e_arm_*.xacro | awm_description/urdf/*.xacro | F10 (UR5e only), F13 (mock_components instead of gz), torch TCP from config (π instead of 3.14) |
+| bringup/config/moveit/*.yaml, launch/*.py | awm_description/config, awm_bringup/launch/sim.launch.py | F05 (ur_description, pick_ik declared), F06 (no absolute paths), F08 (one D16 params file) |
+| calibration_tools (47 scripts) | — | not reused (DES-001 §10) |
+| gripper server / gripper_sampler | — | parked (F10) |
 
 ## 8. Decisions and risks
 
@@ -157,6 +171,11 @@ Filled after discovery; see §7 below in this file (updated) and PROGRESS.md.
 | D4 | `active.json` is a copy, not a link | Shared drive backup |
 | D5 | Release scopes simulation / production | A72/A73 are not executable here; never fake records |
 | D6 | Planning scene part mesh from `cache/mesh.stl` (own STL reader) | No extra deps |
+| D8 | Partial seams (`range_m`, A22 start / end) | 360° orbit not reachable from a fixed base (see PROGRESS.md) |
+| D9 | `joint_path` stored in path.json (D07, A44 "joint path") and reused by M6 | IK solvers are stochastic; M6 verifies by FK instead of re-solving |
+| D10 | KDL for Cartesian (`weld_arm`), pick_ik global for IK search (`weld_arm_search`) | Deterministic Cartesian tracking; global branch search |
+| D11 | Weld segments checked against joint limits, other moves against limits × velocity_scaling | Weld speed is a process value; no limit raised |
+| D12 | Dense (0.02 rad) collision check of all segments in M6 (air moves) and A71 | move_group checks only time-parameterised waypoints |
 | D7 | Fixture and Pismo frame dimensions are NOMINAL placeholders `TODO(OI-6)` style values in YAML | Real drawings not available |
 | R1 | pick_ik success rate / solve time | Multiple seeds; fallback to KDL configurable in kinematics.yaml (logged, not silent) |
 | R2 | compute_cartesian_path fraction < 1 near singularities | Reject seam with reason; tune part placement in test data only |
