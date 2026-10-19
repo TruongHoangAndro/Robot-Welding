@@ -17,6 +17,7 @@ from awm_path.params import ChainParams
 
 FULL = 1.0 - 1e-9
 WRIST_2 = 4
+COLLISION_STEP_RAD = 0.02  # joint-space resolution of the dense collision check (M6 and A71)
 
 
 @dataclass
@@ -29,6 +30,27 @@ class SeamMotion:
     weld: Optional[TrajectoryPoints] = None
     retract: Optional[TrajectoryPoints] = None
     attempts: List[str] = field(default_factory=list)
+
+
+def densify(q: np.ndarray, step_rad: float = COLLISION_STEP_RAD) -> np.ndarray:
+    """Insert linearly interpolated states so no joint moves more than ``step_rad`` per step."""
+    q = np.asarray(q, float)
+    out = [q[0]]
+    for a, b in zip(q, q[1:]):
+        n = max(1, int(np.ceil(np.max(np.abs(b - a)) / step_rad)))
+        for k in range(1, n + 1):
+            out.append(a + (b - a) * k / n)
+    return np.array(out)
+
+
+def first_collision(client: MoveItClient, q: np.ndarray,
+                    step_rad: float = COLLISION_STEP_RAD) -> Optional[str]:
+    """Contacts of the first invalid state along a densified joint path, None if all valid."""
+    for qi in densify(q, step_rad):
+        valid, contacts = client.state_valid(qi)
+        if not valid:
+            return ', '.join(contacts) or 'invalid state'
+    return None
 
 
 def wrist_margin(q: np.ndarray) -> float:

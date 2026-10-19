@@ -17,6 +17,7 @@ import numpy as np
 from awm_core import frames, jsonio
 from awm_core.calibration import load_active
 from awm_core.repository import JobPaths
+from awm_path.motion import first_collision
 from awm_path.moveit_client import MoveItClient, TrajectoryPoints
 from awm_path.params import ChainParams
 from awm_path.planner import check_tcp, load_part_into_scene
@@ -167,17 +168,24 @@ def generate_program(job: JobPaths, params: ChainParams, client: MoveItClient) -
     def air_move(goal: np.ndarray, label: str) -> None:
         if np.max(np.abs(goal - prog.end)) < 1e-6:
             return
-        traj = None
+        traj, why = None, ''
         for attempt in range(params.air_planning_retries):
-            # OMPL is randomised; move_group validates every returned path (ValidateSolution).
+            # OMPL is randomised; move_group validates the waypoints, the dense check below
+            # validates what the controller interpolates between them (same check as A71).
             traj = client.plan_joint(prog.end, goal, params.air_planning_time_s,
                                      params.air_planning_attempts, *scale)
-            if traj is not None:
-                break
-            LOG.warning('air move %s: planning attempt %d failed', label, attempt + 1)
+            if traj is None:
+                why = 'no plan'
+            else:
+                contact = first_collision(client, traj.positions)
+                if contact is None:
+                    break
+                why = f'collision between waypoints ({contact})'
+                traj = None
+            LOG.warning('air move %s: attempt %d rejected: %s', label, attempt + 1, why)
         if traj is None:
             raise ProgramError(f'air move {label}: no collision-free joint path (OMPL, '
-                               f'{params.air_planning_retries} tries)')
+                               f'{params.air_planning_retries} tries, last: {why})')
         traj.positions[-1] = goal  # remove the 1e-4 rad goal tolerance so segments chain exactly
         check_limits(f'air move {label}', traj, params, 'air')
         prog.add('air', None, traj)

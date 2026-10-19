@@ -17,6 +17,7 @@ from awm_core import jsonio
 from awm_core.calibration import load_active
 from awm_core.hashing import sha256_file
 from awm_core.repository import JobPaths
+from awm_path.motion import COLLISION_STEP_RAD, densify, first_collision
 from awm_path.moveit_client import MoveItClient
 from awm_path.params import ChainParams
 from awm_path.planner import load_part_into_scene
@@ -27,7 +28,6 @@ from awm_verify.replay import Replayer
 
 CREATED_BY = f'awm_verify {__version__}'
 LOG = logging.getLogger('awm_verify')
-COLLISION_STEP_RAD = 0.02
 
 
 def _degrees_loader():
@@ -102,27 +102,16 @@ def check_events(doc: Dict) -> Tuple[bool, str]:
         f'{len(doc["events"])} events, each at a segment boundary (segments end at rest)')
 
 
-def _dense(q: np.ndarray) -> np.ndarray:
-    out = [q[0]]
-    for a, b in zip(q, q[1:]):
-        n = int(np.ceil(np.max(np.abs(b - a)) / COLLISION_STEP_RAD))
-        for k in range(1, n + 1):
-            out.append(a + (b - a) * k / n)
-    return np.array(out)
-
-
 def check_collisions(doc: Dict, client: MoveItClient) -> Tuple[bool, str]:
     problems, count = [], 0
     for s in doc['segments']:
-        q = _dense(np.array([p['q_rad'] for p in s['points']]))
-        for qi in q:
-            count += 1
-            valid, contacts = client.state_valid(qi)
-            if not valid:
-                problems.append(f'{s["segment_id"]} ({s["kind"]} {s["seam_id"] or ""}): '
-                                f'{", ".join(contacts) or "invalid state"}')
-                break
-    return not problems, '; '.join(problems) or f'{count} states collision-free'
+        q = np.array([p['q_rad'] for p in s['points']])
+        count += len(densify(q))
+        contact = first_collision(client, q)
+        if contact is not None:
+            problems.append(f'{s["segment_id"]} ({s["kind"]} {s["seam_id"] or ""}): {contact}')
+    return not problems, '; '.join(problems) or (
+        f'{count} states collision-free (joint step <= {COLLISION_STEP_RAD} rad)')
 
 
 def verify_program(job: JobPaths, rev: str, params: ChainParams, client: MoveItClient,
