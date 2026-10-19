@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "part.schema.json",
+  "title": "part",
+  "description": "D03 part record (A14). Geometry in the part frame (STEP origin), metres.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "part_no",
+    "part_rev",
+    "step_file",
+    "step_sha256",
+    "unit_source",
+    "bbox_m",
+    "counts",
+    "checks",
+    "healed",
+    "mesh",
+    "brep_cache",
+    "edges_file"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "part_no": {
+      "type": "string"
+    },
+    "part_rev": {
+      "type": "string"
+    },
+    "step_file": {
+      "type": "string"
+    },
+    "step_sha256": {
+      "$ref": "common.schema.json#/$defs/sha256"
+    },
+    "unit_source": {
+      "type": "string",
+      "enum": [
+        "mm",
+        "m",
+        "inch",
+        "unknown"
+      ]
+    },
+    "bbox_m": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "min",
+        "max"
+      ],
+      "properties": {
+        "min": {
+          "$ref": "common.schema.json#/$defs/vec3"
+        },
+        "max": {
+          "$ref": "common.schema.json#/$defs/vec3"
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "solids",
+        "shells",
+        "faces",
+        "edges"
+      ],
+      "properties": {
+        "solids": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "shells": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "faces": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "edges": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "ok",
+          "detail"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "minItems": 0
+    },
+    "healed": {
+      "type": "boolean"
+    },
+    "mesh": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "sha256",
+        "linear_deflection_m",
+        "angular_deflection_rad",
+        "triangles"
+      ],
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "linear_deflection_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "angular_deflection_rad": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "triangles": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "brep_cache": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "sha256"
+      ],
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        }
+      }
+    },
+    "edges_file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "sha256"
+      ],
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

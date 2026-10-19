@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "calibration.schema.json",
+  "title": "calibration",
+  "description": "D08 calibration data. Transforms a_T_b map b coordinates into a. tcp = tool0_T_tcp.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "calibration_id",
+    "status",
+    "base_T_fixture",
+    "fixture_T_part",
+    "tcp"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "calibration_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "NOMINAL",
+        "MEASURED"
+      ]
+    },
+    "note": {
+      "type": "string"
+    },
+    "base_T_fixture": {
+      "$ref": "common.schema.json#/$defs/pose"
+    },
+    "fixture_T_part": {
+      "$ref": "common.schema.json#/$defs/pose"
+    },
+    "tcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tcp_mig"
+      ],
+      "properties": {
+        "tcp_mig": {
+          "$ref": "common.schema.json#/$defs/pose"
+        },
+        "tcp_laser": {
+          "$ref": "common.schema.json#/$defs/pose"
+        }
+      }
+    },
+    "source_file": {
+      "type": "string"
+    }
+  }
+}

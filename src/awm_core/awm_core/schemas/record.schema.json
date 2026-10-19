@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "record.schema.json",
+  "title": "record",
+  "description": "A72 dry-run / A73 trial-weld record, entered by a person.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "record_type",
+    "program_rev",
+    "program_sha256",
+    "operator",
+    "date",
+    "result",
+    "speed_override_pct",
+    "seams",
+    "notes"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "record_type": {
+      "type": "string",
+      "enum": [
+        "dry_run",
+        "trial_weld"
+      ]
+    },
+    "program_rev": {
+      "$ref": "common.schema.json#/$defs/program_rev"
+    },
+    "program_sha256": {
+      "$ref": "common.schema.json#/$defs/sha256"
+    },
+    "operator": {
+      "type": "string",
+      "minLength": 1
+    },
+    "date": {
+      "type": "string"
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL"
+      ]
+    },
+    "speed_override_pct": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "seams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "seam_id",
+          "result",
+          "note"
+        ],
+        "properties": {
+          "seam_id": {
+            "$ref": "common.schema.json#/$defs/seam_id"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "PASS",
+              "FAIL"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "minItems": 0
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

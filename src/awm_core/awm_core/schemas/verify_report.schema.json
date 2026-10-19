@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "verify_report.schema.json",
+  "title": "verify_report",
+  "description": "D15 simulation / verification report (A71).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "program_rev",
+    "program_sha256",
+    "checks",
+    "replay",
+    "cycle_time_s",
+    "seams",
+    "result"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "program_rev": {
+      "$ref": "common.schema.json#/$defs/program_rev"
+    },
+    "program_sha256": {
+      "$ref": "common.schema.json#/$defs/sha256"
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputs",
+        "continuity",
+        "limits",
+        "events_at_rest",
+        "collision",
+        "replay"
+      ],
+      "properties": {
+        "inputs": {
+          "$ref": "common.schema.json#/$defs/check"
+        },
+        "continuity": {
+          "$ref": "common.schema.json#/$defs/check"
+        },
+        "limits": {
+          "$ref": "common.schema.json#/$defs/check"
+        },
+        "events_at_rest": {
+          "$ref": "common.schema.json#/$defs/check"
+        },
+        "collision": {
+          "$ref": "common.schema.json#/$defs/check"
+        },
+        "replay": {
+          "$ref": "common.schema.json#/$defs/check"
+        }
+      }
+    },
+    "replay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "executed",
+        "segments_ok",
+        "segments_total",
+        "max_tracking_error_rad",
+        "measured_time_s"
+      ],
+      "properties": {
+        "executed": {
+          "type": "boolean"
+        },
+        "segments_ok": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "segments_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_tracking_error_rad": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "measured_time_s": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "cycle_time_s": {
+      "type": "number",
+      "minimum": 0
+    },
+    "seams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "seam_id",
+          "weld_time_s",
+          "length_m"
+        ],
+        "properties": {
+          "seam_id": {
+            "$ref": "common.schema.json#/$defs/seam_id"
+          },
+          "weld_time_s": {
+            "type": "number",
+            "minimum": 0
+          },
+          "length_m": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      },
+      "minItems": 0
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL"
+      ]
+    }
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seams.schema.json",
+  "title": "seams",
+  "description": "D04 seam list (A24). Seam ids assigned by the user; edges reference cache/edges.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "part_no",
+    "part_rev",
+    "seams"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "part_no": {
+      "type": "string"
+    },
+    "part_rev": {
+      "type": "string"
+    },
+    "seams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "seam_id",
+          "edges",
+          "reversed",
+          "joint_type",
+          "weld_side",
+          "leg_mm",
+          "sequence",
+          "process_hint",
+          "material",
+          "thickness_mm",
+          "start_m",
+          "end_m",
+          "length_m",
+          "closed",
+          "fingerprint"
+        ],
+        "properties": {
+          "seam_id": {
+            "$ref": "common.schema.json#/$defs/seam_id"
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/edge_id"
+            },
+            "minItems": 1
+          },
+          "reversed": {
+            "type": "boolean"
+          },
+          "joint_type": {
+            "$ref": "common.schema.json#/$defs/joint_type"
+          },
+          "weld_side": {
+            "type": "string"
+          },
+          "leg_mm": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "process_hint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "MIG",
+              "LASER",
+              null
+            ]
+          },
+          "material": {
+            "type": "string"
+          },
+          "thickness_mm": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "start_m": {
+            "$ref": "common.schema.json#/$defs/vec3"
+          },
+          "end_m": {
+            "$ref": "common.schema.json#/$defs/vec3"
+          },
+          "length_m": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "fingerprint": {
+            "$ref": "common.schema.json#/$defs/sha256"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "minItems": 0
+    }
+  }
+}

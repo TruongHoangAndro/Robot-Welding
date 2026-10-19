@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "release.schema.json",
+  "title": "release",
+  "description": "D10 released program (A74). scope=simulation is not valid for production runs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "program_rev",
+    "program_sha256",
+    "report_sha256",
+    "scope",
+    "records",
+    "approved_by",
+    "approved_at",
+    "locked"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "program_rev": {
+      "$ref": "common.schema.json#/$defs/program_rev"
+    },
+    "program_sha256": {
+      "$ref": "common.schema.json#/$defs/sha256"
+    },
+    "report_sha256": {
+      "$ref": "common.schema.json#/$defs/sha256"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "simulation",
+        "production"
+      ]
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "record_type",
+          "file",
+          "sha256"
+        ],
+        "properties": {
+          "record_type": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          },
+          "sha256": {
+            "$ref": "common.schema.json#/$defs/sha256"
+          }
+        }
+      },
+      "minItems": 0
+    },
+    "approved_by": {
+      "type": "string",
+      "minLength": 1
+    },
+    "approved_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "locked": {
+      "const": true
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}

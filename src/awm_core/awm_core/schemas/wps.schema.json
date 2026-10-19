@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "wps.schema.json",
+  "title": "wps",
+  "description": "D05 welding procedure specification (one file per WPS).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "wps_id",
+    "status",
+    "description",
+    "process",
+    "material",
+    "joint_types",
+    "thickness_mm",
+    "leg_mm",
+    "parameters",
+    "motion",
+    "timing"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "wps_id": {
+      "type": "string",
+      "pattern": "^WPS-[A-Za-z0-9-]+$"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "SAMPLE",
+        "DRAFT",
+        "APPROVED"
+      ]
+    },
+    "description": {
+      "type": "string"
+    },
+    "process": {
+      "$ref": "common.schema.json#/$defs/process"
+    },
+    "material": {
+      "type": "string"
+    },
+    "joint_types": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/joint_type"
+      },
+      "minItems": 1
+    },
+    "thickness_mm": {
+      "$ref": "common.schema.json#/$defs/range"
+    },
+    "leg_mm": {
+      "$ref": "common.schema.json#/$defs/range"
+    },
+    "parameters": {
+      "$ref": "common.schema.json#/$defs/wps_parameters"
+    },
+    "motion": {
+      "$ref": "common.schema.json#/$defs/wps_motion"
+    },
+    "timing": {
+      "$ref": "common.schema.json#/$defs/wps_timing"
+    }
+  }
+}

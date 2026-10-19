@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "path.schema.json",
+  "title": "path",
+  "description": "D07 weld path in the part frame (A41-A45). Every listed seam is 100 % reachable and collision-free; others are in rejected.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "frame",
+    "tool",
+    "group",
+    "calibration",
+    "seams",
+    "rejected"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "frame": {
+      "const": "part"
+    },
+    "tool": {
+      "type": "string"
+    },
+    "group": {
+      "type": "string"
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "calibration_id",
+        "sha256"
+      ],
+      "properties": {
+        "calibration_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        }
+      }
+    },
+    "seams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "seam_id",
+          "process",
+          "sequence",
+          "travel_speed_m_s",
+          "approach_pose",
+          "weld_poses",
+          "retract_pose",
+          "weld_length_m",
+          "reach",
+          "collision"
+        ],
+        "properties": {
+          "seam_id": {
+            "$ref": "common.schema.json#/$defs/seam_id"
+          },
+          "process": {
+            "$ref": "common.schema.json#/$defs/process"
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "travel_speed_m_s": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "approach_pose": {
+            "$ref": "common.schema.json#/$defs/pose"
+          },
+          "weld_poses": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/pose"
+            },
+            "minItems": 2
+          },
+          "retract_pose": {
+            "$ref": "common.schema.json#/$defs/pose"
+          },
+          "weld_length_m": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "reach": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ok",
+              "fraction",
+              "detail",
+              "seed_joints"
+            ],
+            "properties": {
+              "ok": {
+                "type": "boolean"
+              },
+              "fraction": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "detail": {
+                "type": "string"
+              },
+              "seed_joints": {
+                "oneOf": [
+                  {
+                    "$ref": "common.schema.json#/$defs/joints6"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "collision": {
+            "$ref": "common.schema.json#/$defs/check"
+          }
+        }
+      },
+      "minItems": 0
+    },
+    "rejected": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "seam_id",
+          "reason"
+        ],
+        "properties": {
+          "seam_id": {
+            "$ref": "common.schema.json#/$defs/seam_id"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "minItems": 0
+    }
+  }
+}

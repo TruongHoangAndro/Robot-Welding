@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "program.schema.json",
+  "title": "program",
+  "description": "D09 robot program (A61-A64): joint trajectory segments in the robot base frame + weld events at rest points.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "program_rev",
+    "part_no",
+    "part_rev",
+    "frame",
+    "tool",
+    "calibration",
+    "joint_names",
+    "home_joints",
+    "segments",
+    "events",
+    "cycle_time_s",
+    "limits"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "program_rev": {
+      "$ref": "common.schema.json#/$defs/program_rev"
+    },
+    "part_no": {
+      "type": "string"
+    },
+    "part_rev": {
+      "type": "string"
+    },
+    "frame": {
+      "type": "string"
+    },
+    "tool": {
+      "type": "string"
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "calibration_id",
+        "sha256",
+        "status"
+      ],
+      "properties": {
+        "calibration_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "status": {
+          "type": "string"
+        }
+      }
+    },
+    "joint_names": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 6,
+      "maxItems": 6
+    },
+    "home_joints": {
+      "$ref": "common.schema.json#/$defs/joints6"
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "segment_id",
+          "kind",
+          "seam_id",
+          "duration_s",
+          "tcp_speed_m_s",
+          "points"
+        ],
+        "properties": {
+          "segment_id": {
+            "type": "string",
+            "pattern": "^G[0-9]{3}$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "air",
+              "approach",
+              "weld",
+              "retract"
+            ]
+          },
+          "seam_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration_s": {
+            "type": "number",
+            "minimum": 0
+          },
+          "tcp_speed_m_s": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "t_s",
+                "q_rad"
+              ],
+              "properties": {
+                "t_s": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "q_rad": {
+                  "$ref": "common.schema.json#/$defs/joints6"
+                }
+              }
+            },
+            "minItems": 2
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "event_id",
+          "type",
+          "seam_id",
+          "after_segment",
+          "process",
+          "wps_id",
+          "parameters",
+          "timing"
+        ],
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "pattern": "^V[0-9]{3}$"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "WeldStart",
+              "WeldEnd"
+            ]
+          },
+          "seam_id": {
+            "$ref": "common.schema.json#/$defs/seam_id"
+          },
+          "after_segment": {
+            "type": "string",
+            "pattern": "^G[0-9]{3}$"
+          },
+          "process": {
+            "$ref": "common.schema.json#/$defs/process"
+          },
+          "wps_id": {
+            "type": "string"
+          },
+          "parameters": {
+            "$ref": "common.schema.json#/$defs/wps_parameters"
+          },
+          "timing": {
+            "$ref": "common.schema.json#/$defs/wps_timing"
+          }
+        }
+      },
+      "minItems": 0
+    },
+    "cycle_time_s": {
+      "type": "number",
+      "minimum": 0
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "velocity_scaling",
+        "acceleration_scaling"
+      ],
+      "properties": {
+        "velocity_scaling": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "acceleration_scaling": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    }
+  }
+}

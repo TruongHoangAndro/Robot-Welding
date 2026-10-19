@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "process.schema.json",
+  "title": "process",
+  "description": "D06 seam process parameters (A31-A33).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "seams",
+    "unassigned"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "seams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "seam_id",
+          "process",
+          "wps_id",
+          "wps_sha256",
+          "selection_reason",
+          "parameters",
+          "motion",
+          "timing"
+        ],
+        "properties": {
+          "seam_id": {
+            "$ref": "common.schema.json#/$defs/seam_id"
+          },
+          "process": {
+            "$ref": "common.schema.json#/$defs/process"
+          },
+          "wps_id": {
+            "type": "string"
+          },
+          "wps_sha256": {
+            "$ref": "common.schema.json#/$defs/sha256"
+          },
+          "selection_reason": {
+            "type": "string"
+          },
+          "parameters": {
+            "$ref": "common.schema.json#/$defs/wps_parameters"
+          },
+          "motion": {
+            "$ref": "common.schema.json#/$defs/wps_motion"
+          },
+          "timing": {
+            "$ref": "common.schema.json#/$defs/wps_timing"
+          }
+        }
+      },
+      "minItems": 0
+    },
+    "unassigned": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "seam_id",
+          "reason"
+        ],
+        "properties": {
+          "seam_id": {
+            "$ref": "common.schema.json#/$defs/seam_id"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "minItems": 0
+    }
+  }
+}

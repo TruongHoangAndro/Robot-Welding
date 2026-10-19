@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "edges.schema.json",
+  "title": "edges",
+  "description": "Derived B-Rep edge catalogue for seam picking (A21). Part frame, metres.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "edges",
+    "faces"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "curve_type",
+          "length_m",
+          "start_m",
+          "end_m",
+          "mid_m",
+          "closed",
+          "faces",
+          "convexity",
+          "dihedral_deg",
+          "polyline_m",
+          "fingerprint"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "common.schema.json#/$defs/edge_id"
+          },
+          "curve_type": {
+            "type": "string"
+          },
+          "length_m": {
+            "type": "number",
+            "minimum": 0
+          },
+          "start_m": {
+            "$ref": "common.schema.json#/$defs/vec3"
+          },
+          "end_m": {
+            "$ref": "common.schema.json#/$defs/vec3"
+          },
+          "mid_m": {
+            "$ref": "common.schema.json#/$defs/vec3"
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "faces": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/face_id"
+            },
+            "minItems": 0
+          },
+          "convexity": {
+            "type": "string",
+            "enum": [
+              "concave",
+              "convex",
+              "smooth",
+              "free",
+              "nonmanifold"
+            ]
+          },
+          "dihedral_deg": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "polyline_m": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/vec3"
+            },
+            "minItems": 2
+          },
+          "fingerprint": {
+            "$ref": "common.schema.json#/$defs/sha256"
+          }
+        }
+      },
+      "minItems": 0
+    },
+    "faces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "surface_type",
+          "area_m2"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "common.schema.json#/$defs/face_id"
+          },
+          "surface_type": {
+            "type": "string"
+          },
+          "area_m2": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      },
+      "minItems": 0
+    }
+  }
+}

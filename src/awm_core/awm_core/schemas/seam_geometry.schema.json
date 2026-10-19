@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seam_geometry.schema.json",
+  "title": "seam_geometry",
+  "description": "Derived seam samples (A41 input): positions, unit tangent t (weld direction), outward unit normals n1, n2 of the two adjacent faces. Part frame.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "spacing_m",
+    "seams"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "spacing_m": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "seams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "seam_id",
+          "length_m",
+          "closed",
+          "faces",
+          "points"
+        ],
+        "properties": {
+          "seam_id": {
+            "$ref": "common.schema.json#/$defs/seam_id"
+          },
+          "length_m": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "faces": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/face_id"
+            },
+            "minItems": 0
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "s_m",
+                "p_m",
+                "t",
+                "n1",
+                "n2"
+              ],
+              "properties": {
+                "s_m": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "p_m": {
+                  "$ref": "common.schema.json#/$defs/vec3"
+                },
+                "t": {
+                  "$ref": "common.schema.json#/$defs/vec3"
+                },
+                "n1": {
+                  "$ref": "common.schema.json#/$defs/vec3"
+                },
+                "n2": {
+                  "oneOf": [
+                    {
+                      "$ref": "common.schema.json#/$defs/vec3"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "minItems": 2
+          }
+        }
+      },
+      "minItems": 0
+    }
+  }
+}
