@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "created_by": "awm_bringup repo template 0.1.0",
+  "created_at": "2026-10-19T11:11:54Z",
+  "inputs": [],
+  "calibration_id": "CAL-NOMINAL-0001",
+  "status": "NOMINAL",
+  "note": "NOMINAL values from awm_description/config/cell_nominal.yaml. Not measured (A51/A52/A53 pending, R2). base = robot base_link (REP-103), not the UR controller \"base\" frame (rotated 180 deg about z).",
+  "base_T_fixture": {
+    "position_m": [
+      0.42,
+      0.0,
+      0.1
+    ],
+    "quat_xyzw": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "fixture_T_part": {
+    "position_m": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "quat_xyzw": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "tcp": {
+    "tcp_mig": {
+      "position_m": [
+        -0.2037,
+        0.0,
+        0.2773
+      ],
+      "quat_xyzw": [
+        0.0,
+        -0.38268343236488267,
+        0.0,
+        0.9238795325113726
+      ]
+    }
+  }
+}

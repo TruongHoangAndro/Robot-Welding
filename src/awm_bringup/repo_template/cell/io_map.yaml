@@ -1,0 +1,6 @@
+# D11 I/O & handshake signal list — generated from DES-002 (Interface Control Document, planned).
+# TODO(OI-1): MIG welder interface. TODO(OI-2): laser interface. TODO(OI-4): PLC model.
+# Placeholder only; not used by the offline chain.
+schema_version: "1.0"
+status: PLACEHOLDER
+signals: []

@@ -15,7 +15,7 @@ Read this first after a restart. Continue from the first open task. Plan: `PLAN.
 | T6 awm_process | done | WPS lookup, SAMPLE gate, process.json (7 tests) |
 | T7 awm_interfaces | done | builds; §7.1 v0 |
 | T8 awm_description | done | xacro + SRDF + MoveIt cfg, mock hw only (6 tests) |
-| T9 awm_bringup | open | |
+| T9 awm_bringup | done | sim.launch.py headless, D16 params, repo template, SimLaunch test helper (7 tests) |
 | T10 awm_path pure | open | |
 | T11 awm_path MoveIt | open | |
 | T12 awm_program pure | open | |

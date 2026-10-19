@@ -1,0 +1,48 @@
+# D16 cell & runtime configuration (DES-001 §5.1). Single source of parameters for the offline
+# chain nodes (awm_path, awm_program, awm_verify). SI units unless the name says otherwise.
+/**:
+  ros__parameters:
+    # Job repository root. Empty in the file on purpose: no absolute path in source.
+    # Pass it on the command line (run_chain --repo / -p repo_root:=...).
+    repo_root: ""
+    # OCC interpreter for awm_geometry. Empty -> environment variable AWM_OCC_PYTHON.
+    occ_python_cmd: ""
+
+    # Cell model (D14)
+    planning_group: weld_arm
+    tcp_link: tcp_mig
+    base_frame: base_link
+    joint_names: [shoulder_pan_joint, shoulder_lift_joint, elbow_joint, wrist_1_joint, wrist_2_joint, wrist_3_joint]
+    home_joints_rad: [0.0, -1.5708, 1.5708, -1.5708, -1.5708, 0.0]
+
+    # M3 process
+    default_process: MIG
+    # SAMPLE WPS are accepted only in simulation / development.
+    allow_sample_wps: true
+
+    # M4 path planner
+    sample_spacing_m: 0.005
+    approach_distance_m: 0.05
+    cartesian_max_step_m: 0.002
+    revolute_jump_threshold_rad: 0.35
+    ik_timeout_s: 0.5
+    ik_seed_count: 24
+    min_wrist_singularity_margin_rad: 0.15
+    service_timeout_s: 30.0
+
+    # M6 program generator. Do not raise the scalings (CLAUDE.md safety rules).
+    velocity_scaling: 0.2
+    acceleration_scaling: 0.2
+    weld_accel_m_s2: 0.5
+    max_joint_velocity_rad_s: [3.14159, 3.14159, 3.14159, 3.14159, 3.14159, 3.14159]
+    max_joint_acceleration_rad_s2: [5.0, 5.0, 5.0, 5.0, 5.0, 5.0]
+    trajectory_dt_s: 0.008
+    air_planning_time_s: 5.0
+    air_planning_attempts: 5
+
+    # M7 verification
+    replay_on_mock_hardware: true
+    replay_speed_scale: 1.0
+    max_tracking_error_rad: 0.02
+    start_state_tolerance_rad: 0.001
+    controller_action: /joint_trajectory_controller/follow_joint_trajectory

@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "created_by": "awm_bringup repo template 0.1.0",
+  "created_at": "2026-10-19T11:11:54Z",
+  "inputs": [],
+  "wps_id": "WPS-MIG-S235-FW-02",
+  "status": "SAMPLE",
+  "description": "SAMPLE - MIG fillet weld, non-alloy steel, thin wall. Not a qualified WPS.",
+  "process": "MIG",
+  "material": "S235JR",
+  "joint_types": [
+    "fillet"
+  ],
+  "thickness_mm": {
+    "min": 1.5,
+    "max": 3.0
+  },
+  "leg_mm": {
+    "min": 2.0,
+    "max": 3.5
+  },
+  "parameters": {
+    "current_A": 120,
+    "voltage_V": 18.0,
+    "wire_feed_m_min": 4.5,
+    "wire_diameter_mm": 0.8,
+    "gas": "M21 (Ar/CO2 82/18)",
+    "gas_flow_l_min": 12
+  },
+  "motion": {
+    "travel_speed_mm_s": 8.0,
+    "work_angle_deg": 45.0,
+    "travel_angle_deg": 10.0,
+    "stickout_mm": 12.0,
+    "focus_offset_mm": 0.0,
+    "weave_width_mm": 0.0,
+    "weave_freq_hz": 0.0
+  },
+  "timing": {
+    "pre_flow_s": 0.3,
+    "post_flow_s": 0.5,
+    "crater_fill_s": 0.2,
+    "arc_ok_timeout_s": 1.0
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "created_by": "awm_bringup repo template 0.1.0",
+  "created_at": "2026-10-19T11:11:54Z",
+  "inputs": [],
+  "wps_id": "WPS-LASER-S235-FW-01",
+  "status": "SAMPLE",
+  "description": "SAMPLE - laser fillet weld, non-alloy steel, thin sheet. TODO(OI-2): laser source not defined.",
+  "process": "LASER",
+  "material": "S235JR",
+  "joint_types": [
+    "fillet"
+  ],
+  "thickness_mm": {
+    "min": 0.5,
+    "max": 4.0
+  },
+  "leg_mm": {
+    "min": 0.5,
+    "max": 3.0
+  },
+  "parameters": {
+    "power_W": 2000,
+    "gas": "Ar",
+    "gas_flow_l_min": 15
+  },
+  "motion": {
+    "travel_speed_mm_s": 20.0,
+    "work_angle_deg": 45.0,
+    "travel_angle_deg": 5.0,
+    "stickout_mm": 0.0,
+    "focus_offset_mm": 0.0,
+    "weave_width_mm": 0.0,
+    "weave_freq_hz": 0.0
+  },
+  "timing": {
+    "pre_flow_s": 0.2,
+    "post_flow_s": 0.3,
+    "crater_fill_s": 0.0,
+    "arc_ok_timeout_s": 0.5
+  }
+}
