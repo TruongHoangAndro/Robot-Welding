@@ -1,0 +1,18 @@
+# /awm/weld_event — M8 → M10 → PLC. Only while the robot is at rest (design rule 6).
+string WELD_START=WeldStart
+string WELD_END=WeldEnd
+
+string event_type
+string seam_id
+string wps_id
+string parameters_json      # D06 parameters of the seam
+---
+string OUTCOME_ARC_OK=ArcOK
+string OUTCOME_LASER_READY=LaserReady
+string OUTCOME_ARC_OFF=ArcOff
+string OUTCOME_FAULT=Fault
+string outcome
+bool success
+string message
+---
+string phase                # pre_flow, arc_on, crater_fill, post_flow ...

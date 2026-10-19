@@ -1,0 +1,12 @@
+# /awm/cell/command — HMI → M8
+string SELECT_JOB=select_job
+string START=start
+string STOP=stop
+string RESET=reset
+string HOME=home
+
+string command
+string job_id               # for select_job
+---
+bool success
+string message

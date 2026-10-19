@@ -1,0 +1,9 @@
+# /awm/execute_segment — M8 → M9: replay one stored trajectory segment of a released program
+string program_rev
+string segment_id
+float64 speed_override      # 0..1
+---
+bool success
+string message
+---
+float32 percent
