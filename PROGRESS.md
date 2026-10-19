@@ -13,8 +13,8 @@ Read this first after a restart. Continue from the first open task. Plan: `PLAN.
 | T4 awm_cad | done | mocked + real OCC import test |
 | T5 awm_seam | done | picking, chain, attributes, export, rematch (16 tests) |
 | T6 awm_process | done | WPS lookup, SAMPLE gate, process.json (7 tests) |
-| T7 awm_interfaces | open | |
-| T8 awm_description | open | |
+| T7 awm_interfaces | done | builds; §7.1 v0 |
+| T8 awm_description | done | xacro + SRDF + MoveIt cfg, mock hw only (6 tests) |
 | T9 awm_bringup | open | |
 | T10 awm_path pure | open | |
 | T11 awm_path MoveIt | open | |

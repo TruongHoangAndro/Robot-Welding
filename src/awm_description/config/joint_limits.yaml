@@ -1,0 +1,11 @@
+# MoveIt joint limits. Velocities from ur_description ur5e (180 deg/s). UR does not publish
+# acceleration limits; 5.0 rad/s^2 as in the reference demo. Do not raise.
+default_velocity_scaling_factor: 0.1
+default_acceleration_scaling_factor: 0.1
+joint_limits:
+  shoulder_pan_joint: {has_velocity_limits: true, max_velocity: 3.14159, has_acceleration_limits: true, max_acceleration: 5.0}
+  shoulder_lift_joint: {has_velocity_limits: true, max_velocity: 3.14159, has_acceleration_limits: true, max_acceleration: 5.0}
+  elbow_joint: {has_velocity_limits: true, max_velocity: 3.14159, has_acceleration_limits: true, max_acceleration: 5.0}
+  wrist_1_joint: {has_velocity_limits: true, max_velocity: 3.14159, has_acceleration_limits: true, max_acceleration: 5.0}
+  wrist_2_joint: {has_velocity_limits: true, max_velocity: 3.14159, has_acceleration_limits: true, max_acceleration: 5.0}
+  wrist_3_joint: {has_velocity_limits: true, max_velocity: 3.14159, has_acceleration_limits: true, max_acceleration: 5.0}

@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<!-- APLSMN601 cell model (D14): UR5e + MIG torch + Pismo frame + fixture.
+     Phase 1 supports mock hardware only (ros2_control mock_components). The real-robot description
+     (ur_robot_driver) is added by the `real` launch, run by a person only. -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="awm_cell">
+  <xacro:arg name="ur_type" default="ur5e"/>
+  <xacro:arg name="cell_config" default="$(find awm_description)/config/cell_nominal.yaml"/>
+  <xacro:arg name="initial_positions_file" default="$(find awm_description)/config/initial_positions.yaml"/>
+
+  <xacro:include filename="$(find ur_description)/urdf/ur_macro.xacro"/>
+  <xacro:include filename="$(find ur_description)/urdf/ros2_control_mock_hardware.xacro"/>
+  <xacro:include filename="$(find awm_description)/urdf/torch_mig.xacro"/>
+  <xacro:include filename="$(find awm_description)/urdf/cell_environment.xacro"/>
+
+  <xacro:property name="cfg" value="${xacro.load_yaml('$(arg cell_config)')}"/>
+  <xacro:property name="initial_positions_file" value="$(arg initial_positions_file)"/>
+
+  <link name="world"/>
+
+  <xacro:ur_robot
+    name="awm_ur"
+    tf_prefix=""
+    parent="world"
+    joint_limits_parameters_file="$(find ur_description)/config/$(arg ur_type)/joint_limits.yaml"
+    kinematics_parameters_file="$(find ur_description)/config/$(arg ur_type)/default_kinematics.yaml"
+    physical_parameters_file="$(find ur_description)/config/$(arg ur_type)/physical_parameters.yaml"
+    visual_parameters_file="$(find ur_description)/config/$(arg ur_type)/visual_parameters.yaml">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </xacro:ur_robot>
+
+  <xacro:ur_ros2_control
+    name="awm_ur"
+    tf_prefix=""
+    initial_positions="${xacro.load_yaml(initial_positions_file)}"/>
+
+  <xacro:awm_torch_mig parent="tool0" cfg="${cfg}"/>
+  <xacro:awm_cell_environment parent="world" cfg="${cfg}"/>
+</robot>

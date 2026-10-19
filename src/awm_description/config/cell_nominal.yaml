@@ -1,0 +1,27 @@
+# D14 nominal cell geometry (DES-001 §5.3). Single source for the URDF.
+# All values are NOMINAL placeholders until drawings / calibration exist. SI units.
+# The NOMINAL calibration record (D08) in awm_bringup/repo_template must match these values;
+# awm_bringup's test checks it.
+
+pismo_frame:
+  # TODO(OI-6): Pismo frame drawing not available. Robot base sits on the frame top plate.
+  size_m: [1.20, 0.80, 0.80]
+  top_center_xyz_m: [0.25, 0.0, 0.0]
+
+fixture:
+  # Fixture frame = centre of the fixture top surface, in robot base_link coordinates.
+  # TODO(OI-6): fixture design not available; nominal block on the frame top.
+  xyz_m: [0.42, 0.0, 0.10]
+  rpy_rad: [0.0, 0.0, 0.0]
+  size_m: [0.30, 0.30, 0.10]
+
+torch_mig:
+  # TODO(OI-1): MIG torch model unknown. TCP (wire tip) and shape follow the Tac demo torch
+  # (tool0 -> wire tip xyz -0.2037 0 0.2773, 45 deg neck). tcp z axis = wire direction (into the work).
+  tcp_xyz_m: [-0.2037, 0.0, 0.2773]
+  tcp_rpy_rad: [0.0, -0.785398163397, 0.0]
+  stickout_m: 0.015
+  nozzle_length_m: 0.12
+  nozzle_radius_m: 0.011
+  body_radius_m: 0.022
+  body_start_z_m: 0.05

@@ -1,0 +1,75 @@
+<?xml version="1.0"?>
+<!-- MIG torch on tool0. Geometry from cell_nominal.yaml (torch_mig). TODO(OI-1): real torch model.
+     Collision shape: bracket + body (tool0 side -> neck bend) + nozzle (bend -> nozzle tip).
+     The nozzle tip stops stickout_m before the TCP, so the wire tip may touch the part without
+     any allowed-collision entry for the torch (fixes demo finding F07). -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="awm_torch_mig" params="parent cfg">
+    <xacro:property name="t" value="${cfg['torch_mig']}"/>
+    <xacro:property name="px" value="${t['tcp_xyz_m'][0]}"/>
+    <xacro:property name="py" value="${t['tcp_xyz_m'][1]}"/>
+    <xacro:property name="pz" value="${t['tcp_xyz_m'][2]}"/>
+    <xacro:property name="r" value="${t['tcp_rpy_rad'][0]}"/>
+    <xacro:property name="p" value="${t['tcp_rpy_rad'][1]}"/>
+    <xacro:property name="y" value="${t['tcp_rpy_rad'][2]}"/>
+    <!-- wire direction d = z axis of R = Rz(y) Ry(p) Rx(r) -->
+    <xacro:property name="dx" value="${cos(y)*sin(p)*cos(r) + sin(y)*sin(r)}"/>
+    <xacro:property name="dy" value="${sin(y)*sin(p)*cos(r) - cos(y)*sin(r)}"/>
+    <xacro:property name="dz" value="${cos(p)*cos(r)}"/>
+    <!-- nozzle tip N and neck bend B -->
+    <xacro:property name="nx" value="${px - t['stickout_m']*dx}"/>
+    <xacro:property name="ny" value="${py - t['stickout_m']*dy}"/>
+    <xacro:property name="nz" value="${pz - t['stickout_m']*dz}"/>
+    <xacro:property name="bx" value="${nx - t['nozzle_length_m']*dx}"/>
+    <xacro:property name="by" value="${ny - t['nozzle_length_m']*dy}"/>
+    <xacro:property name="bz" value="${nz - t['nozzle_length_m']*dz}"/>
+    <xacro:property name="az" value="${t['body_start_z_m']}"/>
+    <xacro:property name="body_len" value="${sqrt(bx**2 + by**2 + (bz-az)**2)}"/>
+
+    <xacro:macro name="segment" params="x0 y0 z0 x1 y1 z1 radius">
+      <xacro:property name="L" value="${sqrt((x1-x0)**2 + (y1-y0)**2 + (z1-z0)**2)}"/>
+      <origin xyz="${(x0+x1)/2} ${(y0+y1)/2} ${(z0+z1)/2}"
+              rpy="${-asin((y1-y0)/L)} ${atan2(x1-x0, z1-z0)} 0"/>
+      <geometry><cylinder radius="${radius}" length="${L}"/></geometry>
+    </xacro:macro>
+
+    <link name="torch_mig">
+      <visual>
+        <origin xyz="0 0 0.01" rpy="0 0 0"/>
+        <geometry><cylinder radius="0.035" length="0.02"/></geometry>
+        <material name="torch_grey"><color rgba="0.35 0.35 0.38 1"/></material>
+      </visual>
+      <visual>
+        <xacro:segment x0="0" y0="0" z0="0.02" x1="${bx}" y1="${by}" z1="${bz}" radius="${t['body_radius_m']}"/>
+        <material name="torch_grey"/>
+      </visual>
+      <visual>
+        <xacro:segment x0="${bx}" y0="${by}" z0="${bz}" x1="${nx}" y1="${ny}" z1="${nz}" radius="${t['nozzle_radius_m']}"/>
+        <material name="torch_copper"><color rgba="0.72 0.45 0.20 1"/></material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.01" rpy="0 0 0"/>
+        <geometry><cylinder radius="0.035" length="0.02"/></geometry>
+      </collision>
+      <collision>
+        <xacro:segment x0="0" y0="0" z0="${az}" x1="${bx}" y1="${by}" z1="${bz}" radius="${t['body_radius_m']}"/>
+      </collision>
+      <collision>
+        <xacro:segment x0="${bx}" y0="${by}" z0="${bz}" x1="${nx}" y1="${ny}" z1="${nz}" radius="${t['nozzle_radius_m']}"/>
+      </collision>
+    </link>
+    <joint name="tool0_to_torch_mig" type="fixed">
+      <parent link="${parent}"/>
+      <child link="torch_mig"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <!-- TCP: wire tip, z axis along the wire into the work. -->
+    <link name="tcp_mig"/>
+    <joint name="torch_mig_to_tcp" type="fixed">
+      <parent link="${parent}"/>
+      <child link="tcp_mig"/>
+      <origin xyz="${px} ${py} ${pz}" rpy="${r} ${p} ${y}"/>
+    </joint>
+  </xacro:macro>
+</robot>

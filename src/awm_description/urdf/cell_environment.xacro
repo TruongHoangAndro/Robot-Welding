@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+<!-- Static cell: Pismo frame (robot base on its top plate) and the weld fixture. -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="awm_cell_environment" params="parent cfg">
+    <xacro:property name="pf" value="${cfg['pismo_frame']}"/>
+    <xacro:property name="fx" value="${cfg['fixture']}"/>
+
+    <link name="pismo_frame">
+      <visual>
+        <origin xyz="0 0 ${-pf['size_m'][2]/2}"/>
+        <geometry><box size="${pf['size_m'][0]} ${pf['size_m'][1]} ${pf['size_m'][2]}"/></geometry>
+        <material name="frame_blue"><color rgba="0.25 0.35 0.55 1"/></material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${-pf['size_m'][2]/2 - 0.001}"/>
+        <geometry><box size="${pf['size_m'][0]} ${pf['size_m'][1]} ${pf['size_m'][2]}"/></geometry>
+      </collision>
+    </link>
+    <joint name="world_to_pismo_frame" type="fixed">
+      <parent link="${parent}"/>
+      <child link="pismo_frame"/>
+      <origin xyz="${pf['top_center_xyz_m'][0]} ${pf['top_center_xyz_m'][1]} ${pf['top_center_xyz_m'][2]}"/>
+    </joint>
+
+    <!-- fixture frame = top surface centre (calibrated by A52, D08 base_T_fixture). -->
+    <link name="fixture"/>
+    <joint name="world_to_fixture" type="fixed">
+      <parent link="${parent}"/>
+      <child link="fixture"/>
+      <origin xyz="${fx['xyz_m'][0]} ${fx['xyz_m'][1]} ${fx['xyz_m'][2]}"
+              rpy="${fx['rpy_rad'][0]} ${fx['rpy_rad'][1]} ${fx['rpy_rad'][2]}"/>
+    </joint>
+    <link name="fixture_block">
+      <visual>
+        <origin xyz="0 0 ${-fx['size_m'][2]/2}"/>
+        <geometry><box size="${fx['size_m'][0]} ${fx['size_m'][1]} ${fx['size_m'][2]}"/></geometry>
+        <material name="fixture_grey"><color rgba="0.55 0.55 0.5 1"/></material>
+      </visual>
+      <collision>
+        <!-- 1 mm below the top so a part resting on the fixture is not "in collision". -->
+        <origin xyz="0 0 ${-fx['size_m'][2]/2 - 0.001}"/>
+        <geometry><box size="${fx['size_m'][0]} ${fx['size_m'][1]} ${fx['size_m'][2]}"/></geometry>
+      </collision>
+    </link>
+    <joint name="fixture_to_block" type="fixed">
+      <parent link="fixture"/>
+      <child link="fixture_block"/>
+      <origin xyz="0 0 0"/>
+    </joint>
+  </xacro:macro>
+</robot>
