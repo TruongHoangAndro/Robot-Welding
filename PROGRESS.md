@@ -22,7 +22,7 @@ Read this first after a restart. Continue from the first open task. Plan: `PLAN.
 | T13 awm_program MoveIt | done | stored joint path reuse + FK check, events, stale-calibration test (4 sim tests) |
 | T14 awm_verify | done | static checks, replay on mock hw, records, release + lock (9 tests) |
 | T15 end-to-end | done | run_chain: plate (2 seams) + pipe (3 arcs) PASS + released (simulation); 360 deg seam rejected at A4 (3 e2e tests) |
-| T16 docs | open | |
+| T16 docs | done | READMEs, USER_GUIDE, TRACEABILITY, FINAL_REPORT, change proposals CP-5..8 |
 
 ## Last error
 none (resolved: pick_ik global mode + cost settings, see decision log)
