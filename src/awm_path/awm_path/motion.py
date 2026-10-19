@@ -50,7 +50,8 @@ def ik_candidates(client: MoveItClient, pose: np.ndarray, params: ChainParams,
     margin = np.sin(params.min_wrist_singularity_margin_rad)
     solutions: List[np.ndarray] = []
     for seed in seeds:
-        q = client.compute_ik(pose, seed, timeout_s=params.ik_timeout_s)
+        q = client.compute_ik(pose, seed, timeout_s=params.ik_timeout_s,
+                              group=params.ik_search_group)
         if q is None or wrist_margin(q) < margin:
             continue
         if any(np.max(np.abs(q - s)) < 1e-3 for s in solutions):
@@ -72,15 +73,25 @@ def plan_seam_motion(client: MoveItClient, seam_id: str, approach: np.ndarray,
     best = 0.0
     scale = (params.velocity_scaling, params.acceleration_scaling)
     margin = np.sin(params.min_wrist_singularity_margin_rad)
+
+    def cartesian(start, poses):
+        """Best of ``cartesian_retries`` tries (pick_ik is randomised); stops at 100 %."""
+        best_f, best_t = 0.0, None
+        for _ in range(max(1, params.cartesian_retries)):
+            f, t = client.cartesian_path(start, poses, params.cartesian_max_step_m,
+                                         params.revolute_jump_threshold_rad, *scale)
+            if f >= best_f:
+                best_f, best_t = f, t
+            if f >= FULL and t is not None:
+                break
+        return best_f, best_t
+
     for k, q0 in enumerate(candidates[:max_candidates]):
-        f_app, t_app = client.cartesian_path(q0, [weld[0]], params.cartesian_max_step_m,
-                                             params.revolute_jump_threshold_rad, *scale)
+        f_app, t_app = cartesian(q0, [weld[0]])
         if f_app < FULL or t_app is None:
             attempts.append(f'IK#{k}: approach {f_app:.0%}')
             continue
-        f_weld, t_weld = client.cartesian_path(t_app.positions[-1], list(weld[1:]),
-                                               params.cartesian_max_step_m,
-                                               params.revolute_jump_threshold_rad, *scale)
+        f_weld, t_weld = cartesian(t_app.positions[-1], list(weld[1:]))
         best = max(best, f_weld)
         if f_weld < FULL or t_weld is None:
             attempts.append(f'IK#{k}: weld {f_weld:.1%}')
@@ -88,9 +99,7 @@ def plan_seam_motion(client: MoveItClient, seam_id: str, approach: np.ndarray,
         if wrist_margin(t_weld.positions) < margin:
             attempts.append(f'IK#{k}: weld passes near the wrist singularity')
             continue
-        f_ret, t_ret = client.cartesian_path(t_weld.positions[-1], [retract],
-                                             params.cartesian_max_step_m,
-                                             params.revolute_jump_threshold_rad, *scale)
+        f_ret, t_ret = cartesian(t_weld.positions[-1], [retract])
         if f_ret < FULL or t_ret is None:
             attempts.append(f'IK#{k}: retract {f_ret:.0%}')
             continue

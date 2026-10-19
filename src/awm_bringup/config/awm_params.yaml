@@ -9,7 +9,8 @@
     occ_python_cmd: ""
 
     # Cell model (D14)
-    planning_group: weld_arm
+    planning_group: weld_arm            # Cartesian paths / joint planning (KDL)
+    ik_search_group: weld_arm_search    # IK branch search of approach poses (pick_ik global)
     tcp_link: tcp_mig
     base_frame: base_link
     joint_names: [shoulder_pan_joint, shoulder_lift_joint, elbow_joint, wrist_1_joint, wrist_2_joint, wrist_3_joint]
@@ -27,6 +28,9 @@
     tool_roll: travel
     cartesian_max_step_m: 0.002
     revolute_jump_threshold_rad: 0.35
+    # Tries per IK branch for a Cartesian segment (> 1 only helps with a randomised IK solver;
+    # weld_arm uses KDL, which is deterministic). Only 100 % results are ever accepted.
+    cartesian_retries: 1
     ik_timeout_s: 0.5
     ik_seed_count: 24
     min_wrist_singularity_margin_rad: 0.15
@@ -41,6 +45,7 @@
     trajectory_dt_s: 0.008
     air_planning_time_s: 5.0
     air_planning_attempts: 5
+    air_planning_retries: 3
 
     # M7 verification
     replay_on_mock_hardware: true

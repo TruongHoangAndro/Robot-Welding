@@ -122,6 +122,9 @@ def plan_path(job: JobPaths, params: ChainParams, client: MoveItClient) -> Dict:
                       'seed_joints': [float(q) for q in motion.ik_start]},
             'collision': {'ok': True, 'detail': 'compute_cartesian_path avoid_collisions=true '
                                                 'against cell model + part mesh'},
+            'joint_path': {k: [[float(q) for q in row] for row in traj.positions]
+                           for k, traj in (('approach', motion.approach), ('weld', motion.weld),
+                                           ('retract', motion.retract))},
         })
     inputs = [job.part_json, job.seams_json, job.process_json, job.seam_geometry_json,
               job.repo.active_calibration]

@@ -70,7 +70,8 @@
           "retract_pose",
           "weld_length_m",
           "reach",
-          "collision"
+          "collision",
+          "joint_path"
         ],
         "properties": {
           "seam_id": {
@@ -139,6 +140,54 @@
           },
           "collision": {
             "$ref": "common.schema.json#/$defs/check"
+          },
+          "joint_path": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "approach",
+              "weld",
+              "retract"
+            ],
+            "description": "A44 joint path checked by M4 (robot joints, rad) for the calibration in calibration.sha256: approach, weld and retract waypoints. Valid only with that calibration.",
+            "properties": {
+              "approach": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 6,
+                  "maxItems": 6
+                },
+                "minItems": 2
+              },
+              "weld": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 6,
+                  "maxItems": 6
+                },
+                "minItems": 2
+              },
+              "retract": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 6,
+                  "maxItems": 6
+                },
+                "minItems": 2
+              }
+            }
           }
         }
       },

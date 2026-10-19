@@ -17,6 +17,7 @@ class ChainParams:
     repo_root: str = ''
     occ_python_cmd: str = ''
     planning_group: str = 'weld_arm'
+    ik_search_group: str = 'weld_arm_search'
     tcp_link: str = 'tcp_mig'
     base_frame: str = 'base_link'
     joint_names: List[str] = field(default_factory=lambda: list(JOINTS))
@@ -29,6 +30,7 @@ class ChainParams:
     tool_roll: str = 'travel'
     cartesian_max_step_m: float = 0.002
     revolute_jump_threshold_rad: float = 0.35
+    cartesian_retries: int = 1
     ik_timeout_s: float = 0.5
     ik_seed_count: int = 24
     min_wrist_singularity_margin_rad: float = 0.15
@@ -41,6 +43,7 @@ class ChainParams:
     trajectory_dt_s: float = 0.008
     air_planning_time_s: float = 5.0
     air_planning_attempts: int = 5
+    air_planning_retries: int = 3
     replay_on_mock_hardware: bool = True
     replay_speed_scale: float = 1.0
     max_tracking_error_rad: float = 0.02

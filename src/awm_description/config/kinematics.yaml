@@ -1,4 +1,13 @@
+# weld_arm: Cartesian paths and joint planning. KDL (Jacobian, deterministic) tracks the small
+#   Cartesian steps from the previous state without branch jumps.
+# weld_arm_search: same chain, pick_ik global search; used only by compute_ik to find the IK
+#   branches of approach poses.
 weld_arm:
+  kinematics_solver: kdl_kinematics_plugin/KDLKinematicsPlugin
+  kinematics_solver_search_resolution: 0.005
+  kinematics_solver_timeout: 0.05
+  kinematics_solver_attempts: 3
+weld_arm_search:
   kinematics_solver: pick_ik/PickIkPlugin
   kinematics_solver_timeout: 0.05
   kinematics_solver_attempts: 3

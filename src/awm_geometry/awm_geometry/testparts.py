@@ -59,9 +59,10 @@ def pipe_flange() -> Tuple[TopoDS_Shape, Dict]:
     """Flange D150x12 mm with a pipe D50x2.5 mm, 100 mm high: one circular fillet joint.
 
     A full 360 deg orbit is not reachable from a fixed UR5e base with the 45 deg torch (the
-    robot-side arc puts the wrist over the base axis), so the joint is welded as two partial seams
-    (A22 start / end): S01 counter-clockwise -120 -> 180 deg, S02 clockwise -120 -> 180 deg.
-    Arc limits come from a reach map of the NOMINAL cell (PROGRESS.md, 2026-10-19).
+    robot-side arc puts the wrist over the base axis), so the joint is welded as three partial seams
+    (A22 start / end): S01, S02 counter-clockwise -120 -> 60 -> 180 deg, S03 clockwise
+    -120 -> 180 deg. Arc limits come from a reach map of the NOMINAL cell (PROGRESS.md,
+    2026-10-19); arcs start where the approach pose is reachable.
     """
     flange = _cylinder(0.075, 0.012, 0.0)
     pipe = _cut(_cylinder(0.025, 0.100, 0.012), _cylinder(0.0225, 0.100, 0.012))
@@ -69,13 +70,15 @@ def pipe_flange() -> Tuple[TopoDS_Shape, Dict]:
     common = {'joint_type': 'fillet', 'weld_side': 'bisector', 'leg_mm': 3.0,
               'process_hint': 'MIG', 'material': 'S235JR', 'thickness_mm': 2.5,
               'pick_m': _on_circle(0.025, 90.0, 0.012)}
+    arc = [  # (seam, sequence, reversed, start deg, end deg)
+        ('S01', 1, False, -120.0, 60.0),
+        ('S02', 2, False, 60.0, 180.0),
+        ('S03', 3, True, -120.0, 180.0),
+    ]
     picks = {'part_no': 'TEST-PIPE-FL', 'part_rev': 'A', 'seams': [
-        dict(common, seam_id='S01', sequence=1, start_pick_m=_on_circle(0.025, -120.0, 0.012),
-             end_pick_m=_on_circle(0.025, 180.0, 0.012)),
-        dict(common, seam_id='S02', sequence=2, reversed=True,
-             start_pick_m=_on_circle(0.025, -120.0, 0.012),
-             end_pick_m=_on_circle(0.025, 180.0, 0.012)),
-    ]}
+        dict(common, seam_id=sid, sequence=seq, reversed=rev,
+             start_pick_m=_on_circle(0.025, a0, 0.012), end_pick_m=_on_circle(0.025, a1, 0.012))
+        for sid, seq, rev, a0, a1 in arc]}
     return shape, picks
 
 

@@ -115,11 +115,12 @@ class MoveItClient:
         return state
 
     def compute_ik(self, pose: np.ndarray, seed: Sequence[float], timeout_s: float = 0.5,
-                   avoid_collisions: bool = True) -> Optional[np.ndarray]:
+                   avoid_collisions: bool = True,
+                   group: Optional[str] = None) -> Optional[np.ndarray]:
         """IK of the TCP for a base-frame pose; None if no (collision-free) solution."""
         req = GetPositionIK.Request()
         r = req.ik_request
-        r.group_name = self.group
+        r.group_name = group or self.group
         r.robot_state = self.robot_state(seed)
         r.avoid_collisions = avoid_collisions
         r.ik_link_name = self.tcp_link
