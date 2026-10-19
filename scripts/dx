@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Run a command inside the dev container `awm_dev` with ROS 2 Jazzy and the workspace overlay sourced.
+# Usage: scripts/dx "colcon build --packages-select awm_core"
+#
+# FASTRTPS_DEFAULT_PROFILES_FILE is unset because the image's /etc/bash.bashrc exports the demo's
+# UDP/WAN whitelist profile; awm_dev uses default transports with localhost-only discovery.
+set -euo pipefail
+WS="${HOME}/ros2/aplsmn601_ws"
+exec docker exec awm_dev bash -lc "unset FASTRTPS_DEFAULT_PROFILES_FILE; source /opt/ros/jazzy/setup.bash && cd ${WS} && { [ -f install/setup.bash ] && source install/setup.bash || true; } && $*"
