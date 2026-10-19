@@ -82,7 +82,8 @@
               "convex",
               "smooth",
               "free",
-              "nonmanifold"
+              "nonmanifold",
+                  "mixed"
             ]
           },
           "dihedral_deg": {

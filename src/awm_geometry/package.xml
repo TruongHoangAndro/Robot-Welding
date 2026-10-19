@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>awm_geometry</name>
+  <version>0.1.0</version>
+  <description>
+    APLSMN601 OCCT B-Rep helper (ADR-02): STEP import / heal / tessellation, edge catalogue,
+    seam sampling. Pure Python, no rclpy. Runs ONLY in the conda env awm_occ
+    (pythonocc-core 8.0.1, not a rosdep key); called from ROS packages through
+    awm_core.occ_bridge. colcon installs it only so the ROS side can locate it.
+  </description>
+  <maintainer email="truongxhoang@apillis.com">Truong Hoang</maintainer>
+  <license>Proprietary</license>
+
+  <exec_depend>awm_core</exec_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

@@ -5,11 +5,11 @@ Read this first after a restart. Continue from the first open task. Plan: `PLAN.
 | Phase / task | Status | Notes |
 |---|---|---|
 | Phase -1 environment (awm_dev, scripts, Dockerfile, env report, change proposal) | done | commit 14252f5 |
-| Phase 0 discovery (demo map) | in progress | docs/generated/demo_discovery.md |
+| Phase 0 discovery (demo map) | done | docs/generated/demo_discovery.md |
 | Phase 1 plan | done | PLAN.md |
 | T1 awm_core | done | 22 tests (ROS py3.12 + conda py3.10) |
-| T2 awm_geometry import/edges/test parts | open | |
-| T3 awm_geometry sampling | open | |
+| T2 awm_geometry import/edges/test parts | done | OCC 8 API; explicit mm→m; BRepOffset_Analyse convexity |
+| T3 awm_geometry sampling | done | exact curve evaluation; colcon runs OCC suite via conda (12 tests) |
 | T4 awm_cad | open | |
 | T5 awm_seam | open | |
 | T6 awm_process | open | |

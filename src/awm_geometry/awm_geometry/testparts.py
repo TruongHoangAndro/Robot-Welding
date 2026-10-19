@@ -1,0 +1,69 @@
+"""Generated test parts for the end-to-end chain (no customer STEP files are available).
+
+Each part comes with a *pick request*: the seam picks a user would make in the Workbench (a point
+near the seam edge plus the drawing attributes). The picks are test data, not source constants.
+"""
+
+from __future__ import annotations
+
+from typing import Callable, Dict, Tuple
+
+from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
+from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder
+from OCC.Core.TopoDS import TopoDS_Shape
+from OCC.Core.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+from awm_geometry.occ_io import GeometryError
+
+
+def _fuse(a: TopoDS_Shape, b: TopoDS_Shape) -> TopoDS_Shape:
+    op = BRepAlgoAPI_Fuse(a, b)
+    op.SimplifyResult()
+    if not op.IsDone():
+        raise GeometryError('boolean fuse failed')
+    return op.Shape()
+
+
+def _cut(a: TopoDS_Shape, b: TopoDS_Shape) -> TopoDS_Shape:
+    op = BRepAlgoAPI_Cut(a, b)
+    op.SimplifyResult()
+    if not op.IsDone():
+        raise GeometryError('boolean cut failed')
+    return op.Shape()
+
+
+def _cylinder(r: float, h: float, z0: float) -> TopoDS_Shape:
+    return BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(0, 0, z0), gp_Dir(0, 0, 1)), r, h).Shape()
+
+
+def plate_tjoint() -> Tuple[TopoDS_Shape, Dict]:
+    """Base plate 200x150x10 mm with a 160x10x80 mm web: two 160 mm fillet seams."""
+    plate = BRepPrimAPI_MakeBox(gp_Pnt(-0.100, -0.075, 0.0), gp_Pnt(0.100, 0.075, 0.010)).Shape()
+    web = BRepPrimAPI_MakeBox(gp_Pnt(-0.080, -0.005, 0.010), gp_Pnt(0.080, 0.005, 0.090)).Shape()
+    shape = _fuse(plate, web)
+    common = {'joint_type': 'fillet', 'weld_side': 'bisector', 'leg_mm': 4.0,
+              'process_hint': 'MIG', 'material': 'S235JR', 'thickness_mm': 10.0}
+    picks = {'part_no': 'TEST-PLATE-T', 'part_rev': 'A', 'seams': [
+        dict(common, seam_id='S01', sequence=1, pick_m=[0.0, 0.005, 0.010]),
+        dict(common, seam_id='S02', sequence=2, pick_m=[0.0, -0.005, 0.010], reversed=True),
+    ]}
+    return shape, picks
+
+
+def pipe_flange() -> Tuple[TopoDS_Shape, Dict]:
+    """Flange D150x12 mm with a pipe D50x2.5 mm, 100 mm high: one circular fillet seam."""
+    flange = _cylinder(0.075, 0.012, 0.0)
+    pipe = _cut(_cylinder(0.025, 0.100, 0.012), _cylinder(0.0225, 0.100, 0.012))
+    shape = _fuse(flange, pipe)
+    picks = {'part_no': 'TEST-PIPE-FL', 'part_rev': 'A', 'seams': [
+        {'seam_id': 'S01', 'sequence': 1, 'pick_m': [0.025, 0.0, 0.012], 'joint_type': 'fillet',
+         'weld_side': 'bisector', 'leg_mm': 3.0, 'process_hint': 'MIG', 'material': 'S235JR',
+         'thickness_mm': 2.5},
+    ]}
+    return shape, picks
+
+
+PARTS: Dict[str, Callable[[], Tuple[TopoDS_Shape, Dict]]] = {
+    'plate_tjoint': plate_tjoint,
+    'pipe_flange': pipe_flange,
+}
