@@ -6,6 +6,7 @@ near the seam edge plus the drawing attributes). The picks are test data, not so
 
 from __future__ import annotations
 
+import math
 from typing import Callable, Dict, Tuple
 
 from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
@@ -50,15 +51,30 @@ def plate_tjoint() -> Tuple[TopoDS_Shape, Dict]:
     return shape, picks
 
 
+def _on_circle(r: float, deg: float, z: float) -> list:
+    return [r * math.cos(math.radians(deg)), r * math.sin(math.radians(deg)), z]
+
+
 def pipe_flange() -> Tuple[TopoDS_Shape, Dict]:
-    """Flange D150x12 mm with a pipe D50x2.5 mm, 100 mm high: one circular fillet seam."""
+    """Flange D150x12 mm with a pipe D50x2.5 mm, 100 mm high: one circular fillet joint.
+
+    A full 360 deg orbit is not reachable from a fixed UR5e base with the 45 deg torch (the
+    robot-side arc puts the wrist over the base axis), so the joint is welded as two partial seams
+    (A22 start / end): S01 counter-clockwise -120 -> 180 deg, S02 clockwise -120 -> 180 deg.
+    Arc limits come from a reach map of the NOMINAL cell (PROGRESS.md, 2026-10-19).
+    """
     flange = _cylinder(0.075, 0.012, 0.0)
     pipe = _cut(_cylinder(0.025, 0.100, 0.012), _cylinder(0.0225, 0.100, 0.012))
     shape = _fuse(flange, pipe)
+    common = {'joint_type': 'fillet', 'weld_side': 'bisector', 'leg_mm': 3.0,
+              'process_hint': 'MIG', 'material': 'S235JR', 'thickness_mm': 2.5,
+              'pick_m': _on_circle(0.025, 90.0, 0.012)}
     picks = {'part_no': 'TEST-PIPE-FL', 'part_rev': 'A', 'seams': [
-        {'seam_id': 'S01', 'sequence': 1, 'pick_m': [0.025, 0.0, 0.012], 'joint_type': 'fillet',
-         'weld_side': 'bisector', 'leg_mm': 3.0, 'process_hint': 'MIG', 'material': 'S235JR',
-         'thickness_mm': 2.5},
+        dict(common, seam_id='S01', sequence=1, start_pick_m=_on_circle(0.025, -120.0, 0.012),
+             end_pick_m=_on_circle(0.025, 180.0, 0.012)),
+        dict(common, seam_id='S02', sequence=2, reversed=True,
+             start_pick_m=_on_circle(0.025, -120.0, 0.012),
+             end_pick_m=_on_circle(0.025, 180.0, 0.012)),
     ]}
     return shape, picks
 

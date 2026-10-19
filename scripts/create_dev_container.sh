@@ -54,6 +54,7 @@ docker run -d \
     -e AWM_OCC_PYTHON="${HOME}/miniforge3/envs/awm_occ/bin/python" \
     -e AWM_WS="${WS}" \
     -w "${WS}" \
+    --init \
     --entrypoint /bin/sleep \
     "${IMAGE}" infinity
 

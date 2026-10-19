@@ -107,14 +107,15 @@ def sample_seam(shape: TopoDS_Shape, seam: Dict, spacing_m: float) -> Dict:
 
     segs = _chain(dense)
     # _chain keeps the edge order, so faces / curves stay aligned with segs.
-    # Weld direction: chain start must be the seam start; closed chains use the reversed flag.
+    # Weld direction: open chains run from the seam start point; closed chains follow the edge
+    # order (awm_seam writes them in weld order), a single closed edge uses the reversed flag.
     chain_start, chain_end = segs[0][0, :3], segs[-1][-1, :3]
-    closed = bool(seam.get('closed')) or bool(np.linalg.norm(chain_start - chain_end) < 1e-6)
+    closed = bool(np.linalg.norm(chain_start - chain_end) < 1e-6)
     if closed:
-        flip = bool(seam.get('reversed'))
+        flip = len(segs) == 1 and bool(seam.get('reversed'))
     else:
         start = np.asarray(seam['start_m'])
-        flip = np.linalg.norm(chain_end - start) < np.linalg.norm(chain_start - start)
+        flip = bool(np.linalg.norm(chain_end - start) < np.linalg.norm(chain_start - start))
     if flip:
         segs = [_flip(s) for s in reversed(segs)]
         edge_faces = list(reversed(edge_faces))
@@ -129,15 +130,28 @@ def sample_seam(shape: TopoDS_Shape, seam: Dict, spacing_m: float) -> Dict:
     owner = np.array(owner)
     steps = np.linalg.norm(np.diff(dense_all[:, :3], axis=0), axis=1)
     s_dense = np.concatenate([[0.0], np.cumsum(steps)])
-    length = float(s_dense[-1])
+    total = float(s_dense[-1])
+    s_start, s_end = 0.0, total
+    if 'range_m' in seam:  # partial seam (A22 start / end): locate its end points on the chain
+        s_start = _project(dense_all[:, :3], s_dense, seam['start_m'])
+        s_end = _project(dense_all[:, :3], s_dense, seam['end_m'])
+        if closed and s_end <= s_start + 1e-9:
+            s_end += total
+    length = s_end - s_start
+    if abs(length - seam['length_m']) > 1e-3:
+        raise SeamGeometryError(f'{seam["seam_id"]}: sampled length {length * 1000:.2f} mm differs '
+                                f'from seams.json ({seam["length_m"] * 1000:.2f} mm): re-export seams')
     if length < spacing_m:
         raise SeamGeometryError(f'{seam["seam_id"]}: seam length {length * 1000:.2f} mm is '
                                 f'shorter than the sample spacing')
     n = int(math.ceil(length / spacing_m)) + 1
     s_out = np.linspace(0.0, length, n)
+    s_chain = s_start + s_out
+    if closed:
+        s_chain = np.where(s_chain > total + 1e-12, s_chain - total, s_chain)
     points = []
     pair_faces: Optional[List[int]] = None
-    for s in s_out:
+    for s_weld, s in zip(s_out, s_chain):
         j = int(np.clip(np.searchsorted(s_dense, s) - 1, 0, len(s_dense) - 2))
         w = 0.0 if s_dense[j + 1] == s_dense[j] else (s - s_dense[j]) / (s_dense[j + 1] - s_dense[j])
         k = int(owner[j])
@@ -149,12 +163,30 @@ def sample_seam(shape: TopoDS_Shape, seam: Dict, spacing_m: float) -> Dict:
         fids = _ordered_faces(edge_faces[k], ref_face, pair_faces)
         pair_faces = fids
         normals = [face_normal_at(topods.Face(faces_map.FindKey(f)), p) for f in fids[:2]]
-        points.append({'s_m': float(s), 'p_m': p.tolist(), 't': t.tolist(),
+        points.append({'s_m': float(s_weld), 'p_m': p.tolist(), 't': t.tolist(),
                        'n1': normals[0].tolist(),
                        'n2': normals[1].tolist() if len(normals) > 1 else None})
     faces_used = sorted({f for fl in edge_faces for f in fl})
-    return {'seam_id': seam['seam_id'], 'length_m': length, 'closed': closed,
-            'faces': [f'F{f}' for f in faces_used], 'points': points}
+    out = {'seam_id': seam['seam_id'], 'length_m': length,
+           'closed': closed and 'range_m' not in seam,
+           'faces': [f'F{f}' for f in faces_used], 'points': points}
+    if 'range_m' in seam:
+        out['range_m'] = [s_start, s_end]
+    return out
+
+
+def _project(points: np.ndarray, s_dense: np.ndarray, target: Sequence[float]) -> float:
+    """Arc length of the dense-chain point closest to ``target``."""
+    p = np.asarray(target, float)
+    a, b = points[:-1], points[1:]
+    ab = b - a
+    denom = np.einsum('ij,ij->i', ab, ab)
+    t = np.clip(np.einsum('ij,ij->i', p - a, ab) / np.where(denom > 0, denom, 1.0), 0.0, 1.0)
+    d = np.linalg.norm(a + ab * t[:, None] - p, axis=1)
+    k = int(np.argmin(d))
+    if d[k] > 2.0e-3:
+        raise SeamGeometryError('seam start / end point is not on the seam edges')
+    return float(s_dense[k] + t[k] * (s_dense[k + 1] - s_dense[k]))
 
 
 def _evaluate(curve: BRepAdaptor_Curve, u: float, sign: float):

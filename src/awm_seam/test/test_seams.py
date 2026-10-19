@@ -23,6 +23,17 @@ def _edge(i, a, b, convexity='concave', faces=('F1', 'F2'), salt=''):
             'fingerprint': f'{i:064d}' if not salt else f'{salt}{i:063d}'}
 
 
+def _circle(i, r=0.05, centre=(1.0, 0.0, 0.0)):
+    ang = np.linspace(0, 2 * np.pi, 64)
+    poly = np.column_stack([centre[0] + r * np.cos(ang), centre[1] + r * np.sin(ang),
+                            np.zeros_like(ang)])
+    poly[-1] = poly[0]
+    return {'id': f'E{i}', 'curve_type': 'circle', 'length_m': 2 * np.pi * r,
+            'start_m': poly[0].tolist(), 'end_m': poly[0].tolist(), 'mid_m': poly[32].tolist(),
+            'closed': True, 'faces': ['F1', 'F2'], 'convexity': 'concave', 'dihedral_deg': 90.0,
+            'polyline_m': poly.tolist(), 'fingerprint': f'{i:064d}'}
+
+
 @pytest.fixture
 def job(tmp_path):
     job = Repository(tmp_path).job('PART', 'A')
@@ -34,7 +45,7 @@ def job(tmp_path):
         'edges': [_edge(1, [0, 0, 0], [0.1, 0, 0]),
                   _edge(2, [0.1, 0.1, 0], [0.1, 0, 0], faces=('F1', 'F3')),  # reversed direction
                   _edge(3, [0, 0, 0], [0, 0, 0.05], convexity='convex'),
-                  _edge(4, [0.3, 0, 0], [0.4, 0, 0])],
+                  _edge(4, [0.3, 0, 0], [0.4, 0, 0]), _circle(5)],
         'faces': [{'id': f'F{i}', 'surface_type': 'plane', 'area_m2': 0.01} for i in (1, 2, 3)]})
     jsonio.write_json(job.edges_json, edges, 'edges')
     part = jsonio.make_header('test', [step], job.dir)
@@ -154,3 +165,42 @@ def test_stale_edges_refused(job):
     job.model_step.write_text('changed')
     with pytest.raises(jsonio.StaleInputError):
         EdgeCatalogue.load(job)
+
+
+def _at(deg, r=0.05):
+    a = np.radians(deg)
+    return [1.0 + r * np.cos(a), r * np.sin(a), 0.0]
+
+
+def test_partial_seams_on_closed_edge(job):
+    cat = EdgeCatalogue.load(job)
+    half = build_seam(cat, _req('S01', edges=['E5'], start_pick_m=_at(90), end_pick_m=_at(270)))
+    assert half['range_m'][1] - half['range_m'][0] == pytest.approx(np.pi * 0.05, rel=1e-3)
+    assert half['start_m'] == pytest.approx(_at(90), abs=1e-4)
+    assert half['end_m'] == pytest.approx(_at(270), abs=1e-4)
+    assert not half['closed']
+    # Wrapping range: 270 deg -> 90 deg through 0 deg (crosses the chain origin).
+    wrap = build_seam(cat, _req('S02', edges=['E5'], sequence=2, start_pick_m=_at(270),
+                                end_pick_m=_at(90)))
+    assert wrap['range_m'][1] > wrap['chain_length_m']
+    define_seams(job, [_req('S01', edges=['E5'], start_pick_m=_at(90), end_pick_m=_at(270)),
+                       _req('S02', edges=['E5'], sequence=2, start_pick_m=_at(270),
+                            end_pick_m=_at(90))])
+    # Same half again, welded in the other direction: overlaps S01.
+    with pytest.raises(SeamDefinitionError, match='overlapping'):
+        define_seams(job, [_req('S03', edges=['E5'], sequence=3, reversed=True,
+                                start_pick_m=_at(260), end_pick_m=_at(100))])
+    # Reversed quarter inside the free... none left: whole edge overlaps too.
+    with pytest.raises(SeamDefinitionError, match='overlapping'):
+        define_seams(job, [_req('S03', edges=['E5'], sequence=3)])
+
+
+def test_partial_seam_on_open_chain(job):
+    cat = EdgeCatalogue.load(job)
+    seam = build_seam(cat, _req(edges=['E1'], start_pick_m=[0.02, 0, 0], end_pick_m=[0.07, 0, 0]))
+    assert seam['range_m'] == pytest.approx([0.02, 0.07])
+    assert seam['length_m'] == pytest.approx(0.05)
+    with pytest.raises(SeamDefinitionError, match='before the start'):
+        build_seam(cat, _req(edges=['E1'], start_pick_m=[0.07, 0, 0], end_pick_m=[0.02, 0, 0]))
+    with pytest.raises(SeamDefinitionError, match='from the seam edges'):
+        build_seam(cat, _req(edges=['E1'], start_pick_m=[0.02, 0.01, 0]))

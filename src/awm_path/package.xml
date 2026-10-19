@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>awm_path</name>
+  <version>0.1.0</version>
+  <description>APLSMN601 M4 path planner (A41-A45): torch orientation, approach / retract, IK reach and collision check via MoveIt 2 + pick_ik; path.json in the part frame.</description>
+  <maintainer email="truongxhoang@apillis.com">Truong Hoang</maintainer>
+  <license>Proprietary</license>
+
+  <exec_depend>awm_core</exec_depend>
+  <exec_depend>awm_geometry</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>moveit_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>shape_msgs</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>awm_bringup</test_depend>
+  <test_depend>awm_cad</test_depend>
+  <test_depend>awm_seam</test_depend>
+  <test_depend>awm_process</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

@@ -123,6 +123,33 @@ def test_sample_closed_seam_and_stale_input(imported_parts):
         jsonio.read_json(job.seam_geometry_json, 'seam_geometry', base_dir=job.dir)
 
 
+def test_sample_partial_closed_seam(imported_parts):
+    """A22 start / end on the pipe circle: half circle crossing the edge origin, reversed."""
+    from awm_geometry import cli
+    job = imported_parts['pipe_flange']
+    weld = [e for e in _edges(job) if e['convexity'] == 'concave'
+            and abs(e['length_m'] - 2 * np.pi * 0.025) < 1e-6][0]
+    seam = seam_from_edges(job, 'S01', [weld['id']], reversed_=True)
+    r = 0.025
+    start = [r * np.cos(np.radians(90)), r * np.sin(np.radians(90)), 0.012]
+    end = [r * np.cos(np.radians(-90)), r * np.sin(np.radians(-90)), 0.012]
+    total = 2 * np.pi * r
+    seam.update({'start_m': start, 'end_m': end, 'length_m': np.pi * r, 'closed': False,
+                 'range_m': [0.75 * total, 1.25 * total], 'chain_length_m': total})
+    write_seams(job, [seam])
+    assert cli.main(['sample', '--job', str(job.dir), '--spacing-m', '0.004']) == 0
+    out = jsonio.read_json(job.seam_geometry_json, 'seam_geometry')['seams'][0]
+    pts = out['points']
+    assert out['length_m'] == pytest.approx(np.pi * r, abs=1e-5)  # chord sum of 0.5 mm steps
+    assert np.allclose(pts[0]['p_m'], start, atol=1e-6)
+    assert np.allclose(pts[-1]['p_m'], end, atol=1e-6)
+    # Reversed (clockwise seen from +z): from +y through the seam line at +x down to -y.
+    mid = pts[len(pts) // 2]['p_m']
+    assert mid[0] > 0.024
+    cross = np.cross(np.array(pts[0]['p_m']) - [0, 0, 0.012], pts[0]['t'])
+    assert cross[2] < 0
+
+
 def test_sample_rejects_unknown_edge(imported_parts):
     from awm_geometry import cli
     job = imported_parts['plate_tjoint']

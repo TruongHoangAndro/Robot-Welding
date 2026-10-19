@@ -40,6 +40,8 @@ class SeamRequest:
     weld_side: str = 'bisector'
     process_hint: Optional[str] = None
     reversed: bool = False
+    start_pick_m: Optional[List[float]] = None
+    end_pick_m: Optional[List[float]] = None
     note: str = ''
 
     @classmethod
@@ -51,6 +53,7 @@ class SeamRequest:
                    edges=list(data.get('edges', [])), picks_m=[list(p) for p in picks],
                    weld_side=data.get('weld_side', 'bisector'),
                    process_hint=data.get('process_hint'), reversed=bool(data.get('reversed', False)),
+                   start_pick_m=data.get('start_pick_m'), end_pick_m=data.get('end_pick_m'),
                    note=data.get('note', ''))
 
 
@@ -143,8 +146,63 @@ def order_chain(cat: EdgeCatalogue, edge_ids: Sequence[str]) -> Tuple[List[str],
     return chain, start_pt, tail, closed
 
 
-def seam_fingerprint(cat: EdgeCatalogue, edge_ids: Sequence[str]) -> str:
+def chain_polyline(cat: EdgeCatalogue, chain: Sequence[str], start: np.ndarray,
+                   reversed_single: bool) -> np.ndarray:
+    """Polyline of the chain in weld direction (same convention as awm_geometry sampling).
+
+    The first edge is oriented to meet the second one (or to start at ``start`` for an open
+    single edge); a single closed edge runs in curve direction, against it if ``reversed_single``.
+    """
+    polys = [np.asarray(cat.edges[e]['polyline_m'], float) for e in chain]
+    first = polys[0]
+    if len(polys) > 1:
+        nxt = polys[1]
+        d_end = min(np.linalg.norm(first[-1] - nxt[0]), np.linalg.norm(first[-1] - nxt[-1]))
+        d_start = min(np.linalg.norm(first[0] - nxt[0]), np.linalg.norm(first[0] - nxt[-1]))
+        if d_start < d_end:
+            first = first[::-1]
+    elif cat.edges[chain[0]]['closed']:
+        if reversed_single:
+            first = first[::-1]
+    elif np.linalg.norm(first[-1] - start) < np.linalg.norm(first[0] - start):
+        first = first[::-1]
+    out = [first]
+    for poly in polys[1:]:
+        tail = out[-1][-1]
+        out.append(poly if np.linalg.norm(poly[0] - tail) <= np.linalg.norm(poly[-1] - tail)
+                   else poly[::-1])
+    return np.vstack([out[0]] + [p[1:] for p in out[1:]])
+
+
+def project_on_polyline(poly: np.ndarray, point: Sequence[float]) -> Tuple[float, float]:
+    """(arc length of the closest point, distance) of a point to a polyline."""
+    p = np.asarray(point, float)
+    a, b = poly[:-1], poly[1:]
+    ab = b - a
+    seg_len = np.linalg.norm(ab, axis=1)
+    denom = np.where(seg_len > 0, seg_len ** 2, 1.0)
+    t = np.clip(np.einsum('ij,ij->i', p - a, ab) / denom, 0.0, 1.0)
+    closest = a + ab * t[:, None]
+    dist = np.linalg.norm(closest - p, axis=1)
+    k = int(np.argmin(dist))
+    s0 = float(np.sum(seg_len[:k]))
+    return s0 + float(t[k] * seg_len[k]), float(dist[k])
+
+
+def point_at(poly: np.ndarray, s: float) -> np.ndarray:
+    seg_len = np.linalg.norm(np.diff(poly, axis=0), axis=1)
+    cum = np.concatenate([[0.0], np.cumsum(seg_len)])
+    s = float(np.clip(s, 0.0, cum[-1]))
+    k = int(np.clip(np.searchsorted(cum, s) - 1, 0, len(seg_len) - 1))
+    w = 0.0 if seg_len[k] == 0 else (s - cum[k]) / seg_len[k]
+    return poly[k] * (1 - w) + poly[k + 1] * w
+
+
+def seam_fingerprint(cat: EdgeCatalogue, edge_ids: Sequence[str],
+                     range_m: Optional[Sequence[float]] = None) -> str:
     joined = '|'.join(sorted(cat.edges[e]['fingerprint'] for e in edge_ids))
+    if range_m is not None:
+        joined += f'|{round(range_m[0], 4)}:{round(range_m[1], 4)}'
     return hashlib.sha256(joined.encode()).hexdigest()
 
 
@@ -177,22 +235,99 @@ def build_seam(cat: EdgeCatalogue, req: SeamRequest) -> Dict:
     if req.reversed:
         chain = list(reversed(chain))
         start, end = end, start
+    length = float(sum(cat.edges[e]['length_m'] for e in chain))
+    range_m = None
+    if req.start_pick_m is not None or req.end_pick_m is not None:
+        range_m, start, end = _seam_range(cat, req, chain, start, closed)
+        length = range_m[1] - range_m[0]
     seam = {
         'seam_id': req.seam_id, 'edges': chain, 'reversed': req.reversed,
         'joint_type': req.joint_type, 'weld_side': req.weld_side, 'leg_mm': req.leg_mm,
         'sequence': req.sequence, 'process_hint': req.process_hint, 'material': req.material,
         'thickness_mm': req.thickness_mm,
         'start_m': [float(v) for v in start], 'end_m': [float(v) for v in end],
-        'length_m': float(sum(cat.edges[e]['length_m'] for e in chain)), 'closed': closed,
-        'fingerprint': seam_fingerprint(cat, chain),
+        'length_m': length, 'closed': closed and range_m is None,
+        'fingerprint': seam_fingerprint(cat, chain, range_m),
     }
+    if range_m is not None:
+        seam['range_m'] = range_m
+        seam['chain_length_m'] = float(sum(cat.edges[e]['length_m'] for e in chain))
     if req.note:
         seam['note'] = req.note
     return seam
 
 
+MIN_SEAM_M = 0.005
+
+
+def _seam_range(cat: EdgeCatalogue, req: SeamRequest, chain: List[str], start: np.ndarray,
+                closed: bool) -> Tuple[List[float], np.ndarray, np.ndarray]:
+    """A22 start / end: arc-length range of a partial seam from start / end picks."""
+    poly = chain_polyline(cat, chain, start, req.reversed)
+    total = float(np.sum(np.linalg.norm(np.diff(poly, axis=0), axis=1)))
+    s0, s1 = 0.0, total
+    for name, pick in (('start', req.start_pick_m), ('end', req.end_pick_m)):
+        if pick is None:
+            continue
+        s, dist = project_on_polyline(poly, pick)
+        if dist > PICK_MAX_DIST_M:
+            raise SeamDefinitionError(f'{req.seam_id}: {name} pick is {dist * 1000:.1f} mm from '
+                                      f'the seam edges')
+        if name == 'start':
+            s0 = s
+        else:
+            s1 = s
+    if closed:
+        if s1 <= s0 + 1e-9:
+            s1 += total
+    elif s1 <= s0:
+        raise SeamDefinitionError(f'{req.seam_id}: end pick lies before the start pick in weld '
+                                  f'direction (use reversed)')
+    # Picks are located on the display polyline; express the range in true arc length.
+    scale = float(sum(cat.edges[e]['length_m'] for e in chain)) / total
+    s0, s1 = s0 * scale, s1 * scale
+    poly_s0, poly_s1 = s0 / scale, s1 / scale
+    if s1 - s0 < MIN_SEAM_M:
+        raise SeamDefinitionError(f'{req.seam_id}: partial seam shorter than '
+                                  f'{MIN_SEAM_M * 1000:.0f} mm')
+    return [s0, s1], point_at(poly, poly_s0 % total if closed else poly_s0), \
+        point_at(poly, poly_s1 % total if closed and poly_s1 > total else poly_s1)
+
+
+def _interval(seam: Dict, flip: bool, total: float) -> Optional[Tuple[float, float]]:
+    """Arc-length interval of a partial seam, expressed in the other seam's direction if ``flip``.
+
+    Both directions of a chain share the same origin vertex, so s maps to total - s.
+    """
+    if 'range_m' not in seam:
+        return None
+    s0, s1 = seam['range_m']
+    if flip:
+        s0, s1 = total - s1, total - s0
+    if s0 < 0:
+        s0, s1 = s0 + total, s1 + total
+    return s0, s1
+
+
+def _overlap(a: Dict, b: Dict) -> bool:
+    """True if two seams weld a common piece of edge."""
+    if sorted(a['edges']) != sorted(b['edges']):
+        return True
+    total = a.get('chain_length_m') or b.get('chain_length_m')
+    flip = (a['reversed'] != b['reversed']) if len(a['edges']) == 1 else a['edges'] != b['edges']
+    ia, ib = _interval(a, False, total), _interval(b, flip, total)
+    if ia is None or ib is None:
+        return True
+
+    def split(iv):
+        s0, s1 = iv
+        return [(s0, s1)] if s1 <= total else [(s0, total), (0.0, s1 - total)]
+
+    return any(x0 < y1 - 1e-5 and y0 < x1 - 1e-5 for x0, x1 in split(ia) for y0, y1 in split(ib))
+
+
 def check_seam_list(seams: Sequence[Dict]) -> None:
-    """Unique ids, unique sequence numbers, no edge used by two seams."""
+    """Unique ids, unique sequence numbers, no piece of edge welded by two seams."""
     ids = [s['seam_id'] for s in seams]
     dup = {i for i in ids if ids.count(i) > 1}
     if dup:
@@ -201,12 +336,12 @@ def check_seam_list(seams: Sequence[Dict]) -> None:
     dup_seq = {q for q in seqs if seqs.count(q) > 1}
     if dup_seq:
         raise SeamDefinitionError(f'duplicate sequence number(s): {sorted(dup_seq)}')
-    used: Dict[str, str] = {}
-    for s in seams:
-        for e in s['edges']:
-            if e in used:
-                raise SeamDefinitionError(f'edge {e} is used by {used[e]} and {s["seam_id"]}')
-            used[e] = s['seam_id']
+    for i, a in enumerate(seams):
+        for b in seams[i + 1:]:
+            shared = set(a['edges']) & set(b['edges'])
+            if shared and _overlap(a, b):
+                raise SeamDefinitionError(f'edge(s) {sorted(shared)} used by {a["seam_id"]} and '
+                                          f'{b["seam_id"]} with overlapping ranges')
 
 
 def load_seams(job: JobPaths, check: bool = True) -> Dict:
@@ -268,6 +403,6 @@ def rematch(old_seams: Sequence[Dict], old_cat: EdgeCatalogue,
             continue
         updated = dict(seam)
         updated['edges'] = new_ids
-        updated['fingerprint'] = seam_fingerprint(new_cat, new_ids)
+        updated['fingerprint'] = seam_fingerprint(new_cat, new_ids, seam.get('range_m'))
         matched.append(updated)
     return matched, missing

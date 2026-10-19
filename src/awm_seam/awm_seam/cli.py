@@ -53,6 +53,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     d.add_argument('--weld-side', default='bisector')
     d.add_argument('--process-hint', choices=['MIG', 'LASER'], default=None)
     d.add_argument('--reversed', action='store_true')
+    d.add_argument('--start-pick', type=_point, default=None,
+                   help='x,y,z on the chain where a partial seam starts (A22 start)')
+    d.add_argument('--end-pick', type=_point, default=None,
+                   help='x,y,z on the chain where a partial seam ends (A22 end)')
     d.add_argument('--note', default='')
     f = sub.add_parser('from-picks', help='define all seams of a pick request file (JSON)')
     f.add_argument('--job', required=True)
@@ -75,7 +79,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 sequence=args.sequence, material=args.material, thickness_mm=args.thickness_mm,
                 edges=[e for e in args.edges.split(',') if e], picks_m=args.pick,
                 weld_side=args.weld_side, process_hint=args.process_hint,
-                reversed=args.reversed, note=args.note)
+                reversed=args.reversed, start_pick_m=args.start_pick, end_pick_m=args.end_pick,
+                note=args.note)
             doc = define_seams(job, [req])
         elif args.cmd == 'from-picks':
             data = json.loads(open(args.picks, encoding='utf-8').read())

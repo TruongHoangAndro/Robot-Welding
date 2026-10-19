@@ -119,6 +119,20 @@
           },
           "note": {
             "type": "string"
+          },
+          "range_m": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "A22 start / end: arc length [s_start, s_end] along the edge chain in weld direction, from the chain start. Absent = whole chain. Closed chains may wrap (s_end > chain length)."
+          },
+          "chain_length_m": {
+            "type": "number",
+            "exclusiveMinimum": 0
           }
         }
       },
