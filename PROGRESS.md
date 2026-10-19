@@ -10,9 +10,9 @@ Read this first after a restart. Continue from the first open task. Plan: `PLAN.
 | T1 awm_core | done | 22 tests (ROS py3.12 + conda py3.10) |
 | T2 awm_geometry import/edges/test parts | done | OCC 8 API; explicit mm→m; BRepOffset_Analyse convexity |
 | T3 awm_geometry sampling | done | exact curve evaluation; colcon runs OCC suite via conda (12 tests) |
-| T4 awm_cad | open | |
-| T5 awm_seam | open | |
-| T6 awm_process | open | |
+| T4 awm_cad | done | mocked + real OCC import test |
+| T5 awm_seam | done | picking, chain, attributes, export, rematch (16 tests) |
+| T6 awm_process | done | WPS lookup, SAMPLE gate, process.json (7 tests) |
 | T7 awm_interfaces | open | |
 | T8 awm_description | open | |
 | T9 awm_bringup | open | |
