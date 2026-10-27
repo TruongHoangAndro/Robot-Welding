@@ -1,0 +1,9 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.obsidian/workspace*.json
+.obsidian/cache
+.trash/
+# backups are zipped to Drive, not committed
+*.zip
