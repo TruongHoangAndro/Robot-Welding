@@ -1,183 +1,143 @@
-# APLSMN601 offline engineering chain (A1, A2, A3, A4, A6, A7) — implementation plan
+# APLSMN601 — implementation plan Rev 0.4 (Sim-0 → Sim-1 → Sim-2)
 
-Status: Phase 1 plan, written by the agent on 2026-10-19. Decisions are logged in §8 and in `PROGRESS.md`.
-Sources: DES-001 Rev 0.2 (+ `docs/generated/DES-001_change_proposal.md`), DES-003 (exported in
-`docs/generated/function_register_*.md`), demo discovery `docs/generated/demo_discovery.md`.
+Status: **draft for review by Truong Hoang**, written by the software agent on 2026-10-27. No code has been changed
+for this plan yet. The previous plan (offline chain A1–A7 on DES-001 Rev 0.2, delivered 2026-10-19) is in git:
+`git show 13ef478:PLAN.md`.
 
-## 1. Packages and dependency graph
+Sources: DES-001 Rev 0.4 (software architecture), DES-003 Rev 0.4 (function register, "Sim stage" column),
+TST-002 Rev 0.2 (collision-avoidance spike), change proposal `docs/generated/DES-001_change_proposal.md` CP-9…CP-23
+(decisions of 2026-10-27), cell CAD `docs/3D/APLSMN601_Automated Weldment System.step`.
 
-```
-awm_interfaces (msg/srv/action, §7.1, v0 — not used by the offline chain yet)
+## 1. Goal per milestone
 
-awm_core  (pure Python: numpy + jsonschema; importable from ROS python 3.12 AND conda python 3.10)
-   ▲   ▲   ▲
-   │   │   └──────────────────────────────────────────────┐
-awm_geometry (pure Python + OCC, conda env only; CLI)      │
-   ▲ (subprocess, occ_python_cmd)                          │
-awm_cad (A11–A14 wrapper) ─► awm_seam (A21/A22/A24, pure) ─► awm_process (A31–A33, pure)
-                                                           │
-awm_description (D14: xacro, SRDF, MoveIt cfg) ◄── awm_bringup (sim.launch.py, D16 config, repo template)
-                                                           │
-awm_path (A41–A45, rclpy client of move_group) ─► awm_program (A61–A64) ─► awm_verify (A71–A74, run_chain)
-```
+| Milestone | Date | Done when |
+|---|---|---|
+| TST-002 decision | Thu 2026-10-29 | Spike results C1, C2, C3, C5, C8 on the golden part (J1, J2), Go / Pivot / No-Go input |
+| Sim-0 | Fri 2026-10-30 | mm units in all project data, cell imported from the Fusion STEP, cell model with LightWELD head and positioner joint in MoveIt, `awm_interfaces` contract in mm reviewed |
+| Sim-1 | Fri 2026-11-20 | In the browser: create job from the golden part → pick J1, J2 → plan (ψ × IK ladder, positioner modes C / B) → failing points red → playback of robot + positioner (mock hardware) → simulation report D15. Sim-1 ends at A71 (CP-17) |
+| Sim-2 | Fri 2026-12-04 | Same program, released with `scope: simulation`, replayed by the runtime chain (M8 / M9 / M10 sim) through `ur_robot_driver` on URSim + mock positioner joint |
 
-| Package | Type | Depends on | Runs in |
+Golden part: `564082-Assembly-3 parts` (pipe nipple + solid + elbow) from the cell CAD. Two closed butt joints,
+Ø 26.67 mm: **J1** nipple ↔ solid, coaxial with the positioner axis → Mode C; **J2** solid ↔ elbow, 76.6 mm off the
+axis, axis perpendicular to it → Mode B or robot alone.
+
+## 2. What changes against the delivered code (Rev 0.2)
+
+| Area | Delivered 2026-10-19 | Rev 0.4 + decisions of 2026-10-27 | Action |
 |---|---|---|---|
-| awm_interfaces | ament_cmake | rosidl | ROS |
-| awm_core | ament_python | numpy, jsonschema | ROS py3.12 and conda py3.10 |
-| awm_geometry | ament_python (no rclpy) | awm_core, OCC | conda py3.10 only (installed by colcon only to be locatable) |
-| awm_cad | ament_python | awm_core, awm_geometry (subprocess) | ROS |
-| awm_seam | ament_python | awm_core | ROS / plain python |
-| awm_process | ament_python | awm_core | ROS / plain python |
-| awm_description | ament_cmake | ur_description, ur_moveit_config, xacro | ROS |
-| awm_bringup | ament_python | awm_description, moveit_configs_utils, controller_manager, mock_components | ROS |
-| awm_path | ament_python | awm_core, awm_geometry (subprocess), rclpy, moveit_msgs | ROS |
-| awm_program | ament_python | awm_core, awm_path (client), rclpy, moveit_msgs | ROS |
-| awm_verify | ament_python | everything above, control_msgs | ROS |
+| Units | SI (m, rad) in schemas | mm / deg / s in all project data; one adapter (ADR-14) | Migrate (T0.1) |
+| Process | MIG torch, weave | LightWELD laser, presets, wobble = head parameter | Rewrite `awm_process`, tool model |
+| Tool model | Demo MIG torch, nominal | LightWELD head + mount from Fusion CAD, TCP at nozzle tip (CP-10) | New (T0.3) |
+| Cell model | Hand-written boxes | Fusion STEP assembly, marker components `REF_*` (CP-23) | New import (T0.2) |
+| Positioner | none | 1-axis, Phase 1, ROS 2 control (CP-20) | New joint + controller (T0.3, T0.4) |
+| IK / planner | KDL Cartesian + pick_ik seeds | Analytic UR IK, 8 branches × ψ, ladder-graph DP (ADR-12), Mode C / B | Rewrite `awm_path` core (WP1) |
+| Seams | edge ids, attributes, range_m | + n1 / n2, closed flag, sequence (no tacks, CP-19), Engineer only (CP-21) | Extend `awm_seam` |
+| CAD outputs | STL mesh, edges.json | + D20 `view.glb` + `topology.json`, collision mesh with `face_id`, multi-solid | Extend `awm_geometry` / `awm_cad` |
+| Placement | fixed in calibration | D19 with `source` study / fixture_cad (CP-22) | New |
+| Program | 6 joints, MIG events | 7 joints, positioner segments, LaserReady / EmissionOff | Extend `awm_program` |
+| Verify / release | simulation / production scopes | same + D19 source rule, positioner in dense check | Extend `awm_verify` |
+| UI | none (CLI + RViz) | Web: `awm_api` (FastAPI) + `awm_web` (React / r3f) | New (WP3) |
+| Runtime | none | M8 / M9 / M10-sim for Sim-2 | New (WP4) |
 
-**OCC bridge.** ROS-side code never imports OCC. `awm_core.occ_bridge.run_geometry_cli(args)` builds the
-command from parameter `occ_python_cmd` (default: env `AWM_OCC_PYTHON`), sets `PYTHONPATH` to the install
-locations of `awm_geometry` and `awm_core` (found with `importlib.util.find_spec` in the ROS python, so no
-absolute path in source), runs `-m awm_geometry.cli ...`, and raises `GeometryCliError(stderr)` on exit ≠ 0.
+Kept as is: job repository, headers, SHA-256 stale-input checks, OCC subprocess bridge, simulation / production
+release scopes, dense collision check (CP-16), Docker workflow.
 
-## 2. Job package and files (DES-001 §5.2 + CP-3)
+## 3. Work packages
 
-```
-<repo_root>/
-├── cell/
-│   ├── wps/WPS-*.json                 D05  (SAMPLE)
-│   ├── calibration/<id>.json          D08  (NOMINAL) ; active.json = copy of the active record + `source` name
-│   └── io_map.yaml                    D11  TODO(OI-1) placeholder
-└── jobs/<PartNo>_<PartRev>/
-    ├── model.step                     D01 copy (read-only)
-    ├── part.json                      D03
-    ├── cache/model.brep, mesh.stl, edges.json, seam_geometry.json   derived
-    ├── seams.json                     D04
-    ├── process.json                   D06
-    ├── path.json                      D07 (part frame)
-    ├── programs/<P###>/program.json   D09 (base frame, joint segments + events)
-    ├── programs/<P###>/verify/report.json, records/*.json   D15, A72/A73 records
-    └── release.json                   D10
-```
-`active.json` is a copy (not a symlink: the repository is backed up to a Windows shared drive).
+Each task lists its test. "Sim" = needs the ROS sim launch; everything else runs with plain pytest.
 
-## 3. JSON schemas (draft 2020-12, in `awm_core/schemas/`)
-
-Common header (every file): `schema_version` ("1.0"), `created_by` ("<tool> <version>"), `created_at`
-(ISO 8601 UTC), `inputs`: list of `{name, sha256}` (paths relative to the job / repo root).
-Readers recompute input hashes and refuse stale inputs (`StaleInputError`).
-Units: SI unless the field name says `_mm`, `_deg`, `_mm_s`, `_l_min`, `_A`, `_V`, `_W`, `_m_min`.
-Poses: `{"position_m": [x,y,z], "quat_xyzw": [x,y,z,w]}`.
-
-| Schema | Key fields |
-|---|---|
-| part (D03) | part_no, part_rev, step_file, step_sha256, unit_source ("mm"), bbox_m {min,max}, counts {solids, faces, edges}, checks [{name, ok, detail}], healed (bool), mesh {file, sha256, linear_deflection_m, triangles}, brep_cache, edges_file |
-| edges (derived) | edges: [{id "E<n>", curve_type, length_m, start_m, end_m, mid_m, faces ["F<n>",…], convexity (concave/convex/smooth/free), polyline_m [[x,y,z]…], fingerprint (sha256 of rounded type/length/end points)}] |
-| seams (D04) | seams: [{seam_id "S01", edges ["E12",…], reversed (bool), joint_type (fillet/butt/lap/groove), weld_side (both faces / face id), leg_mm, sequence, process_hint (MIG/LASER/null), material, thickness_mm, start_m, end_m, length_m, fingerprint}] |
-| wps (D05) | wps_id, status ("SAMPLE"), process (MIG/LASER), material, joint_types [], thickness_mm {min,max}, leg_mm {min,max}, parameters {…}, motion {travel_speed_mm_s, work_angle_deg, travel_angle_deg, stickout_mm, focus_offset_mm, weave_width_mm, weave_freq_hz}, timing {pre_flow_s, post_flow_s, crater_fill_s, arc_ok_timeout_s} |
-| process (D06) | seams: [{seam_id, process, wps_id, wps_sha256, parameters, motion, timing}] |
-| seam_geometry (derived) | seams: [{seam_id, spacing_m, points: [{s_m, p_m, t, n1, n2}]}] |
-| path (D07) | frame "part", tool ("tcp_mig"/"tcp_laser"), calibration_id + sha256 used for the reach check, seams: [{seam_id, process, travel_speed_m_s, approach_pose, weld_poses [...], retract_pose, reach {fraction, ik_seed_joints, min_manipulability, ok}, collision {ok}}] , rejected: [{seam_id, reason}] |
-| calibration (D08) | calibration_id, status ("NOMINAL"/"MEASURED"), base_T_fixture, fixture_T_part, tcp {tcp_mig, tcp_laser} (tool0_T_tcp) |
-| program (D09) | program_rev, frame "base_link", calibration_sha256, joint_names, home_joints, segments: [{segment_id, kind (air/approach/weld/retract), seam_id, points [{t_s, q_rad[6]}], duration_s}], events: [{event_id, type (WeldStart/WeldEnd), seam_id, after_segment, wps_id, parameters, timing}], cycle_time_s |
-| release (D10) | program_rev, program_sha256, report_sha256, scope ("simulation"/"production"), records [{type, file, sha256}], approved_by, approved_at, locked (true) |
-| verify report (D15) | program_rev, program_sha256, checks {reach, collision, start_state, limits, events_at_rest} each {ok, detail}, replay {executed, segments_ok, max_tracking_error_rad, measured_time_s}, cycle_time_s, result ("PASS"/"FAIL") |
-| record (A72/A73) | record_type (dry_run/trial_weld), program_rev, operator, date, result (PASS/FAIL), speed_override, notes |
-
-## 4. ROS interfaces needed for A1–A7
-
-Offline chain uses only MoveIt 2 / ros2_control interfaces (DES-001 §7.1 last two rows):
-`/compute_ik` (GetPositionIK), `/compute_fk` (GetPositionFK), `/compute_cartesian_path` (GetCartesianPath),
-`/plan_kinematic_path` (GetMotionPlan, OMPL, air moves), `/check_state_validity` (GetStateValidity),
-`/apply_planning_scene` (ApplyPlanningScene), `/joint_trajectory_controller/follow_joint_trajectory`
-(FollowJointTrajectory, mock hardware replay), `/joint_states`.
-`awm_interfaces` gets the §7.1 runtime definitions (CellCommand.srv, CellState.msg, ExecuteSegment.action,
-WeldEvent.action, PlcStatus.msg, Alarm.msg) as v0 so later runtime packages can build against them.
-
-## 5. Algorithms (summary)
-
-- **A11/A12** STEPControl_Reader (mm → m scaling at the boundary), ShapeFix_Shape, BRepCheck_Analyzer,
-  solid/shell counts, bbox, small-edge check. **A13** BRepMesh_IncrementalMesh → binary STL in metres.
-  **A14** part.json with SHA-256 of model.step.
-- **A21** edge catalogue from `TopExp.MapShapes` (stable indexed map) with adjacency (`MapShapesAndAncestors`)
-  and convexity from the face normals at the edge midpoint; picking by edge id or by nearest point (UI click).
-  **A22** attributes validated (edges connected into one chain, concave for fillet). **A24** seams.json.
-- **A41** sample each seam chain at `sample_spacing_m` with tangent t and the two face normals n1, n2.
-- **A42** fillet / groove: z_tool = −normalize(n1+n2) rotated by work-angle offset; travel angle tilts z towards
-  t (push > 0); x_tool = travel direction projected ⟂ z; y = z × x. Laser: TCP offset `focus_offset_mm` along z.
-  Weave ≠ 0 → seam rejected ("weave planned for R3").
-- **A43** approach / retract = start / end pose moved by `approach_distance_m` along −z.
-- **A44/A45** part pose from the active calibration; part mesh added to the planning scene;
-  IK of the approach pose with several seeds (pick_ik), then `compute_cartesian_path` approach→start,
-  weld waypoints, end→retract with `avoid_collisions=true`. Accept only `fraction == 1.0` for every segment;
-  otherwise the seam is rejected with the reason (no fallback).
-- **A61** base_T_tcp = base_T_fixture · fixture_T_part · part_T_pose (tool frame = tcp link of D14, checked
-  against D08 TCP by FK). **A62** segments: air (OMPL joint plan home→approach / retract→next approach /
-  →home), approach, weld, retract (Cartesian). Time parameterisation: weld segment at constant TCP speed
-  from WPS travel speed (arc length from FK, short accel ramps), others trapezoidal with config velocity /
-  acceleration scaling; joint velocity limits checked. **A63** WeldStart after approach, WeldEnd after weld —
-  both at segment boundaries where velocity is zero. **A64** `programs/P###/program.json`, read-only after release.
-- **A71** replay all segments on mock hardware through the JTC action; check start-state, tracking error,
-  state validity of every trajectory point; report D15. **A72/A73** record CLI + templates.
-  **A74** release.json; scope `production` needs PASS dry-run and trial-weld records, `simulation` needs only
-  the PASS report and is marked as such. Program directory made read-only.
-
-## 6. Task checklist (ordered by dependency; each with its test)
+### WP0 — Foundations (Sim-0)
 
 | # | Task | Test |
 |---|---|---|
-| T1 | awm_core: hashing, json io + header, schemas, frames, repository paths, occ bridge | pytest (no ROS): schemas valid, round trips, stale-hash detection, frame math |
-| T2 | awm_geometry: STEP import/heal/mesh/part.json, edge catalogue, test-part generator | `$AWM_OCC_PYTHON -m pytest`; colcon test runs the CLI via subprocess |
-| T3 | awm_geometry: seam sampling (points, tangents, normals) | pytest on generated plate/flange parts |
-| T4 | awm_cad: import CLI wrapper (A11–A14) | pytest with fixture JSON + optional real CLI |
-| T5 | awm_seam: seam define/pick/export (A21, A22, A24) | pytest on fixture edges.json |
-| T6 | awm_process: WPS library + assignment (A31–A33), SAMPLE WPS files | pytest |
-| T7 | awm_interfaces v0 | colcon build |
-| T8 | awm_description: UR5e + torch + Pismo frame + fixture xacro, SRDF, MoveIt config | xacro → URDF parse test; check_urdf-like pytest |
-| T9 | awm_bringup: sim.launch.py (mock hardware, move_group, RViz/headless), D16 config, repo template | launch smoke test with timeout (move_group services up) |
-| T10 | awm_path: pose generation (pure) | pytest (no ROS) |
-| T11 | awm_path: MoveIt client (IK, Cartesian, scene) → path.json | launch_testing with sim headless |
-| T12 | awm_program: transform + segments + time param + events (pure parts) | pytest |
-| T13 | awm_program: MoveIt-backed program build → program.json | launch_testing |
-| T14 | awm_verify: replay + report, records CLI, release | pytest + launch_testing |
-| T15 | run_chain end-to-end on 2 generated parts | pytest e2e + `ros2 run awm_verify run_chain` |
-| T16 | Docs: READMEs, USER_GUIDE, TRACEABILITY, FINAL_REPORT | — |
+| T0.1 | **mm migration.** `awm_core.units`: the only mm ↔ m / deg ↔ rad converter (scalars, vectors, poses, joint lists). Schemas v2 in mm / deg (`*_mm`, `*_deg`, `*_mm_s`); readers refuse v1. All packages switched; URDF / MoveIt calls go through the adapter. Static check: no `1000` / `0.001` scale literals outside `awm_core.units` | Adapter round-trip tests; schema tests; source-scan test fails on ad-hoc scaling |
+| T0.2 | **Cell CAD import** (`awm_geometry cell-import`): read the Fusion STEP with XCAF; CAD → `world` rotation from a config value (this file: Y up); component → role map in `cell/cad_map.yaml` (data, not code): `static`, `positioner_rotating`, `fixture`, `part`, `head`, `mount`, `ignore`; collision meshes (convex hulls for the surface-model head), frames from `REF_*` markers; refuse import on missing markers, duplicates or unit mismatch. Extract the part sub-assembly to the job (`model.step` + source file SHA-256 + component path) | pytest on the real file (slow mark, 60 s read) + a small synthetic assembly |
+| T0.3 | **Cell model v2** (`awm_description`): UR5e from `ur_description`; LightWELD head + mount links, `nozzle_tip` / `nozzle_body` split, `tcp_laser` (CP-10); `positioner_joint` (revolute, limits from config) with rotating holders and the part as children of `positioner_flange`; static cell meshes from T0.2 loaded from the repository root (cell data stays out of the source tree); SRDF + ACM (only `nozzle_tip` ↔ part); padding 3 mm | xacro → URDF parse; FK of `tcp_laser` vs CAD pose; ACM test |
+| T0.4 | **ros2_control**: one controller manager, `ur_manipulator` controller + `positioner_trajectory_controller`; `mock_components` for both in Sim-1. Launch names `sim_mock` (Sim-1), `sim_ursim` (Sim-2) (CP-14 #5) | Launch smoke test: both controllers active, `/joint_states` has 7 joints |
+| T0.5 | **`awm_interfaces` v1**: lengths `*_mm`, LaserReady / EmissionOff, positioner fields; reviewed before WP4 | colcon build + message round trip |
+| T0.6 | **Environment**: `ur-analytic-ik` in a venv inside `awm_dev` (PEP 668), `moveit_py` check, Node.js for `awm_web`, all recorded in `docker/Dockerfile` | Version report in `docs/generated/env_report.md` |
 
-## 7. Reuse map (demo → new) — see `docs/generated/demo_discovery.md` for code locations
+### WP1 — Planner (ADR-12, TST-002) — first results for 29 Oct, complete for Sim-1
 
-The demo is ROS 2 Jazzy C++/Python with hard-coded seams. Its logic was used as reference; no file
-was copied verbatim (the demo code depends on assembly-mode data, absolute paths and a dual-robot
-model). Findings fixed by the new design:
-
-| Demo file (hold_and_weld_*) | New file | Findings fixed |
+| # | Task | Test |
 |---|---|---|
-| planning/occt loader + seam_extractor_occt.py | awm_geometry/occ_io.py, topology.py, sampling.py | F03 (no hard-coded seams), F04 (pythonocc in conda env), units mm→m explicit, OCC 8 API (`topods.Edge`, `brepbndlib.Add`, no `HashCode`), arc-length sampling, edge orientation respected |
-| planning/weld_planner.py (torch frame) | awm_path/poses.py | right-handed tool frame (demo z-flip bug), work / travel angle from WPS, approach / retract along the torch axis |
-| application/welder_action_server.cpp (planning part) | awm_path/motion.py, planner.py | F01 (100 % Cartesian, was 35 %), F07 (collision check on every segment, no blind fallbacks, no broad ACM), F12 groundwork |
-| application/welder_action_server.cpp (execution part) | awm_program/generator.py (offline), awm_verify/replay.py (sim) | ADR-05 offline/online split, F12 constant TCP speed, F14 calibration hash in program |
-| application/dual_robot_coordinator.cpp | — (M8 out of scope) | F02: seam ids only from seams.json / program |
-| description/robot2_welder.xacro, welding_torch_prefix.xacro, ur5e_arm_*.xacro | awm_description/urdf/*.xacro | F10 (UR5e only), F13 (mock_components instead of gz), torch TCP from config (π instead of 3.14) |
-| bringup/config/moveit/*.yaml, launch/*.py | awm_description/config, awm_bringup/launch/sim.launch.py | F05 (ur_description, pick_ik declared), F06 (no absolute paths), F08 (one D16 params file) |
-| calibration_tools (47 scripts) | — | not reused (DES-001 §10) |
-| gripper server / gripper_sampler | — | parked (F10) |
+| T1.1 | Seam frame (CP-9): X = tangent, Z = bisector of n1 / n2 out of the material (butt joint on a tube: n1 = n2 → surface normal), beam axis = −Z; arc-length sampling 1–3 mm; 360° closing overlap | Pure pytest on J1 / J2 geometry (frames orthonormal, Z outward) |
+| T1.2 | Analytic IK: all 8 UR5e solutions for a `tool0` pose (ur-analytic-ik; fallback: port of `ur_kin.cpp`), joint limits, singularity measures | Compare with MoveIt FK on random states (< 0.01 mm) |
+| T1.3 | Candidate sweep per point: ψ 0–350° step 10° × 8 branches (× positioner angle in Mode B); validity + minimum distance from MoveIt (in-process `moveit_py` planning scene if available, else services); output `candidates.csv` (TST-002 format) | Sim: C1 scene sanity 10 / 10 colliding + 10 / 10 free |
+| T1.4 | Ladder-graph DP: one IK branch per seam, \|Δq\| ≤ 5° per step, wrist-3 within ±180° of start and ±270° absolute (CP-14 #3), cost = joint motion + deviation from nominal + low-clearance penalty + wrist-3 travel; per-point status (OK / collision / reach / singularity / limit) for the red points | Pure pytest on synthetic ladders; Sim: C2, C3 on J2 |
+| T1.5 | **Mode C** (seam coaxial with the positioner axis, detected from geometry): one fixed robot pose (ψ / branch with the largest clearance over the full turn), collision of head vs. rotating part + holders every 2° over 360° + overlap; positioner speed ω = travel speed / radius | Sim: J1 100 % with clearance report |
+| T1.6 | **Mode B**: split the seam into arcs, candidate positioner angles (e.g. 15° steps), ladder per (arc, angle), fewest segments covering 100 %; robot-only first, positioner only if needed | Sim: J2 coverage, C8 numbers robot-only vs. with positioner |
+| T1.7 | Approach / retract 30–50 mm along the beam axis; OMPL air moves (robot) and index moves (positioner, robot parked) with dense collision check (CP-16) | Sim: C4 clearance ≥ 10 mm |
+| T1.8 | Time parameterisation (A47): robot weld speed in the part frame, error < 5 %; Mode C positioner profile; wrist-3 / cable-wrap check (A48) | Pure pytest on speed error |
+| T1.9 | `path.json` v2 (D07): poses in mm in the `part` frame, joint path (6 + positioner, deg), mode per segment, per-point status, D08 hash (CP-15, CP-18). TST-002 harness: C1–C6, C8 table for TST-002 Rev 0.3 | Schema test; harness run on the golden part |
 
-## 8. Decisions and risks
+### WP2 — Engineering chain on Rev 0.4 (Sim-1)
 
-| # | Decision / risk | Reason / fallback |
+| # | Task | Test |
 |---|---|---|
-| D1 | ROS 2 Jazzy in Docker (`awm_dev`) | CLAUDE.md; change proposal CP-1 |
-| D2 | Seams defined via edge catalogue (pure Python), OCC only for import and sampling | Keeps ROS side testable without conda; one geometry source |
-| D3 | Edge picking by id or nearest point | Same API the Qt GUI will use for a click |
-| D4 | `active.json` is a copy, not a link | Shared drive backup |
-| D5 | Release scopes simulation / production | A72/A73 are not executable here; never fake records |
-| D6 | Planning scene part mesh from `cache/mesh.stl` (own STL reader) | No extra deps |
-| D8 | Partial seams (`range_m`, A22 start / end) | 360° orbit not reachable from a fixed base (see PROGRESS.md) |
-| D9 | `joint_path` stored in path.json (D07, A44 "joint path") and reused by M6 | IK solvers are stochastic; M6 verifies by FK instead of re-solving |
-| D10 | KDL for Cartesian (`weld_arm`), pick_ik global for IK search (`weld_arm_search`) | Deterministic Cartesian tracking; global branch search |
-| D11 | Weld segments checked against joint limits, other moves against limits × velocity_scaling | Weld speed is a process value; no limit raised |
-| D12 | Dense (0.02 rad) collision check of all segments in M6 (air moves) and A71 | move_group checks only time-parameterised waypoints |
-| D7 | Fixture and Pismo frame dimensions are NOMINAL placeholders `TODO(OI-6)` style values in YAML | Real drawings not available |
-| R1 | pick_ik success rate / solve time | Multiple seeds; fallback to KDL configurable in kinematics.yaml (logged, not silent) |
-| R2 | compute_cartesian_path fraction < 1 near singularities | Reject seam with reason; tune part placement in test data only |
-| R3 | OCC 7.x → 8.0 API differences (HashCode removed, static methods) | Use `TopTools_IndexedMapOfShape`, `topods.Edge`, `brepbndlib.Add` |
-| R4 | DDS interference with the demo container | Domain 42, localhost discovery, private IPC |
+| T2.1 | `awm_cad`: split solids, D20 view model (`view.glb`, one node per face / edge, chord ≤ 0.05 mm; `topology.json`), collision mesh with `face_id` (chord ≤ 0.1 mm near seams) | pytest on the golden part: 3 solids, edge ids stable across re-imports |
+| T2.2 | `awm_seam`: pick by edge id, auto-chain tangent edges, attributes incl. closed flag and sequence, n1 / n2 export, fingerprint re-match | pytest: J1, J2 picked from their edge ids |
+| T2.3 | `awm_process`: WPS library v2 (mm, LightWELD preset id, CW / HPP, wobble display, focus offset, versioning, released WPS read-only); one SAMPLE WPS | pytest |
+| T2.4 | Placement (CP-22): D19 with `source`; Sim-1 placement study = candidates entered by hand, each planned in full; import from the fixture CAD (T0.2) | pytest + Sim: golden part from the cell CAD |
+| T2.5 | `awm_program`: 7-joint segments (air, approach, weld_robot, weld_positioner, retract, index), events at rest of robot **and** positioner, calibration hash | Pure pytest + Sim program build |
+| T2.6 | `awm_verify`: replay of both controllers on mock hardware, dense check incl. positioner, D15 report, simulation-scope release (CP-17) and D19 source rule | Sim e2e: golden part → PASS → simulation release |
+
+### WP3 — Web UI (Sim-1), DES-001 §4.5 / §7.4
+
+| # | Task | Test |
+|---|---|---|
+| T3.1 | `awm_api` (FastAPI + rclpy): `/auth/login` (single local login, roles stubbed per A88), `/jobs`, `/jobs/{id}/view`, `/seams` (Engineer only), `/process`, `/plan` (async + WebSocket progress), `/simulation`, `/release` (simulation scope) | pytest with FastAPI test client |
+| T3.2 | `awm_web` (React + TS + react-three-fiber + urdf-loader): S1 job library, S2 seam picker (edge picking from D20, chain, attributes), S4 simulation (scrubber, red points, robot + positioner animation, cycle time); S3 process minimal | Component tests + one scripted browser run |
+| T3.3 | `web` launch: `awm_api` + static front-end build | Smoke test |
+
+### WP4 — Runtime chain on URSim (Sim-2)
+
+| # | Task | Test |
+|---|---|---|
+| T4.1 | URSim e-Series container on a private Docker network (no host network, no real IP), `sim_ursim` launch: `ur_robot_driver` + mock positioner joint in the same controller manager | Driver connects, 7 joints in `/joint_states` |
+| T4.2 | `awm_plc_bridge` sim mode: WeldStart / WeldEnd → simulated LaserReady / EmissionOff, timeouts, heartbeat; no emission command path to hardware | pytest |
+| T4.3 | `awm_executor` (M9, C++ per ADR-08): start-state check, segment replay, speed-scaling monitor (weld only at 100 %) | Sim-2 replay of the golden part |
+| T4.4 | `awm_cell` (M8, minimal): load release (scope check, hashes), seam loop, FAULT on timeout / scaling change | Sim-2 e2e + fault injection |
+
+## 4. Schedule (proposal)
+
+| Dates | Work |
+|---|---|
+| Wed 28 – Thu 29 Oct | Spike for TST-002 on J1 / J2: T1.1, T1.2, T1.3, T1.4 on a provisional scene (cell CAD as static meshes, head from CAD, positioner fixed at 0° plus a Mode C check) → C1, C2, C3, C5, C8 numbers for the 29 Oct meeting |
+| Fri 30 Oct (Sim-0) | T0.5 contract, T0.6 environment; T0.1 started |
+| 2 – 6 Nov | T0.1 – T0.4 finished; T1.5 – T1.9 |
+| 9 – 13 Nov | WP2; T3.1 |
+| 16 – 20 Nov | T3.2, T3.3; Sim-1 demo on Fri 20 Nov |
+| 23 Nov – 4 Dec | WP4; Sim-2 on Fri 4 Dec |
+
+**Risk to the dates:** Sim-0 by 30 Oct is not realistic for T0.1 – T0.4 together with the spike; the plan keeps the
+spike first and moves the rest of WP0 into the week of 2 Nov. The Web UI (WP3) is the largest new block; if it is
+late, Sim-1 is shown with the same API and RViz playback, and the browser screens follow.
+
+## 5. Inputs needed (owner)
+
+| # | Input | Needed for | Owner |
+|---|---|---|---|
+| I1 | Marker components `REF_WORLD`, `REF_UR_BASE`, `REF_FIXTURE`, `REF_PART`, `REF_POSITIONER`, `REF_TOOL0`, `REF_TCP` in the Fusion model; remove the duplicate `ASSY, Welding tool`; state the up axis | T0.2, T0.3 (until then frames are derived from components and marked Assumption) | Mechanical (Nghia Nguyen) |
+| I2 | Nozzle tip / TCP point of the LightWELD head (IPG data or measured on the CAD) | T0.3, CP-10 | Khang Doan |
+| I3 | Which holders rotate with the part (`Part1`, `Part2`, `Part3`)? Positioner angle limits (cable / belt) | T0.3, T1.5 | Mechanical |
+| I4 | Positioner motor driver, encoder, fieldbus (EtherCAT proposed) | Hardware stage only; Sim uses mock | Mechanical / electrical (OI-14) |
+| I5 | Sample WPS for J1 / J2: travel speed, head angles, preset id | T1.5, T1.8, T2.3 | Welding engineer |
+| I6 | Upper laser enclosure model (collision when the robot reaches high) | T0.2 | Mechanical |
+| I7 | CI host for Sim-0 "Git + CI" (GitHub Actions needs a public base image, not the local `ros2-jazzy-hardware-accelerated`) | Sim-0 | Truong |
+
+## 6. Rules carried over
+
+No part-specific code: J1 / J2, component names and poses live only in job / cell data and config. No partial-path
+fallback: a seam is accepted only at 100 %. Never connect to a real robot, PLC, LightWELD or positioner drive; URSim
+and mock hardware only. No emission command outside the PLC sim mode. Units only through `awm_core.units`. Code and
+wiki changes never in the same commit.
+
+## 7. Open points to confirm in the review
+
+1. Spike first, Sim-0 rest in the week of 2 Nov (§4).
+2. Mode B for J2: try robot-only first, use positioner angles only when robot-only is below 100 % (T1.6).
+3. Cell data location: generated cell meshes and `cad_map.yaml` under `<repo_root>/cell/model/`, not in the
+   `awm_description` source tree (T0.3).
+4. Web UI fallback for Sim-1 if WP3 is late (§4).
+5. M9 in C++ as ADR-08 says, or Python first for Sim-2 and C++ later.

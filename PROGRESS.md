@@ -2,6 +2,18 @@
 
 Read this first after a restart. Continue from the first open task. Plan: `PLAN.md`.
 
+## Rev 0.4 migration (from 2026-10-27)
+
+| Step | Status | Notes |
+|---|---|---|
+| Sync design baseline (DES-001 / DES-003 Rev 0.4, TST-002 Rev 0.2, CLAUDE.md) | done | 2026-10-27 |
+| Decisions CP-9…CP-23 (Z up, TCP, Sim-1 end, placement, calibration, tacks, positioner, Fusion CAD) | done | `docs/generated/DES-001_change_proposal.md` |
+| Cell CAD read test (Fusion STEP, golden part assembly, positioner) | done | findings in CP-11, CP-20, CP-23 |
+| PLAN.md Rev 0.4 | draft, waiting for Truong's review | 2026-10-28 |
+| WP0 … WP4 | not started | — |
+
+## Rev 0.2 offline chain (2026-10-19, superseded by the table above)
+
 | Phase / task | Status | Notes |
 |---|---|---|
 | Phase -1 environment (awm_dev, scripts, Dockerfile, env report, change proposal) | done | commit 14252f5 |
