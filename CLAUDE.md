@@ -38,6 +38,11 @@ Golden part: component `564082-Assembly-3 parts` inside that file (pipe nipple +
 Older revisions in `docs/reference/` (DES-001 Rev 0.2, DES-003 Rev 0.1) are kept for history only.
 If code and the architecture document disagree, stop and ask. Do not silently change the design.
 Change proposals go in `docs/generated/DES-001_change_proposal.md`.
+Rev 0.5 drafts (review of 2026-10-29, not approved yet): `docs/generated/drafts/` — DES-001 Rev 0.5 and DES-003 Rev 0.5
+(new A17 placement study, A18 cell CAD import, D21 cell & fixture CAD, ADR-16, ADR-17). Findings: `docs/generated/doc_review_2026-10-29.md`.
+Rev 0.5 accepted by Truong on 2026-10-29: release files in `docs/generated/release_rev0.5/` (SHA256SUMS), to be uploaded
+to Drive next to Rev 0.4; then copy them unchanged into `docs/reference/` and switch the @-include above to Rev 0.5.
+Function owners (2026-10-29): all functions = software agent (Claude Code); Truong = direction and simulation tests.
 
 ## Decisions of 2026-10-27 (Truong; to be written into DES-001 Rev 0.5 — see change proposal)
 - **Z axis = positive upwards.** `world` Z points up. The seam frame Z is the bisector of the two face normals and points

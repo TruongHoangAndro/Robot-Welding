@@ -7,12 +7,13 @@ for this plan yet. The previous plan (offline chain A1–A7 on DES-001 Rev 0.2, 
 Sources: DES-001 Rev 0.4 (software architecture), DES-003 Rev 0.4 (function register, "Sim stage" column),
 TST-002 Rev 0.2 (collision-avoidance spike), change proposal `docs/generated/DES-001_change_proposal.md` CP-9…CP-23
 (decisions of 2026-10-27), cell CAD `docs/3D/APLSMN601_Automated Weldment System.step`.
+Function IDs follow the DES-003 Rev 0.5 draft (`docs/generated/drafts/`, review of 2026-10-29).
 
 ## 1. Goal per milestone
 
 | Milestone | Date | Done when |
 |---|---|---|
-| TST-002 decision | Thu 2026-10-29 | Spike results C1, C2, C3, C5, C8 on the golden part (J1, J2), Go / Pivot / No-Go input |
+| TST-002 decision | Thu 2026-10-29 → **new date needed** (spike not run yet, review T-07) | Spike results C1, C2, C3, C5, C8 on the golden part (J1, J2), Go / Pivot / No-Go input |
 | Sim-0 | Fri 2026-10-30 | mm units in all project data, cell imported from the Fusion STEP, cell model with LightWELD head and positioner joint in MoveIt, `awm_interfaces` contract in mm reviewed |
 | Sim-1 | Fri 2026-11-20 | In the browser: create job from the golden part → pick J1, J2 → plan (ψ × IK ladder, positioner modes C / B) → failing points red → playback of robot + positioner (mock hardware) → simulation report D15. Sim-1 ends at A71 (CP-17) |
 | Sim-2 | Fri 2026-12-04 | Same program, released with `scope: simulation`, replayed by the runtime chain (M8 / M9 / M10 sim) through `ur_robot_driver` on URSim + mock positioner joint |
@@ -51,7 +52,7 @@ Each task lists its test. "Sim" = needs the ROS sim launch; everything else runs
 | # | Task | Test |
 |---|---|---|
 | T0.1 | **mm migration.** `awm_core.units`: the only mm ↔ m / deg ↔ rad converter (scalars, vectors, poses, joint lists). Schemas v2 in mm / deg (`*_mm`, `*_deg`, `*_mm_s`); readers refuse v1. All packages switched; URDF / MoveIt calls go through the adapter. Static check: no `1000` / `0.001` scale literals outside `awm_core.units` | Adapter round-trip tests; schema tests; source-scan test fails on ad-hoc scaling |
-| T0.2 | **Cell CAD import** (`awm_geometry cell-import`): read the Fusion STEP with XCAF; CAD → `world` rotation from a config value (this file: Y up); component → role map in `cell/cad_map.yaml` (data, not code): `static`, `positioner_rotating`, `fixture`, `part`, `head`, `mount`, `ignore`; collision meshes (convex hulls for the surface-model head), frames from `REF_*` markers; refuse import on missing markers, duplicates or unit mismatch. Extract the part sub-assembly to the job (`model.step` + source file SHA-256 + component path) | pytest on the real file (slow mark, 60 s read) + a small synthetic assembly |
+| T0.2 | **Cell CAD import, A18** (`awm_geometry cell-import`): read the Fusion STEP with XCAF; CAD → `world` rotation from a config value (this file: Y up); component → role map in `cell/cad_map.yaml` (data, not code): `static`, `positioner_rotating`, `fixture`, `part`, `head`, `mount`, `ignore`; collision meshes (convex hulls for the surface-model head), frames from `REF_*` markers; refuse import on missing markers, duplicates or unit mismatch. Extract the part sub-assembly to the job (`model.step` + source file SHA-256 + component path) | pytest on the real file (slow mark, 60 s read) + a small synthetic assembly |
 | T0.3 | **Cell model v2** (`awm_description`): UR5e from `ur_description`; LightWELD head + mount links, `nozzle_tip` / `nozzle_body` split, `tcp_laser` (CP-10); `positioner_joint` (revolute, limits from config) with rotating holders and the part as children of `positioner_flange`; static cell meshes from T0.2 loaded from the repository root (cell data stays out of the source tree); SRDF + ACM (only `nozzle_tip` ↔ part); padding 3 mm | xacro → URDF parse; FK of `tcp_laser` vs CAD pose; ACM test |
 | T0.4 | **ros2_control**: one controller manager, `ur_manipulator` controller + `positioner_trajectory_controller`; `mock_components` for both in Sim-1. Launch names `sim_mock` (Sim-1), `sim_ursim` (Sim-2) (CP-14 #5) | Launch smoke test: both controllers active, `/joint_states` has 7 joints |
 | T0.5 | **`awm_interfaces` v1**: lengths `*_mm`, LaserReady / EmissionOff, positioner fields; reviewed before WP4 | colcon build + message round trip |
@@ -78,7 +79,7 @@ Each task lists its test. "Sim" = needs the ROS sim launch; everything else runs
 | T2.1 | `awm_cad`: split solids, D20 view model (`view.glb`, one node per face / edge, chord ≤ 0.05 mm; `topology.json`), collision mesh with `face_id` (chord ≤ 0.1 mm near seams) | pytest on the golden part: 3 solids, edge ids stable across re-imports |
 | T2.2 | `awm_seam`: pick by edge id, auto-chain tangent edges, attributes incl. closed flag and sequence, n1 / n2 export, fingerprint re-match | pytest: J1, J2 picked from their edge ids |
 | T2.3 | `awm_process`: WPS library v2 (mm, LightWELD preset id, CW / HPP, wobble display, focus offset, versioning, released WPS read-only); one SAMPLE WPS | pytest |
-| T2.4 | Placement (CP-22): D19 with `source`; Sim-1 placement study = candidates entered by hand, each planned in full; import from the fixture CAD (T0.2) | pytest + Sim: golden part from the cell CAD |
+| T2.4 | Placement A15 / A17 (CP-22): D19 with `source`; Sim-1 placement study = candidates entered by hand, each planned in full; import from the fixture CAD (T0.2) | pytest + Sim: golden part from the cell CAD |
 | T2.5 | `awm_program`: 7-joint segments (air, approach, weld_robot, weld_positioner, retract, index), events at rest of robot **and** positioner, calibration hash | Pure pytest + Sim program build |
 | T2.6 | `awm_verify`: replay of both controllers on mock hardware, dense check incl. positioner, D15 report, simulation-scope release (CP-17) and D19 source rule | Sim e2e: golden part → PASS → simulation release |
 
