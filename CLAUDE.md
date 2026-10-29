@@ -18,7 +18,7 @@ Real hardware is on hold until the Sim gate (decision 2026-10-22; schedule propo
 | Sim-2 URSim | Same trajectories through ur_robot_driver on URSim | 2026-12-04 |
 
 ## Read first (source of truth)
-@docs/reference/APLSMN601-DES-001_Software_Architecture_Rev0.4.md
+@docs/generated/release_rev0.5/APLSMN601-DES-001_Software_Architecture_Rev0.5.md
 @docs/reference/APLSMN601-TST-002_Collision_Avoidance_Spike_Rev0.2.md
 @docs/LLM_Wiki/wiki/overview.md
 
@@ -40,8 +40,9 @@ If code and the architecture document disagree, stop and ask. Do not silently ch
 Change proposals go in `docs/generated/DES-001_change_proposal.md`.
 Rev 0.5 drafts (review of 2026-10-29, not approved yet): `docs/generated/drafts/` — DES-001 Rev 0.5 and DES-003 Rev 0.5
 (new A17 placement study, A18 cell CAD import, D21 cell & fixture CAD, ADR-16, ADR-17). Findings: `docs/generated/doc_review_2026-10-29.md`.
-Rev 0.5 accepted by Truong on 2026-10-29: release files in `docs/generated/release_rev0.5/` (SHA256SUMS), to be uploaded
-to Drive next to Rev 0.4; then copy them unchanged into `docs/reference/` and switch the @-include above to Rev 0.5.
+**Working baseline = Rev 0.5** in `docs/generated/release_rev0.5/` (accepted by Truong 2026-10-29). Upload to Drive is
+deferred until it has been tuned during the simulation tests (decision 2026-10-29); until then the repo copy is the
+master. Changes found while testing are edited there (and in the drafts scripts) and logged in the change proposal.
 Function owners (2026-10-29): all functions = software agent (Claude Code); Truong = direction and simulation tests.
 
 ## Decisions of 2026-10-27 (Truong; to be written into DES-001 Rev 0.5 — see change proposal)
