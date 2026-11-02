@@ -11,6 +11,8 @@ from typing import Callable, Dict, Tuple
 
 from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
 from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder
+from OCC.Core.TopoDS import TopoDS_Compound
+from OCC.Core.BRep import BRep_Builder
 from OCC.Core.TopoDS import TopoDS_Shape
 from OCC.Core.gp import gp_Ax2, gp_Dir, gp_Pnt
 
@@ -82,7 +84,41 @@ def pipe_flange() -> Tuple[TopoDS_Shape, Dict]:
     return shape, picks
 
 
+# Separate-solid weldments (CP-52): the solids touch but are not fused, as in a Fusion assembly.
+_TUBE_R, _BORE_R = 0.013335, 0.010465  # golden-part tube section (test data)
+
+
+def _assembly(*shapes: TopoDS_Shape) -> TopoDS_Shape:
+    result = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(result)
+    for shape in shapes:
+        builder.Add(result, shape)
+    return result
+
+
+def _tube(z0: float, h: float) -> TopoDS_Shape:
+    return _cut(_cylinder(_TUBE_R, h, z0), _cylinder(_BORE_R, h, z0))
+
+
+def tube_rod() -> Tuple[TopoDS_Shape, Dict]:
+    """Two solids: tube D26.67 x 2.87 mm (z -30..0 mm) butt against a rod D26.67 mm (z 0..40 mm).
+
+    One joint edge: the outer circle at z = 0 (the bore circle has no partner edge on the rod).
+    """
+    return _assembly(_tube(-0.030, 0.030), _cylinder(_TUBE_R, 0.040, 0.0)), {
+        'part_no': 'TEST-TUBE-ROD', 'part_rev': 'A', 'seams': []}
+
+
+def tube_tube() -> Tuple[TopoDS_Shape, Dict]:
+    """Two coaxial tubes D26.67 x 2.87 mm butt-jointed at z = 0: joint edges at the outer and bore circles."""
+    return _assembly(_tube(-0.030, 0.030), _tube(0.0, 0.040)), {
+        'part_no': 'TEST-TUBE-TUBE', 'part_rev': 'A', 'seams': []}
+
+
 PARTS: Dict[str, Callable[[], Tuple[TopoDS_Shape, Dict]]] = {
     'plate_tjoint': plate_tjoint,
     'pipe_flange': pipe_flange,
+    'tube_rod': tube_rod,
+    'tube_tube': tube_tube,
 }

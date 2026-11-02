@@ -38,7 +38,8 @@ def test_skip_for_any_other_reason_is_reported():
 def test_occ_suite_passes_in_conda_env(tmp_path):
     argv = occ_bridge.interpreter_command(None) + [
         '-m', 'pytest', '-q', '-rs', '-p', 'no:cacheprovider', '--basetemp', str(tmp_path / 'occ'),
-        str(HERE / 'test_geometry_occ.py'), str(HERE / 'test_joints_occ.py')]
+        str(HERE / 'test_geometry_occ.py'), str(HERE / 'test_joints_occ.py'),
+        str(HERE / 'test_view_occ.py')]
     proc = subprocess.run(argv, cwd=str(HERE), env=occ_bridge.geometry_env(),
                           capture_output=True, text=True, timeout=900, check=False)
     # OCCT writes its own (late-flushed) banners to stdout: look for pytest's summary line.

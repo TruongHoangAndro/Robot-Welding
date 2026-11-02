@@ -1,12 +1,15 @@
 """awm_geometry CLI (runs in the conda env ``awm_occ``).
 
-Commands (all lengths in metres):
+Commands (lengths in metres, except export-view: mm per the D20 contract):
   info                                       OCC version as JSON
   import --job DIR --step FILE --part-no N --part-rev R [--linear-deflection-m D]
                                              A11-A14: STEP -> model.step copy, model.brep, mesh.stl,
                                              edges.json, part.json
   sample --job DIR --spacing-m S             A41 input: seams.json -> cache/seam_geometry.json
   make-test-part --kind K --out FILE.step [--picks FILE.json]
+  export-view --step FILE [--component NAME] [--up-axis +Y] --out DIR
+                                             A13 D20 view model in mm: DIR/view.glb + DIR/topology.json
+                                             (contract docs/generated/contracts/D20_view_model.md)
 
 Logs go to stderr; a one-line JSON summary goes to stdout.
 """
@@ -131,6 +134,16 @@ def cmd_make_test_part(args) -> dict:
     return result
 
 
+def cmd_export_view(args) -> dict:
+    from awm_geometry import assembly, view
+
+    step = Path(args.step)
+    LOG.info('A11 reading %s%s', step, f' (component {args.component})' if args.component else '')
+    component = assembly.read_part(step, args.component)
+    return view.export(component, step, args.component, args.up_axis, Path(args.out),
+                       _created_by(), step.resolve().parent)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='awm_geometry', description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -151,11 +164,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--kind', required=True)
     p.add_argument('--out', required=True)
     p.add_argument('--picks')
+    p = sub.add_parser('export-view')
+    p.add_argument('--step', required=True)
+    p.add_argument('--component', default=None,
+                   help='assembly component name (default: the whole file)')
+    p.add_argument('--up-axis', default='+Z', choices=['+X', '-X', '+Y', '-Y', '+Z', '-Z'],
+                   help='up axis of the source file (recorded only; no rotation is applied)')
+    p.add_argument('--out', required=True)
     return parser
 
 
 COMMANDS = {'info': cmd_info, 'import': cmd_import, 'sample': cmd_sample,
-            'make-test-part': cmd_make_test_part}
+            'make-test-part': cmd_make_test_part, 'export-view': cmd_export_view}
 
 
 def main(argv: Optional[List[str]] = None) -> int:
