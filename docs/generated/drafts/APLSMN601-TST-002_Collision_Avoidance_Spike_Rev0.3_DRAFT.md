@@ -72,10 +72,11 @@ A seam that passes with H-BOX very likely passes with the real head. A result th
 reported with the blocking link.
 
 ### 3.2 Seam frames for welds between separate solids (entry gate)
-- M1 builds a joint-aware weldment shape by general fuse of the part solids (fuzzy value 0.05 mm, **Assumption**).
-  Every face keeps its source-solid id. n1 / n2 are taken from the exterior faces of the two solids at the joint.
-- Fallback if the fuse is not ready on 2026-11-03: tube rule for coaxial tube butt joints, n1 = n2 = radial, marked
-  **Assumption** in the results.
+- Joint edges are found between the separate solids (edge of solid A coinciding with an edge of solid B within
+  0.05 mm). At each seam point, n1 / n2 are the normals of the **exterior faces** of the two solids: the face next to
+  the edge that does not touch the other solid (`awm_geometry.joints`). This replaces the general fuse proposed in
+  board decision B-02: same result, no boolean operation, every normal keeps its source solid.
+- Fallback (not needed, see G1 result): tube rule for coaxial tube butt joints, n1 = n2 = radial.
 - Frame: X = tangent (travel), **Z = bisector of n1 / n2, out of the material** (for a tube butt joint = the radial
   surface normal), Y = Z × X. The beam axis is −Z. (Rev 0.2 D1 "Z = −bisector" = the beam axis.)
 - **Entry gate G1:** on the real 3-solid assembly, the seam-frame Z of J1 and J2 is radial within 0.5° at every
@@ -187,7 +188,7 @@ backend (`SceneBackend` implementation), ψ case, head model, clearance method (
 ## 11. Results (filled after the run)
 | ID | Result | Value | Pass / Fail | ψ case | Head model | Note |
 |---|---|---|---|---|---|---|
-| G1 | | | | — | — | |
+| G1 | J1 and J2 seam-frame Z vs radial, 12 points each, golden part from the cell CAD (3 solids) | max 0.000° joint-aware (per-solid rule of Rev 0.2: 45°) | Pass | — | — | 2026-11-02, `test_joints_occ.py::test_gate_g1_golden_part`; J1 axis horizontal (CAD X), J2 axis tilted 5.9° |
 | G2 / C1 | | | | — | both | |
 | C2 | | | | | | |
 | C3 | | | | | | |
