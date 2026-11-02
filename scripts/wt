@@ -32,7 +32,7 @@ case "${cmd}" in
     ;;
   list)
     git -C "${WS}" worktree list
-    for d in "${ROOT}"/*/; do [ -f "${d}.awm_domain" ] && echo "$(basename "${d}") domain $(cat "${d}.awm_domain")"; done
+    for d in "${ROOT}"/*/; do if [ -f "${d}.awm_domain" ]; then echo "$(basename "${d}") domain $(cat "${d}.awm_domain")"; fi; done
     ;;
   rm)
     agent="${2:?agent}"
