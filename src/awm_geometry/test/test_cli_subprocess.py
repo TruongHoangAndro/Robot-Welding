@@ -41,3 +41,13 @@ def test_bridge_error_has_stderr(tmp_path):
         occ_bridge.run_geometry_cli(['import', '--job', str(tmp_path / 'j'), '--step',
                                      str(tmp_path / 'missing.step'), '--part-no', 'X',
                                      '--part-rev', 'A'])
+
+
+def test_export_view_via_bridge(tmp_path):
+    step = tmp_path / 'tube_rod.step'
+    occ_bridge.run_geometry_cli(['make-test-part', '--kind', 'tube_rod', '--out', str(step)])
+    out = occ_bridge.run_geometry_cli(['export-view', '--step', str(step), '--out',
+                                       str(tmp_path / 'view')])
+    summary = json.loads(out.stdout.strip().splitlines()[-1])
+    assert summary['solids'] == 2 and summary['joints'][0]['joint_edge_id'] == 'JE1'
+    jsonio.read_json(tmp_path / 'view' / 'topology.json', 'view_topology', base_dir=tmp_path)

@@ -76,9 +76,14 @@ def bbox(shape: TopoDS_Shape) -> Tuple[List[float], List[float]]:
     return [xmin, ymin, zmin], [xmax, ymax, zmax]
 
 
-def check_and_heal(shape: TopoDS_Shape, unit_source: str) -> Tuple[TopoDS_Shape, bool,
-                                                                   List[CheckResult]]:
-    """A12: run ShapeFix if the shape is not valid; return (shape, healed, checks)."""
+def check_and_heal(shape: TopoDS_Shape, unit_source: str,
+                   history: Optional[list] = None) -> Tuple[TopoDS_Shape, bool, List[CheckResult]]:
+    """A12: run ShapeFix if the shape is not valid; return (shape, healed, checks).
+
+    The shape is expected in metres (checks ``size_plausible`` / ``no_small_edges``). If ``history`` is a
+    list and the shape is healed, the ShapeFix context (``ShapeBuild_ReShape``) is appended to it so
+    callers can map sub-shapes of the input to the healed shape.
+    """
     checks: List[CheckResult] = []
     valid = BRepCheck_Analyzer(shape).IsValid()
     healed = False
@@ -87,6 +92,8 @@ def check_and_heal(shape: TopoDS_Shape, unit_source: str) -> Tuple[TopoDS_Shape,
         fixer.Perform()
         shape = fixer.Shape()
         healed = True
+        if history is not None:
+            history.append(fixer.Context())
         valid = BRepCheck_Analyzer(shape).IsValid()
     checks.append(CheckResult('brep_valid', valid,
                               'valid' + (' after ShapeFix' if healed else '') if valid
@@ -165,6 +172,37 @@ def fingerprint(curve_type: str, length: float, ends: List[List[float]], mid: Li
     return hashlib.sha256(text.encode()).hexdigest()
 
 
+def edge_closed(edge: TopoDS_Edge) -> bool:
+    """Closed flag of an edge (shared by the A21 catalogue and D20; shape in metres)."""
+    curve = BRepAdaptor_Curve(edge)
+    start = _pnt(curve.Value(curve.FirstParameter()))
+    end = _pnt(curve.Value(curve.LastParameter()))
+    return bool(BRep_Tool.IsClosed(edge)) or float(np.linalg.norm(np.subtract(start, end))) < 1e-7
+
+
+def edge_fingerprint(edge: TopoDS_Edge) -> str:
+    """Fingerprint of an edge (shared by the A21 catalogue and D20; shape in metres)."""
+    curve = BRepAdaptor_Curve(edge)
+    ctype = _CURVE_NAMES.get(curve.GetType(), 'other')
+    u0, u1 = curve.FirstParameter(), curve.LastParameter()
+    start, end = _pnt(curve.Value(u0)), _pnt(curve.Value(u1))
+    mid = _pnt(curve.Value(0.5 * (u0 + u1)))
+    return fingerprint(ctype, edge_length(edge), [start, end], mid)
+
+
+def edge_face_ids(ancestors: TopTools_IndexedDataMapOfShapeListOfShape,
+                  faces: TopTools_IndexedMapOfShape, edge: TopoDS_Edge) -> List[str]:
+    """Ids of the faces adjacent to ``edge``, in ancestor order without duplicates."""
+    face_ids: List[str] = []
+    idx = ancestors.FindIndex(edge)
+    if idx:
+        for f in ancestors.FindFromIndex(idx):
+            fid = f'F{faces.FindIndex(f)}'
+            if fid not in face_ids:
+                face_ids.append(fid)
+    return face_ids
+
+
 def edge_catalogue(shape: TopoDS_Shape) -> Dict[str, list]:
     """Build the ``edges.json`` payload (edges + faces) for a healed shape in metres."""
     faces = index_map(shape, TopAbs_FACE)
@@ -191,13 +229,7 @@ def edge_catalogue(shape: TopoDS_Shape) -> Dict[str, list]:
         mid = _pnt(curve.Value(0.5 * (u0 + u1)))
         length = edge_length(edge)
         n_poly = int(min(64, max(2, math.ceil(length / 0.002) + 1)))
-        face_ids: List[str] = []
-        idx = ancestors.FindIndex(edge)
-        if idx:
-            for f in ancestors.FindFromIndex(idx):
-                fid = f'F{faces.FindIndex(f)}'
-                if fid not in face_ids:
-                    face_ids.append(fid)
+        face_ids = edge_face_ids(ancestors, faces, edge)
         convexity = _convexity(analyse, edge, len(face_ids))
         if convexity == 'free' and BRep_Tool.IsClosed(
                 edge, topods.Face(faces.FindKey(int(face_ids[0][1:])))):
@@ -206,11 +238,10 @@ def edge_catalogue(shape: TopoDS_Shape) -> Dict[str, list]:
         edge_list.append({
             'id': f'E{i}', 'curve_type': ctype, 'length_m': length,
             'start_m': start, 'end_m': end, 'mid_m': mid,
-            'closed': bool(BRep_Tool.IsClosed(edge)) or float(np.linalg.norm(
-                np.subtract(start, end))) < 1e-7,
+            'closed': edge_closed(edge),
             'faces': face_ids, 'convexity': convexity, 'dihedral_deg': dihedral,
             'polyline_m': sample_edge(edge, n_poly).tolist(),
-            'fingerprint': fingerprint(ctype, length, [start, end], mid),
+            'fingerprint': edge_fingerprint(edge),
         })
     return {'edges': edge_list, 'faces': face_list}
 

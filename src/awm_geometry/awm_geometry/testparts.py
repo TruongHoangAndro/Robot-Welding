@@ -7,14 +7,17 @@ near the seam edge plus the drawing attributes). The picks are test data, not so
 from __future__ import annotations
 
 import math
-from typing import Callable, Dict, Tuple
+from pathlib import Path
+from typing import Callable, Dict, List, Sequence, Tuple, Union
 
 from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
 from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder
-from OCC.Core.TopoDS import TopoDS_Shape
+from OCC.Core.TopoDS import TopoDS_Compound, TopoDS_Shape
+from OCC.Core.BRep import BRep_Builder
 from OCC.Core.gp import gp_Ax2, gp_Dir, gp_Pnt
 
-from awm_geometry.occ_io import GeometryError
+from awm_core import units
+from awm_geometry.occ_io import GeometryError, scale_shape
 
 
 def _fuse(a: TopoDS_Shape, b: TopoDS_Shape) -> TopoDS_Shape:
@@ -82,7 +85,98 @@ def pipe_flange() -> Tuple[TopoDS_Shape, Dict]:
     return shape, picks
 
 
+# Separate-solid weldments (CP-52): the solids touch but are not fused, as in a Fusion assembly.
+_TUBE_R, _BORE_R = 0.013335, 0.010465  # golden-part tube section (test data)
+
+
+def _assembly(*shapes: TopoDS_Shape) -> TopoDS_Shape:
+    result = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(result)
+    for shape in shapes:
+        builder.Add(result, shape)
+    return result
+
+
+def _tube(z0: float, h: float) -> TopoDS_Shape:
+    return _cut(_cylinder(_TUBE_R, h, z0), _cylinder(_BORE_R, h, z0))
+
+
+def tube_rod() -> Tuple[TopoDS_Shape, Dict]:
+    """Two solids: tube D26.67 x 2.87 mm (z -30..0 mm) butt against a rod D26.67 mm (z 0..40 mm).
+
+    One joint edge: the outer circle at z = 0 (the bore circle has no partner edge on the rod).
+    """
+    return _assembly(_tube(-0.030, 0.030), _cylinder(_TUBE_R, 0.040, 0.0)), {
+        'part_no': 'TEST-TUBE-ROD', 'part_rev': 'A', 'seams': []}
+
+
+def tube_tube() -> Tuple[TopoDS_Shape, Dict]:
+    """Two coaxial tubes D26.67 x 2.87 mm butt-jointed at z = 0: joint edges at the outer and bore circles."""
+    return _assembly(_tube(-0.030, 0.030), _tube(0.0, 0.040)), {
+        'part_no': 'TEST-TUBE-TUBE', 'part_rev': 'A', 'seams': []}
+
+
 PARTS: Dict[str, Callable[[], Tuple[TopoDS_Shape, Dict]]] = {
     'plate_tjoint': plate_tjoint,
     'pipe_flange': pipe_flange,
+    'tube_rod': tube_rod,
+    'tube_tube': tube_tube,
 }
+
+
+def box(lo: Sequence[float], hi: Sequence[float]) -> TopoDS_Shape:
+    """Axis-aligned box between two corners (metres, like every test part here)."""
+    return BRepPrimAPI_MakeBox(gp_Pnt(*lo), gp_Pnt(*hi)).Shape()
+
+
+def separate(*shapes: TopoDS_Shape) -> TopoDS_Shape:
+    """Compound of separate (not fused) solids."""
+    return _assembly(*shapes)
+
+
+def write_assembly(path: Union[str, Path],
+                   components: List[Tuple[str, List[TopoDS_Shape]]]) -> None:
+    """Write a STEP assembly (mm): one sub-assembly per ``(name, solids in metres)``, one part per solid.
+
+    Part names are ``<name>-body<k>``. Used to test component reading (A15 / D20) without the cell CAD.
+    """
+    from OCC.Core.IFSelect import IFSelect_RetDone
+    from OCC.Core.Interface import Interface_Static
+    from OCC.Core.STEPCAFControl import STEPCAFControl_Writer
+    from OCC.Core.STEPControl import STEPControl_AsIs
+    from OCC.Core.TCollection import TCollection_ExtendedString
+    from OCC.Core.TDataStd import TDataStd_Name
+    from OCC.Core.TDocStd import TDocStd_Document
+    from OCC.Core.TopLoc import TopLoc_Location
+    from OCC.Core.XCAFDoc import XCAFDoc_DocumentTool
+
+    doc = TDocStd_Document('XmlOcaf')
+    tool = XCAFDoc_DocumentTool.ShapeTool(doc.Main())
+    root = tool.NewShape()
+    TDataStd_Name.Set(root, TCollection_ExtendedString('assembly'))
+    for name, solids in components:
+        sub = tool.NewShape()
+        TDataStd_Name.Set(sub, TCollection_ExtendedString(name))
+        for k, solid in enumerate(solids, start=1):
+            label = tool.AddShape(scale_shape(solid, units.m_to_mm(1.0)), False)
+            TDataStd_Name.Set(label, TCollection_ExtendedString(f'{name}-body{k}'))
+            tool.AddComponent(sub, label, TopLoc_Location())
+        tool.AddComponent(root, sub, TopLoc_Location())
+    tool.UpdateAssemblies()
+    Interface_Static.SetCVal('write.step.unit', 'MM')
+    writer = STEPCAFControl_Writer()
+    writer.SetNameMode(True)
+    if not writer.Transfer(doc, STEPControl_AsIs) or writer.Write(str(path)) != IFSelect_RetDone:
+        raise GeometryError(f'cannot write STEP assembly {path}')
+
+
+def weldment_assembly() -> List[Tuple[str, List[TopoDS_Shape]]]:
+    """Small assembly: component ``weldment`` (tube + rod, one joint), ``other`` (a box) and two
+    components both named ``dup`` (ambiguous name)."""
+    return [
+        ('weldment', [_tube(-0.030, 0.030), _cylinder(_TUBE_R, 0.040, 0.0)]),
+        ('other', [box((0.100, 0.0, 0.0), (0.120, 0.020, 0.020))]),
+        ('dup', [box((0.200, 0.0, 0.0), (0.210, 0.010, 0.010))]),
+        ('dup', [box((0.300, 0.0, 0.0), (0.310, 0.010, 0.010))]),
+    ]

@@ -1,12 +1,15 @@
 """awm_geometry CLI (runs in the conda env ``awm_occ``).
 
-Commands (all lengths in metres):
+Commands (lengths in metres, except export-view: mm per the D20 contract):
   info                                       OCC version as JSON
-  import --job DIR --step FILE --part-no N --part-rev R [--linear-deflection-m D]
+  import --job DIR --step FILE --part-no N --part-rev R [--component NAME] [--linear-deflection-m D]
                                              A11-A14: STEP -> model.step copy, model.brep, mesh.stl,
                                              edges.json, part.json
   sample --job DIR --spacing-m S             A41 input: seams.json -> cache/seam_geometry.json
   make-test-part --kind K --out FILE.step [--picks FILE.json]
+  export-view --step FILE [--job DIR] [--component NAME] [--up-axis +Y] --out DIR
+                                             A13 D20 view model in mm: DIR/view.glb + DIR/topology.json
+                                             (contract docs/generated/contracts/D20_view_model.md)
 
 Logs go to stderr; a one-line JSON summary goes to stdout.
 """
@@ -43,6 +46,7 @@ def cmd_info(_args) -> dict:
 
 def cmd_import(args) -> dict:
     from awm_geometry import occ_io, topology
+    from awm_geometry import part as part_mod
 
     job = JobPaths(args.job)
     step_src = Path(args.step)
@@ -55,10 +59,11 @@ def cmd_import(args) -> dict:
             job.model_step.chmod(0o644)
         shutil.copyfile(step_src, job.model_step)
         job.model_step.chmod(0o444)
-    LOG.info('A11 reading %s', job.model_step)
-    shape, unit = occ_io.read_step(job.model_step)
+    LOG.info('A11 reading %s%s', job.model_step,
+             f' (component {args.component})' if args.component else '')
     LOG.info('A12 check & heal')
-    shape, healed, checks = topology.check_and_heal(shape, unit)
+    loaded = part_mod.load_part(job.model_step, args.component)
+    shape, unit, healed, checks = loaded.shape, loaded.unit, loaded.healed, loaded.checks
     failed = [c for c in checks if not c.ok and c.name in ('brep_valid', 'has_solid')]
     occ_io.write_brep(shape, job.brep_cache)
     LOG.info('A13 tessellate (linear deflection %.5f m)', args.linear_deflection_m)
@@ -131,6 +136,18 @@ def cmd_make_test_part(args) -> dict:
     return result
 
 
+def cmd_export_view(args) -> dict:
+    from awm_geometry import part, view
+
+    step = Path(args.step)
+    job = Path(args.job) if args.job else None
+    view.source_name(step, job)  # rule 7: fail early if the STEP is not inside the job
+    LOG.info('A11 reading %s%s', step, f' (component {args.component})' if args.component else '')
+    loaded = part.load_part(step, args.component)
+    return view.export(loaded, step, args.component, args.up_axis, Path(args.out),
+                       _created_by(), job)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='awm_geometry', description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -142,6 +159,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--step', required=True)
     p.add_argument('--part-no', required=True)
     p.add_argument('--part-rev', required=True)
+    p.add_argument('--component', default=None,
+                   help='assembly component name (default: the whole file); same as export-view')
     p.add_argument('--linear-deflection-m', type=float, default=1.0e-4)
     p.add_argument('--angular-deflection-deg', type=float, default=10.0)
     p = sub.add_parser('sample')
@@ -151,11 +170,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--kind', required=True)
     p.add_argument('--out', required=True)
     p.add_argument('--picks')
+    p = sub.add_parser('export-view')
+    p.add_argument('--step', required=True)
+    p.add_argument('--job', default=None,
+                   help='job folder: source.file / inputs relative to it (STEP must be inside)')
+    p.add_argument('--component', default=None,
+                   help='assembly component name (default: the whole file)')
+    p.add_argument('--up-axis', default='+Z', choices=['+X', '-X', '+Y', '-Y', '+Z', '-Z'],
+                   help='up axis of the source file (recorded only; no rotation is applied)')
+    p.add_argument('--out', required=True)
     return parser
 
 
 COMMANDS = {'info': cmd_info, 'import': cmd_import, 'sample': cmd_sample,
-            'make-test-part': cmd_make_test_part}
+            'make-test-part': cmd_make_test_part, 'export-view': cmd_export_view}
 
 
 def main(argv: Optional[List[str]] = None) -> int:

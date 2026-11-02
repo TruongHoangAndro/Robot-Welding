@@ -34,11 +34,21 @@ class GeometryError(RuntimeError):
     """A geometry operation failed (bad file, invalid shape, ...)."""
 
 
-def scale_shape(shape: TopoDS_Shape, factor: float) -> TopoDS_Shape:
-    """Uniform scale about the origin (geometry is copied)."""
+def scale_shape_tracked(shape: TopoDS_Shape, factor: float) -> BRepBuilderAPI_Transform:
+    """Uniform scale about the origin (geometry is copied); the operation keeps the sub-shape history."""
     trsf = gp_Trsf()
     trsf.SetScale(gp_Pnt(0.0, 0.0, 0.0), factor)
-    return BRepBuilderAPI_Transform(shape, trsf, True).Shape()
+    return BRepBuilderAPI_Transform(shape, trsf, True)
+
+
+def scale_shape(shape: TopoDS_Shape, factor: float) -> TopoDS_Shape:
+    """Uniform scale about the origin (geometry is copied)."""
+    return scale_shape_tracked(shape, factor).Shape()
+
+
+def file_length_unit(reader: STEPControl_Reader) -> str:
+    """Length unit declared in a STEP file read by ``reader`` ('mm', 'm', 'inch' or 'unknown')."""
+    return _file_length_unit(reader)
 
 
 def _file_length_unit(reader: STEPControl_Reader) -> str:
