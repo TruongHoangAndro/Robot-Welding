@@ -499,3 +499,24 @@ PLAN.md (rebase on DES-001 Rev 0.5 / 0.6):
 - New §6 "Risks and triggers"; PROGRESS.md weekly dependency check.
 - TST-002 Rev 0.3 (new revision copied into `docs/reference/` only from the Drive master): frozen inputs §2 / §4 / §5,
   entry checks, two ψ cases, two head models, outcome table §6, records per result.
+
+# Changes found during the spike (from 2026-11-02)
+
+## CP-52 Joint detection between solids without a general fuse (modifies B-02 / CP-37)
+
+**Status:** accepted by Truong Hoang on 2026-11-02 (implementation evidence: WP-S S.1, TST-002 Rev 0.3 G1 PASS).
+**Finding:** B-02 asked M1 to build a joint-aware weldment shape by a general fuse of the part solids (fuzzy value
+0.05 mm), with every face keeping its source-solid id. S.1 shows that the fuse is not needed: the joint edges are found
+directly between the separate solids (an edge of solid A coinciding with an edge of solid B within 0.05 mm), and at
+each seam point n1 / n2 are the normals of the exterior faces of the two solids, i.e. the face next to the edge that
+does not touch the other solid (`awm_geometry.joints`, solids read with `awm_geometry.assembly`).
+**Result:** on the golden part 564082 (3 solids, J1 and J2) the seam-frame Z is radial within 0.000° at 12 points per
+joint (per-solid rule of Rev 0.2: 45°). No boolean operation, no fuzzy-value tuning, every normal keeps its source
+solid by construction.
+**Proposal:** DES-001 Rev 0.6 M1 row: "joint detection between solids (general fuse; each face keeps its source-solid
+id, B-02)" → "joint detection between solids (coincident edges within 0.05 mm, n1 / n2 from the exterior faces of
+each solid; no general fuse; B-02 as modified by CP-52)". 4.3 step 1 is unchanged. PLAN.md S.1 text and the board
+record line "M1 adds a joint-aware fused weldment shape" follow. The 0.05 mm coincidence tolerance is an
+**Assumption** (tolerance of the Fusion export), to be revisited if a customer STEP has gaps or overlaps at a joint;
+the tube-rule fallback (n1 = n2 = radial) stays documented in TST-002 Rev 0.3 §3.2.
+**DES-003 impact:** A11 / A21 / A41 descriptions use "joint detection" instead of "fused weldment shape".
