@@ -104,3 +104,12 @@ def test_release_requires_lock(tmp_path):
     doc['locked'] = False
     with pytest.raises(SchemaValidationError):
         jsonio.validate(doc, 'release')
+
+
+def test_contract_examples_validate():
+    """Every hand-made contract example (T0.5) matches its schema: examples/<schema>.example.json."""
+    examples = sorted((jsonio.SCHEMA_DIR / 'examples').glob('*.example.json'))
+    assert examples
+    for path in examples:
+        doc = json.loads(path.read_text())
+        jsonio.validate(doc, path.name[:-len('.example.json')])

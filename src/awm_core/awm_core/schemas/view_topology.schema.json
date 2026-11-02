@@ -1,0 +1,274 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "view_topology.schema.json",
+  "title": "view_topology",
+  "description": "D20 3D view model, topology part (job/cache/view/topology.json), companion of view.glb. Part frame, mm, degrees. Contract: docs/generated/contracts/D20_view_model.md. Display only; never a weld path.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "unit",
+    "frame",
+    "source",
+    "tessellation",
+    "solids",
+    "faces",
+    "edges",
+    "joints"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "2.0"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "unit": {
+      "const": "mm"
+    },
+    "frame": {
+      "const": "part"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "component",
+        "up_axis"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "STEP file name relative to the job folder"
+        },
+        "component": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Assembly component the part was taken from, null for a single-part file"
+        },
+        "up_axis": {
+          "type": "string",
+          "enum": [
+            "+X",
+            "-X",
+            "+Y",
+            "-Y",
+            "+Z",
+            "-Z"
+          ],
+          "description": "Up axis of the source file; the viewer rotates it to +Z for display only"
+        }
+      }
+    },
+    "tessellation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "face_linear_deflection_mm",
+        "face_angular_deflection_deg",
+        "edge_chord_mm"
+      ],
+      "properties": {
+        "face_linear_deflection_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "face_angular_deflection_deg": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "edge_chord_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 0.05
+        }
+      }
+    },
+    "solids": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "solid_id",
+          "name",
+          "volume_mm3",
+          "bbox_min_mm",
+          "bbox_max_mm"
+        ],
+        "properties": {
+          "solid_id": {
+            "$ref": "common.schema.json#/$defs/solid_id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Component / body name from the STEP file, empty if none"
+          },
+          "volume_mm3": {
+            "type": "number",
+            "minimum": 0
+          },
+          "bbox_min_mm": {
+            "$ref": "common.schema.json#/$defs/vec3"
+          },
+          "bbox_max_mm": {
+            "$ref": "common.schema.json#/$defs/vec3"
+          }
+        }
+      }
+    },
+    "faces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "face_id",
+          "solid_id",
+          "surface_type",
+          "area_mm2"
+        ],
+        "properties": {
+          "face_id": {
+            "$ref": "common.schema.json#/$defs/face_id"
+          },
+          "solid_id": {
+            "$ref": "common.schema.json#/$defs/solid_id"
+          },
+          "surface_type": {
+            "type": "string"
+          },
+          "area_mm2": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "edge_id",
+          "solid_id",
+          "curve_type",
+          "length_mm",
+          "closed",
+          "faces",
+          "tangent_neighbours",
+          "fingerprint",
+          "joint_edge_id"
+        ],
+        "properties": {
+          "edge_id": {
+            "$ref": "common.schema.json#/$defs/edge_id"
+          },
+          "solid_id": {
+            "$ref": "common.schema.json#/$defs/solid_id"
+          },
+          "curve_type": {
+            "type": "string"
+          },
+          "length_mm": {
+            "type": "number",
+            "minimum": 0
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "faces": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/face_id"
+            }
+          },
+          "tangent_neighbours": {
+            "type": "array",
+            "description": "Edges sharing a vertex with G1 continuity (used by auto-chaining in S2)",
+            "items": {
+              "$ref": "common.schema.json#/$defs/edge_id"
+            }
+          },
+          "fingerprint": {
+            "type": "string",
+            "minLength": 1
+          },
+          "joint_edge_id": {
+            "oneOf": [
+              {
+                "$ref": "common.schema.json#/$defs/joint_edge_id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "joints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "joint_edge_id",
+          "solid_a",
+          "solid_b",
+          "edge_a",
+          "edge_b",
+          "length_mm",
+          "closed",
+          "preview_frames"
+        ],
+        "properties": {
+          "joint_edge_id": {
+            "$ref": "common.schema.json#/$defs/joint_edge_id"
+          },
+          "solid_a": {
+            "$ref": "common.schema.json#/$defs/solid_id"
+          },
+          "solid_b": {
+            "$ref": "common.schema.json#/$defs/solid_id"
+          },
+          "edge_a": {
+            "$ref": "common.schema.json#/$defs/edge_id"
+          },
+          "edge_b": {
+            "$ref": "common.schema.json#/$defs/edge_id"
+          },
+          "length_mm": {
+            "type": "number",
+            "minimum": 0
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "preview_frames": {
+            "type": "array",
+            "description": "Seam-frame samples for visual checking only (X = tangent along edge_a, Z = bisector of the exterior-face normals, out of the material); 4 samples at 0/25/50/75 % of the length. Not a weld path; D04 owns seam frames",
+            "items": {
+              "$ref": "common.schema.json#/$defs/frame_sample"
+            }
+          }
+        }
+      }
+    }
+  }
+}

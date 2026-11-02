@@ -83,6 +83,36 @@
       "type": "string",
       "pattern": "^F[0-9]+$"
     },
+    "solid_id": {
+      "type": "string",
+      "pattern": "^B[0-9]+$",
+      "description": "Solid (body) of a part, 1-based in B-Rep map order of the healed shape"
+    },
+    "joint_edge_id": {
+      "type": "string",
+      "pattern": "^JE[0-9]+$",
+      "description": "Joint edge: an edge of one solid coinciding with an edge of another solid (CP-52)"
+    },
+    "frame_sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "point_mm",
+        "x",
+        "z"
+      ],
+      "properties": {
+        "point_mm": {
+          "$ref": "common.schema.json#/$defs/vec3"
+        },
+        "x": {
+          "$ref": "common.schema.json#/$defs/vec3"
+        },
+        "z": {
+          "$ref": "common.schema.json#/$defs/vec3"
+        }
+      }
+    },
     "process": {
       "type": "string",
       "enum": [
