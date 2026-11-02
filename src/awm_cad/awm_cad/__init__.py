@@ -1,4 +1,4 @@
-"""APLSMN601 M1 CAD import (A11-A14).
+"""APLSMN601 M1 CAD import (A11-A14) and D20 view model export (A13).
 
 The B-Rep work runs in the OCC interpreter (awm_geometry); this package validates the results and
 offers the Python API / CLI used by the Workbench and the chain runner.
@@ -43,3 +43,24 @@ def import_step(repo_root: PathLike, step_file: PathLike, part_no: str, part_rev
     if part['part_no'] != part_no or part['part_rev'] != part_rev:
         raise RuntimeError(f'part.json does not match the request: {job.part_json}')
     return ImportResult(job, summary)
+
+
+def export_view(step_file: PathLike, out_dir: PathLike, component: Optional[str] = None,
+                up_axis: str = '+Z', occ_python_cmd: Optional[str] = None) -> Dict[str, Any]:
+    """Export the D20 view model (``view.glb`` + ``topology.json``, mm) of a STEP file or component.
+
+    Runs ``awm_geometry.cli export-view`` in the OCC interpreter, then validates ``topology.json``
+    against ``view_topology`` (inputs relative to the STEP file's folder, normally the job folder).
+    Returns the CLI summary. Raises ``GeometryCliError`` if the export fails.
+    """
+    step = Path(step_file)
+    out = Path(out_dir)
+    args = ['export-view', '--step', str(step), '--out', str(out), '--up-axis', up_axis]
+    if component is not None:
+        args += ['--component', component]
+    proc = occ_bridge.run_geometry_cli(args, occ_python_cmd=occ_python_cmd)
+    summary = json.loads(proc.stdout.strip().splitlines()[-1])
+    jsonio.read_json(out / 'topology.json', 'view_topology', base_dir=step.resolve().parent)
+    if not (out / 'view.glb').is_file():
+        raise RuntimeError(f'view.glb missing in {out}')
+    return summary

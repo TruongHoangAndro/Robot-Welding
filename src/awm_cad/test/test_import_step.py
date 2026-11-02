@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from awm_cad import import_step
+from awm_cad import export_view, import_step
 from awm_cad.cli import main
 from awm_core import jsonio, occ_bridge
 
@@ -75,3 +75,52 @@ def test_real_import(tmp_path):
                  '--part-rev', 'A']) == 0
     part = json.loads((tmp_path / 'repo' / 'jobs' / 'PLATE_A' / 'part.json').read_text())
     assert part['counts']['solids'] == 1
+
+
+def _example_topology():
+    return json.loads((Path(jsonio.SCHEMA_DIR) / 'examples' / 'view_topology.example.json').read_text())
+
+
+def test_export_view_validates_topology(tmp_path, monkeypatch):
+    step = tmp_path / 'model.step'
+    step.write_text('ISO-10303-21; fake')
+    calls = []
+
+    def fake(args, occ_python_cmd=None):
+        calls.append(args)
+        out = Path(args[args.index('--out') + 1])
+        doc = _example_topology()
+        doc['inputs'] = [jsonio.input_entry(step, tmp_path)]
+        jsonio.write_json(out / 'topology.json', doc, 'view_topology')
+        (out / 'view.glb').write_bytes(b'glTF')
+        return subprocess.CompletedProcess([], 0, stdout='banner\n{"solids": 2}\n', stderr='')
+
+    monkeypatch.setattr(occ_bridge, 'run_geometry_cli', fake)
+    summary = export_view(step, tmp_path / 'cache' / 'view', component='C', up_axis='+Y')
+    assert summary == {'solids': 2}
+    assert calls[0][:1] == ['export-view']
+    assert calls[0][calls[0].index('--component') + 1] == 'C'
+    assert calls[0][calls[0].index('--up-axis') + 1] == '+Y'
+
+
+def test_export_view_rejects_stale_input(tmp_path, monkeypatch):
+    step = tmp_path / 'model.step'
+    step.write_text('ISO-10303-21; fake')
+
+    def fake(args, occ_python_cmd=None):
+        out = Path(args[args.index('--out') + 1])
+        jsonio.write_json(out / 'topology.json', _example_topology(), 'view_topology')
+        return subprocess.CompletedProcess([], 0, stdout='{}\n', stderr='')
+
+    monkeypatch.setattr(occ_bridge, 'run_geometry_cli', fake)
+    with pytest.raises(jsonio.StaleInputError):
+        export_view(step, tmp_path / 'view')
+
+
+@pytest.mark.skipif(not os.environ.get(occ_bridge.ENV_VAR), reason='AWM_OCC_PYTHON not set')
+def test_real_export_view(tmp_path):
+    step = tmp_path / 'tube_rod.step'
+    occ_bridge.run_geometry_cli(['make-test-part', '--kind', 'tube_rod', '--out', str(step)])
+    summary = export_view(step, tmp_path / 'view')
+    assert summary['solids'] == 2 and len(summary['joints']) == 1
+    assert (tmp_path / 'view' / 'view.glb').read_bytes()[:4] == b'glTF'
