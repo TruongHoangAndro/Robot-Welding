@@ -22,7 +22,7 @@ from OCC.Core.TopLoc import TopLoc_Location
 from OCC.Core.TopoDS import TopoDS_Compound, TopoDS_Shape
 from OCC.Core.XCAFDoc import XCAFDoc_DocumentTool
 
-from awm_geometry.occ_io import GeometryError
+from awm_geometry.occ_io import GeometryError, file_length_unit
 
 PathLike = Union[str, Path]
 
@@ -35,14 +35,18 @@ class Component:
     shape: TopoDS_Shape
     #: (solid, name) for every solid below the component; name = nearest instance or product name.
     solids: List[Tuple[TopoDS_Shape, str]] = field(default_factory=list)
+    #: Length unit declared in the STEP file ('mm', 'm', 'inch', 'unknown'); shapes are in mm regardless.
+    unit: str = 'unknown'
 
 
 def _name(label: TDF_Label) -> str:
-    return label.GetLabelName() or ''
+    """Label name; '' for none and for the automatic reference names ``=>[0:1:...]`` of XCAF."""
+    text = label.GetLabelName() or ''
+    return '' if text.startswith('=>[') else text
 
 
 def _open(path: Path):
-    """Read a STEP file into an XCAF document; return ``(document, shape tool)``.
+    """Read a STEP file into an XCAF document; return ``(document, shape tool, file length unit)``.
 
     Callers keep the document referenced while they use the tool's labels.
     """
@@ -54,7 +58,7 @@ def _open(path: Path):
     if reader.ReadFile(str(path)) != IFSelect_RetDone or not reader.Transfer(doc):
         raise GeometryError(f'cannot read STEP assembly {path}')
     tool = XCAFDoc_DocumentTool.ShapeTool(doc.Main())
-    return doc, tool
+    return doc, tool, file_length_unit(reader.Reader())
 
 
 def _named_solids(tool, label: TDF_Label, location: TopLoc_Location,
@@ -87,7 +91,7 @@ def read_components(step: PathLike, name: str) -> List[Component]:
     The search stops at the first match on each branch. Raises if the file cannot be read.
     """
     path = Path(step)
-    _doc, tool = _open(path)
+    _doc, tool, unit = _open(path)
     found: List[Component] = []
 
     def matches(text: str) -> bool:
@@ -104,7 +108,7 @@ def read_components(step: PathLike, name: str) -> List[Component]:
         trail = trail + [here]
         if matches(_name(label)) or matches(_name(ref)):
             found.append(Component(' / '.join(trail), tool.GetShape(ref).Moved(location),
-                                   _named_solids(tool, label, parent_location, '')))
+                                   _named_solids(tool, label, parent_location, ''), unit))
             return
         if tool.IsAssembly(ref):
             children = TDF_LabelSequence()
@@ -131,7 +135,7 @@ def read_part(step: PathLike, name: Optional[str]) -> Component:
             raise GeometryError(f'{len(found)} components named {name!r} in {path} (expected 1)'
                                 + ('' if not found else ': ' + '; '.join(c.path for c in found)))
         return found[0]
-    _doc, tool = _open(path)
+    _doc, tool, unit = _open(path)
     roots = TDF_LabelSequence()
     tool.GetFreeShapes(roots)
     shapes, solids = [], []
@@ -140,7 +144,7 @@ def read_part(step: PathLike, name: Optional[str]) -> Component:
         solids.extend(_named_solids(tool, roots.Value(i), TopLoc_Location(), ''))
     if not shapes:
         raise GeometryError(f'STEP file {path} contains no shape')
-    return Component(path.name, compound(shapes), solids)
+    return Component(path.name, compound(shapes), solids, unit)
 
 
 def compound(shapes: List[TopoDS_Shape]) -> TopoDS_Compound:

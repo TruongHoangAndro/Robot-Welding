@@ -77,6 +77,7 @@ def check_glb(topo, data):
         idx_acc = gltf['accessors'][prim['indices']]
         assert idx_acc['componentType'] == glb.UNSIGNED_INT
         idx = glb.accessor_array(gltf, binary, prim['indices'])
+        assert idx_acc['min'] == [int(idx.min())] and idx_acc['max'] == [int(idx.max())]
         assert len(pos) == len(nor) > 0 and len(idx) % 3 == 0 and len(idx) > 0
         assert idx.max() < len(pos)
         np.testing.assert_allclose(np.linalg.norm(nor, axis=1), 1.0, atol=1e-5)
@@ -168,24 +169,45 @@ def test_tube_rod_single_closed_joint_with_radial_frames(tube_rod):
         _radial_check(frame, outward=True)
 
 
+def test_preview_x_follows_edge_a_parameter_direction(tube_rod):
+    """X is the tangent of edge_a in its curve-parameter direction (sign included)."""
+    from OCC.Core.BRepAdaptor import BRepAdaptor_Curve
+    from OCC.Core.TopoDS import topods
+    from OCC.Core.gp import gp_Pnt, gp_Vec
+
+    from awm_geometry import part, view
+
+    step, (topo, _), _ = tube_rod
+    model = view.PartModel(part.load_part(step))
+    (joint,) = topo['joints']
+    curve = BRepAdaptor_Curve(topods.Edge(model.edges.FindKey(int(joint['edge_a'][1:]))))
+    us = np.linspace(curve.FirstParameter(), curve.LastParameter(), 3601)
+    pts = units.m_to_mm([[q.X(), q.Y(), q.Z()] for q in (curve.Value(u) for u in us)])
+    for frame in joint['preview_frames']:
+        k = int(np.argmin(np.linalg.norm(pts - np.array(frame['point_mm']), axis=1)))
+        p, v = gp_Pnt(), gp_Vec()
+        curve.D1(float(us[k]), p, v)
+        assert _angle_deg(frame['x'], [v.X(), v.Y(), v.Z()]) < ANGLE_LIMIT_DEG
+
+
 def test_tube_rod_edge_chord(tube_rod):
     """Every exact curve point lies within edge_chord_mm of its GLB polyline."""
     from OCC.Core.BRepAdaptor import BRepAdaptor_Curve
     from OCC.Core.TopoDS import topods
 
-    from awm_geometry import assembly, view
+    from awm_geometry import part, view
 
     step, (topo, data), _ = tube_rod
     chord = topo['tessellation']['edge_chord_mm']
     assert chord <= 0.05
     polylines = check_glb(topo, data)
-    model = view.build_model(assembly.read_part(step, None))
+    model = view.PartModel(part.load_part(step))
     worst = 0.0
     for e in topo['edges']:
         curve = BRepAdaptor_Curve(topods.Edge(model.edges.FindKey(int(e['edge_id'][1:]))))
         u0, u1 = curve.FirstParameter(), curve.LastParameter()
-        exact = np.array([[q.X(), q.Y(), q.Z()] for q in
-                          (curve.Value(u0 + (u1 - u0) * k / 999) for k in range(1000))])
+        exact = units.m_to_mm([[q.X(), q.Y(), q.Z()] for q in
+                               (curve.Value(u0 + (u1 - u0) * k / 999) for k in range(1000))])
         poly = polylines[e['edge_id']].astype(float)
         worst = max(worst, float(_dist_to_polyline(exact, poly).max()))
     assert worst <= chord + FLOAT32_TOL_MM, worst
@@ -230,6 +252,72 @@ def test_unknown_component_fails(tmp_path, occ):
     assert not (tmp_path / 'out' / 'topology.json').exists()
 
 
+def test_job_relative_source(tmp_path, occ):
+    """Rule 7: with --job, names are relative to the job folder; a STEP outside the job is refused."""
+    from awm_geometry import cli
+
+    job = tmp_path / 'jobs' / 'P_A'
+    job.mkdir(parents=True)
+    step = _write_part(job, 'tube_rod')
+    step = step.rename(job / 'model.step')
+    topo, _ = _export(step, job / 'cache' / 'view', '--job', str(job))
+    jsonio.check_inputs(topo, job)
+    assert topo['source']['file'] == 'model.step'
+    assert topo['inputs'][0]['name'] == 'model.step'
+    outside = _write_part(tmp_path, 'tube_rod')
+    assert cli.main(['export-view', '--step', str(outside), '--job', str(job),
+                     '--out', str(tmp_path / 'x')]) == 1
+
+
+def test_component_of_assembly_and_ambiguous_name(tmp_path, occ):
+    from awm_geometry import cli, testparts
+
+    step = tmp_path / 'asm.step'
+    testparts.write_assembly(step, testparts.weldment_assembly())
+    topo, data = _export(step, tmp_path / 'weldment', '--component', 'weldment')
+    check_glb(topo, data)
+    assert [s['name'] for s in topo['solids']] == ['weldment-body1', 'weldment-body2']
+    assert len(topo['joints']) == 1 and topo['joints'][0]['closed']
+    assert cli.main(['export-view', '--step', str(step), '--component', 'dup',
+                     '--out', str(tmp_path / 'dup')]) == 1
+    assert not (tmp_path / 'dup' / 'topology.json').exists()
+
+
+def _boxes(tmp_path, name, corners):
+    from awm_geometry import occ_io, testparts
+
+    shape = testparts.separate(*[testparts.box(units.mm_to_m(lo), units.mm_to_m(hi))
+                                 for lo, hi in corners])
+    step = tmp_path / f'{name}.step'
+    occ_io.write_step_mm(shape, step)
+    return step
+
+
+def test_line_contact_joint_has_empty_preview(tmp_path, occ, caplog):
+    """Rule 6: two boxes touching along one edge - exterior face ambiguous - frames [], export OK."""
+    step = _boxes(tmp_path, 'line', [((0, 0, 0), (10, 10, 10)), ((10, 10, 0), (20, 20, 10))])
+    with caplog.at_level('WARNING', logger='awm_geometry'):
+        topo, data = _export(step, tmp_path / 'out')
+    check_glb(topo, data)
+    (joint,) = topo['joints']
+    assert joint['preview_frames'] == [] and joint['length_mm'] == pytest.approx(10.0)
+    assert any('no preview frames' in r.getMessage() for r in caplog.records)
+
+
+def test_edge_in_two_joints_fails(tmp_path, occ, caplog):
+    """Rule 6: three 10 mm boxes (A [0,10]², B [10,20]x[0,10], C [0,10]x[10,20]) - the vertical edge
+    of A at (10, 10) coincides with an edge of B and of C - export fails naming edge and joints."""
+    from awm_geometry import cli
+
+    step = _boxes(tmp_path, 'three', [((0, 0, 0), (10, 10, 10)), ((10, 0, 0), (20, 10, 10)),
+                                      ((0, 10, 0), (10, 20, 10))])
+    with caplog.at_level('ERROR', logger='awm_geometry'):
+        assert cli.main(['export-view', '--step', str(step), '--out', str(tmp_path / 'o')]) == 1
+    text = ' '.join(r.getMessage() for r in caplog.records)
+    assert 'belongs to two joints' in text and 'JE' in text and ' E' in text
+    assert not (tmp_path / 'o' / 'topology.json').exists()
+
+
 @pytest.mark.skipif(not os.environ.get('AWM_CELL_STEP'), reason='AWM_CELL_STEP not set')
 def test_golden_part_view(tmp_path, occ):
     """Golden part (cell CAD component): 3 solids, the two weld joints J1 / J2 closed, schema valid."""
@@ -245,6 +333,6 @@ def test_golden_part_view(tmp_path, occ):
     assert len(outer) == 2  # J1 (nipple - solid) and J2 (solid - elbow), outer diameter
     assert {(j['solid_a'], j['solid_b']) for j in outer} != {(outer[0]['solid_a'],
                                                              outer[0]['solid_b'])}
-    # The bores of nipple, solid and elbow also meet edge to edge: find_joint_edges returns
-    # those circles as well (contract rule 3 numbers every result). Pinned so a change shows up.
+    # The bores of nipple, solid and elbow also meet edge to edge: find_joint_edges returns those
+    # circles as well; all 4 joints are kept (lead decision 2026-11-02). Pinned so a change shows up.
     assert len(topo['joints']) == 4

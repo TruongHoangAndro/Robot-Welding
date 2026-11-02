@@ -81,31 +81,40 @@ def _example_topology():
     return json.loads((Path(jsonio.SCHEMA_DIR) / 'examples' / 'view_topology.example.json').read_text())
 
 
+def _job_with_step(tmp_path):
+    job = tmp_path / 'jobs' / 'P_A'
+    job.mkdir(parents=True)
+    (job / 'model.step').write_text('ISO-10303-21; fake')
+    return job
+
+
 def test_export_view_validates_topology(tmp_path, monkeypatch):
-    step = tmp_path / 'model.step'
-    step.write_text('ISO-10303-21; fake')
+    job = _job_with_step(tmp_path)
     calls = []
 
     def fake(args, occ_python_cmd=None):
         calls.append(args)
         out = Path(args[args.index('--out') + 1])
         doc = _example_topology()
-        doc['inputs'] = [jsonio.input_entry(step, tmp_path)]
+        doc['inputs'] = [jsonio.input_entry(job / 'model.step', job)]
         jsonio.write_json(out / 'topology.json', doc, 'view_topology')
         (out / 'view.glb').write_bytes(b'glTF')
         return subprocess.CompletedProcess([], 0, stdout='banner\n{"solids": 2}\n', stderr='')
 
     monkeypatch.setattr(occ_bridge, 'run_geometry_cli', fake)
-    summary = export_view(step, tmp_path / 'cache' / 'view', component='C', up_axis='+Y')
+    summary = export_view(job, component='C', up_axis='+Y')
     assert summary == {'solids': 2}
-    assert calls[0][:1] == ['export-view']
-    assert calls[0][calls[0].index('--component') + 1] == 'C'
-    assert calls[0][calls[0].index('--up-axis') + 1] == '+Y'
+    args = calls[0]
+    assert args[0] == 'export-view'
+    assert args[args.index('--step') + 1] == str(job / 'model.step')
+    assert args[args.index('--job') + 1] == str(job)
+    assert args[args.index('--out') + 1] == str(job / 'cache' / 'view')
+    assert args[args.index('--component') + 1] == 'C'
+    assert args[args.index('--up-axis') + 1] == '+Y'
 
 
 def test_export_view_rejects_stale_input(tmp_path, monkeypatch):
-    step = tmp_path / 'model.step'
-    step.write_text('ISO-10303-21; fake')
+    job = _job_with_step(tmp_path)
 
     def fake(args, occ_python_cmd=None):
         out = Path(args[args.index('--out') + 1])
@@ -114,13 +123,18 @@ def test_export_view_rejects_stale_input(tmp_path, monkeypatch):
 
     monkeypatch.setattr(occ_bridge, 'run_geometry_cli', fake)
     with pytest.raises(jsonio.StaleInputError):
-        export_view(step, tmp_path / 'view')
+        export_view(job)
 
 
 @pytest.mark.skipif(not os.environ.get(occ_bridge.ENV_VAR), reason='AWM_OCC_PYTHON not set')
-def test_real_export_view(tmp_path):
+def test_real_import_and_export_view(tmp_path):
     step = tmp_path / 'tube_rod.step'
     occ_bridge.run_geometry_cli(['make-test-part', '--kind', 'tube_rod', '--out', str(step)])
-    summary = export_view(step, tmp_path / 'view')
+    result = import_step(tmp_path / 'repo', step, 'TR', 'A')
+    summary = export_view(result.job.dir)
     assert summary['solids'] == 2 and len(summary['joints']) == 1
-    assert (tmp_path / 'view' / 'view.glb').read_bytes()[:4] == b'glTF'
+    topo = json.loads((result.job.cache_dir / 'view' / 'topology.json').read_text())
+    assert topo['source']['file'] == 'model.step'
+    catalogue = json.loads(result.job.edges_json.read_text())
+    assert [e['id'] for e in catalogue['edges']] == [e['edge_id'] for e in topo['edges']]
+    assert [e['fingerprint'] for e in catalogue['edges']] == [e['fingerprint'] for e in topo['edges']]
