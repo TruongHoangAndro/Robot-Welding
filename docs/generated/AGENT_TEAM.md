@@ -11,7 +11,7 @@ defined in `.claude/agents/`. Truong gives direction, decides escalations and ru
 
 | Agent | Writes (only) | Functions (DES-003) | Plan tasks | ROS_DOMAIN_ID |
 |---|---|---|---|---|
-| lead (main session) | `awm_interfaces`, `awm_core` schemas and contracts, `PLAN.md`, `PROGRESS.md`, change proposal, `docs/generated/**` | — | T0.1 (contracts part), T0.5, merges | 42 |
+| lead (main session) | `awm_interfaces`, `awm_core` schemas and contracts, `PLAN.md`, `PROGRESS.md`, change proposal, `docs/generated/**` | — | T0.1 (contracts part), T0.5, merges after Truong's choice (CLAUDE.md, 2026-11-02) | 42 |
 | `planner` | `awm_path` (M4 core library, backends, CLI) | A41–A49 | WP-S S.2–S.7, WP1 | 43 |
 | `cad-geometry` | `awm_geometry`, `awm_cad` | A11–A15, A17, A18 | T0.2, T2.1 | 44 |
 | `cell-sim` | `awm_description`, `awm_bringup`, `awm_positioner` (mock), `docker/`, `scripts/` | D14, D16 | T0.3, T0.4, T0.6, T0.7 | 45 |
@@ -54,7 +54,8 @@ Every agent reads `CLAUDE.md` first; its rules win. In addition:
 ```
 lead: contract / task brief ─► agent (own worktree + branch) ─► tests green
       ─► rules-auditor + reviewer (parallel, read-only, get the diff, not the agent's conclusion)
-      ─► agent fixes findings ─► lead merges into GotoCode, updates PROGRESS.md
+      ─► agent fixes findings ─► lead presents the result to Truong ─► merge into GotoCode only on Truong's choice
+      ─► lead updates PROGRESS.md
       ─► at a stage exit: Truong runs the acceptance script in simulation
 ```
 

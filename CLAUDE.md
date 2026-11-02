@@ -179,8 +179,10 @@ Superpowers skills are enabled for this project. Project rules above override sk
 - `PLAN.md` stays the master plan (work packages); `PROGRESS.md` links each detailed plan and its status.
 
 ### Git
-- No git worktrees (colcon scans the whole workspace, `build/` and `install/` are shared, `scripts/dx` uses a fixed path).
-  Work on a feature branch `<wp-task>-<topic>` from `GotoCode` in the main workspace.
+- Agent worktrees only as `.worktrees/<agent>`, created with `scripts/wt` (decision 2026-11-02, `docs/generated/AGENT_TEAM.md` §3):
+  inside the bind mount, own `build/` / `install/`, `.worktrees/COLCON_IGNORE`, `scripts/dx` runs the checkout it sits in,
+  own `ROS_DOMAIN_ID` in `.awm_domain`. A single agent working alone uses a feature branch `<wp-task>-<topic>` from
+  `GotoCode` in the main workspace. No other worktree locations (the Agent tool's own worktree isolation is not used).
 - Commit prefixes: `<package>:`, `docs:`, `plan:` (specs, plans), `env:`; wiki commits separately with `wiki:`.
 - finishing-a-development-branch: base branch = `GotoCode`. Present the options and wait; never push or merge without Truong's choice.
 - `.superpowers/` (subagent ledgers) is git-ignored.
