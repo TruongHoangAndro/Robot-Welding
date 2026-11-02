@@ -13,7 +13,9 @@ Read this first after a restart. Continue from the first open task. Plan: `PLAN.
 | DES-001 Rev 0.6 draft + AI review board (B-01…B-25), TST-002 Rev 0.3 draft, PLAN.md Rev 0.6 | done, waiting for Truong's review; escalations E-01…E-08 open | commit a96c188, 2026-11-02 |
 | WP-S S.1 joint-aware seam normals (`awm_geometry.joints`, `awm_geometry.assembly`) | done — **G1 PASS** on the golden part (0.000° vs 45° per-solid) | 2026-11-02, `test_joints_occ.py` |
 | Agent team set up (`docs/generated/AGENT_TEAM.md`, `.claude/agents/`, `scripts/wt`, per-checkout `ROS_DOMAIN_ID` in `scripts/dx`) | done | 2026-11-02, accepted by Truong |
-| WP-S S.2 … S.7 (M4 core library, state space, clearance / contact, sweep, Mode C check, records) | next | decision Fri 2026-11-06 |
+| WP-S S.2 M4 core (`awm_core.units`, KinematicsBackend ur-analytic-ik 0.1.0.post3, SceneBackend move_group) | done — merged d031a60…47532f2; rules audit PASS, review no blocker / major | 2026-11-02, plan `docs/superpowers/plans/2026-11-02-ws-s2-m4-core.md`; image not rebuilt |
+| S.2 review follow-ups (minor): R1 IK branch label per solution (needed by S.3 ladder edges); R2 `ik()` can return [] exactly at q5 = 0 → report "singular", not "unreachable"; R3 `check_rigid` 1e-9 rejects 6-decimal rotations → precision / quaternion rule in T0.5; R4 test pinning fk_tcp composition order; R5 C1 must cover collision correctness; R6 pin scikit-build-core / nanobind; R7 `apt-get update` in docker/README; R8 Assumption: nominal DH = nominal URDF, calibrated kinematics_params at HW stage | open — R1, R2, R4 in S.3; R3 in T0.5; R6, R7 cell-sim; R8 change proposal | 2026-11-02 |
+| WP-S S.3 … S.7 (state space, clearance / contact, sweep, Mode C check, records) | next | decision Fri 2026-11-06 |
 | WP0 … WP4 | not started | — |
 
 ## Rev 0.2 offline chain (2026-10-19, superseded by the table above)
