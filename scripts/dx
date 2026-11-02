@@ -8,6 +8,9 @@
 #
 # FASTRTPS_DEFAULT_PROFILES_FILE is unset because the image's /etc/bash.bashrc exports the demo's
 # UDP/WAN whitelist profile; awm_dev uses default transports with localhost-only discovery.
+#
+# Python packages that are not in apt (ur-analytic-ik, WP-S S.2) live in the venv /opt/awm_venv
+# (--system-site-packages, docker/Dockerfile); its site-packages is prepended to PYTHONPATH after sourcing.
 set -euo pipefail
 MOUNT="${HOME}/ros2/aplsmn601_ws"
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,5 +19,6 @@ case "${WS}/" in
   *) echo "dx: ${WS} is outside the awm_dev bind mount ${MOUNT}" >&2; exit 2 ;;
 esac
 DOMAIN=42
+VENV_SITE=/opt/awm_venv/lib/python3.12/site-packages
 if [ -f "${WS}/.awm_domain" ]; then DOMAIN="$(tr -dc '0-9' < "${WS}/.awm_domain")"; fi
-exec docker exec -e ROS_DOMAIN_ID="${DOMAIN}" awm_dev bash -lc "unset FASTRTPS_DEFAULT_PROFILES_FILE; source /opt/ros/jazzy/setup.bash && cd '${WS}' && { [ -f install/setup.bash ] && source install/setup.bash || true; } && $*"
+exec docker exec -e ROS_DOMAIN_ID="${DOMAIN}" awm_dev bash -lc "unset FASTRTPS_DEFAULT_PROFILES_FILE; source /opt/ros/jazzy/setup.bash && cd '${WS}' && { [ -f install/setup.bash ] && source install/setup.bash || true; } && export PYTHONPATH=\"${VENV_SITE}\${PYTHONPATH:+:\$PYTHONPATH}\" && $*"

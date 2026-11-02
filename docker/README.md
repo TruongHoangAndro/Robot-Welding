@@ -25,6 +25,18 @@ docker build -t awm-dev:jazzy -f docker/Dockerfile docker/
 The base image `ros2-jazzy-hardware-accelerated:latest` is the demo image (built from
 `docs/reference/ros2_nvidia_build-UR5E_WorkingDemo.zip` → `Dockerfile`).
 
+## Python venv `/opt/awm_venv` (pip packages not in apt)
+`ur-analytic-ik==0.1.0.post3` (analytic UR IK, all 8 branches; ADR-12, WP-S S.2) is built from the PyPI sdist into the
+venv `/opt/awm_venv`, created with `--system-site-packages` so numpy and rclpy stay visible. `scripts/dx` prepends
+`/opt/awm_venv/lib/python3.12/site-packages` to `PYTHONPATH`, so every `scripts/dx` command (colcon test included)
+can import it. In an existing container:
+```bash
+docker exec -u root awm_dev bash -lc "apt-get install -y cmake ninja-build g++ libeigen3-dev python3-venv && \
+  python3 -m venv --system-site-packages /opt/awm_venv && /opt/awm_venv/bin/pip install ur-analytic-ik==0.1.0.post3"
+```
+The same lines are in `docker/Dockerfile` (rebuild the image with the command above). Never `pip install` into the
+system Python (PEP 668).
+
 ## OCCT environment (host, mounted read-only)
 pythonocc-core lives in the host conda env `awm_occ`, mounted at the same path. To recreate it:
 ```bash
