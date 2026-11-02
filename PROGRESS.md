@@ -12,6 +12,7 @@ Read this first after a restart. Continue from the first open task. Plan: `PLAN.
 | PLAN.md Rev 0.4 | superseded by PLAN.md Rev 0.6 | 2026-10-28 |
 | DES-001 Rev 0.6 draft + AI review board (B-01…B-25), TST-002 Rev 0.3 draft, PLAN.md Rev 0.6 | done, waiting for Truong's review; escalations E-01…E-08 open | commit a96c188, 2026-11-02 |
 | WP-S S.1 joint-aware seam normals (`awm_geometry.joints`, `awm_geometry.assembly`) | done — **G1 PASS** on the golden part (0.000° vs 45° per-solid) | 2026-11-02, `test_joints_occ.py` |
+| Agent team set up (`docs/generated/AGENT_TEAM.md`, `.claude/agents/`, `scripts/wt`, per-checkout `ROS_DOMAIN_ID` in `scripts/dx`) | done | 2026-11-02, accepted by Truong |
 | WP-S S.2 … S.7 (M4 core library, state space, clearance / contact, sweep, Mode C check, records) | next | decision Fri 2026-11-06 |
 | WP0 … WP4 | not started | — |
 

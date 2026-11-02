@@ -2,8 +2,19 @@
 # Run a command inside the dev container `awm_dev` with ROS 2 Jazzy and the workspace overlay sourced.
 # Usage: scripts/dx "colcon build --packages-select awm_core"
 #
+# The workspace is the checkout that contains this script, so `.worktrees/<name>/scripts/dx` builds and tests that
+# agent worktree (docs/generated/AGENT_TEAM.md). A checkout may hold a `.awm_domain` file with its own ROS_DOMAIN_ID
+# so that parallel sim launches do not see each other; default 42.
+#
 # FASTRTPS_DEFAULT_PROFILES_FILE is unset because the image's /etc/bash.bashrc exports the demo's
 # UDP/WAN whitelist profile; awm_dev uses default transports with localhost-only discovery.
 set -euo pipefail
-WS="${HOME}/ros2/aplsmn601_ws"
-exec docker exec awm_dev bash -lc "unset FASTRTPS_DEFAULT_PROFILES_FILE; source /opt/ros/jazzy/setup.bash && cd ${WS} && { [ -f install/setup.bash ] && source install/setup.bash || true; } && $*"
+MOUNT="${HOME}/ros2/aplsmn601_ws"
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+case "${WS}/" in
+  "${MOUNT}/"*) ;;
+  *) echo "dx: ${WS} is outside the awm_dev bind mount ${MOUNT}" >&2; exit 2 ;;
+esac
+DOMAIN=42
+if [ -f "${WS}/.awm_domain" ]; then DOMAIN="$(tr -dc '0-9' < "${WS}/.awm_domain")"; fi
+exec docker exec -e ROS_DOMAIN_ID="${DOMAIN}" awm_dev bash -lc "unset FASTRTPS_DEFAULT_PROFILES_FILE; source /opt/ros/jazzy/setup.bash && cd '${WS}' && { [ -f install/setup.bash ] && source install/setup.bash || true; } && $*"

@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Agent worktrees inside the workspace (visible to awm_dev through the bind mount), one ROS_DOMAIN_ID each.
+# Usage:
+#   scripts/wt new <agent> <branch> [base]   create .worktrees/<agent> on a new branch from base (default: HEAD)
+#   scripts/wt list                          list worktrees and their domain ids
+#   scripts/wt rm <agent>                    remove the worktree (the branch is kept)
+# Domain ids are fixed per agent in docs/generated/AGENT_TEAM.md; the main checkout uses 42.
+set -euo pipefail
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="${WS}/.worktrees"
+
+domain_of() {
+  case "$1" in
+    planner) echo 43 ;; cad-geometry) echo 44 ;; cell-sim) echo 45 ;; seam-process) echo 46 ;;
+    program-verify) echo 47 ;; web) echo 48 ;; runtime) echo 49 ;;
+    *) echo "wt: unknown agent '$1'" >&2; exit 2 ;;
+  esac
+}
+
+cmd="${1:-list}"
+case "${cmd}" in
+  new)
+    agent="${2:?agent}"; branch="${3:?branch}"; base="${4:-HEAD}"
+    domain="$(domain_of "${agent}")"
+    mkdir -p "${ROOT}"
+    # colcon in the main checkout must not pick up the packages of the worktrees.
+    touch "${ROOT}/COLCON_IGNORE"
+    git -C "${WS}" worktree add -b "${branch}" "${ROOT}/${agent}" "${base}"
+    echo "${domain}" > "${ROOT}/${agent}/.awm_domain"
+    echo "worktree ${ROOT}/${agent} on ${branch}, ROS_DOMAIN_ID ${domain}"
+    echo "build/test with: ${ROOT}/${agent}/scripts/dx \"colcon build --symlink-install\""
+    ;;
+  list)
+    git -C "${WS}" worktree list
+    for d in "${ROOT}"/*/; do [ -f "${d}.awm_domain" ] && echo "$(basename "${d}") domain $(cat "${d}.awm_domain")"; done
+    ;;
+  rm)
+    agent="${2:?agent}"
+    rm -f "${ROOT}/${agent}/.awm_domain"
+    git -C "${WS}" worktree remove "${ROOT}/${agent}"
+    ;;
+  *) echo "usage: scripts/wt new|list|rm ..." >&2; exit 2 ;;
+esac
