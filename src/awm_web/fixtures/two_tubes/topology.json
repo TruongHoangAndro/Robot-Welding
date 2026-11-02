@@ -1,0 +1,300 @@
+{
+  "schema_version": "2.0",
+  "created_by": "awm_web scripts/make_fixture.mjs (synthetic test fixture)",
+  "created_at": "2026-11-02T00:00:00+07:00",
+  "inputs": [
+    {
+      "name": "two_tubes_synthetic.step",
+      "sha256": "c508bbf319306b116e3819a2274c155301a61b9d85a672649cd70191a9b78a02"
+    }
+  ],
+  "unit": "mm",
+  "frame": "part",
+  "source": {
+    "file": "two_tubes_synthetic.step",
+    "component": "two_tubes (synthetic)",
+    "up_axis": "+Z"
+  },
+  "tessellation": {
+    "face_linear_deflection_mm": 0.05,
+    "face_angular_deflection_deg": 5,
+    "edge_chord_mm": 0.05
+  },
+  "solids": [
+    {
+      "solid_id": "B1",
+      "name": "tube_a",
+      "volume_mm3": 7023.34,
+      "bbox_min_mm": [
+        -13.3,
+        -13.3,
+        0
+      ],
+      "bbox_max_mm": [
+        13.3,
+        13.3,
+        40
+      ]
+    },
+    {
+      "solid_id": "B2",
+      "name": "tube_b",
+      "volume_mm3": 7023.34,
+      "bbox_min_mm": [
+        -13.3,
+        -13.3,
+        40
+      ],
+      "bbox_max_mm": [
+        13.3,
+        13.3,
+        80
+      ]
+    }
+  ],
+  "faces": [
+    {
+      "face_id": "F1",
+      "solid_id": "B1",
+      "surface_type": "cylinder",
+      "area_mm2": 3342.65
+    },
+    {
+      "face_id": "F2",
+      "solid_id": "B1",
+      "surface_type": "cylinder",
+      "area_mm2": 2764.6
+    },
+    {
+      "face_id": "F3",
+      "solid_id": "B1",
+      "surface_type": "plane",
+      "area_mm2": 175.58
+    },
+    {
+      "face_id": "F4",
+      "solid_id": "B1",
+      "surface_type": "plane",
+      "area_mm2": 175.58
+    },
+    {
+      "face_id": "F5",
+      "solid_id": "B2",
+      "surface_type": "cylinder",
+      "area_mm2": 3342.65
+    },
+    {
+      "face_id": "F6",
+      "solid_id": "B2",
+      "surface_type": "cylinder",
+      "area_mm2": 2764.6
+    },
+    {
+      "face_id": "F7",
+      "solid_id": "B2",
+      "surface_type": "plane",
+      "area_mm2": 175.58
+    },
+    {
+      "face_id": "F8",
+      "solid_id": "B2",
+      "surface_type": "plane",
+      "area_mm2": 175.58
+    }
+  ],
+  "edges": [
+    {
+      "edge_id": "E1",
+      "solid_id": "B1",
+      "curve_type": "circle",
+      "length_mm": 83.57,
+      "closed": true,
+      "faces": [
+        "F1",
+        "F3"
+      ],
+      "tangent_neighbours": [],
+      "fingerprint": "circle:r13.3000:c0.0000,0.0000,0.0000",
+      "joint_edge_id": null
+    },
+    {
+      "edge_id": "E2",
+      "solid_id": "B1",
+      "curve_type": "circle",
+      "length_mm": 69.12,
+      "closed": true,
+      "faces": [
+        "F2",
+        "F3"
+      ],
+      "tangent_neighbours": [],
+      "fingerprint": "circle:r11.0000:c0.0000,0.0000,0.0000",
+      "joint_edge_id": null
+    },
+    {
+      "edge_id": "E3",
+      "solid_id": "B1",
+      "curve_type": "circle",
+      "length_mm": 83.57,
+      "closed": true,
+      "faces": [
+        "F1",
+        "F4"
+      ],
+      "tangent_neighbours": [],
+      "fingerprint": "circle:r13.3000:c0.0000,0.0000,40.0000",
+      "joint_edge_id": "JE1"
+    },
+    {
+      "edge_id": "E4",
+      "solid_id": "B1",
+      "curve_type": "circle",
+      "length_mm": 69.12,
+      "closed": true,
+      "faces": [
+        "F2",
+        "F4"
+      ],
+      "tangent_neighbours": [],
+      "fingerprint": "circle:r11.0000:c0.0000,0.0000,40.0000",
+      "joint_edge_id": null
+    },
+    {
+      "edge_id": "E5",
+      "solid_id": "B2",
+      "curve_type": "circle",
+      "length_mm": 83.57,
+      "closed": true,
+      "faces": [
+        "F5",
+        "F7"
+      ],
+      "tangent_neighbours": [],
+      "fingerprint": "circle:r13.3000:c0.0000,0.0000,40.0000",
+      "joint_edge_id": "JE1"
+    },
+    {
+      "edge_id": "E6",
+      "solid_id": "B2",
+      "curve_type": "circle",
+      "length_mm": 69.12,
+      "closed": true,
+      "faces": [
+        "F6",
+        "F7"
+      ],
+      "tangent_neighbours": [],
+      "fingerprint": "circle:r11.0000:c0.0000,0.0000,40.0000",
+      "joint_edge_id": null
+    },
+    {
+      "edge_id": "E7",
+      "solid_id": "B2",
+      "curve_type": "circle",
+      "length_mm": 83.57,
+      "closed": true,
+      "faces": [
+        "F5",
+        "F8"
+      ],
+      "tangent_neighbours": [],
+      "fingerprint": "circle:r13.3000:c0.0000,0.0000,80.0000",
+      "joint_edge_id": null
+    },
+    {
+      "edge_id": "E8",
+      "solid_id": "B2",
+      "curve_type": "circle",
+      "length_mm": 69.12,
+      "closed": true,
+      "faces": [
+        "F6",
+        "F8"
+      ],
+      "tangent_neighbours": [],
+      "fingerprint": "circle:r11.0000:c0.0000,0.0000,80.0000",
+      "joint_edge_id": null
+    }
+  ],
+  "joints": [
+    {
+      "joint_edge_id": "JE1",
+      "solid_a": "B1",
+      "solid_b": "B2",
+      "edge_a": "E3",
+      "edge_b": "E5",
+      "length_mm": 83.57,
+      "closed": true,
+      "preview_frames": [
+        {
+          "point_mm": [
+            13.3,
+            0,
+            40
+          ],
+          "x": [
+            0,
+            1,
+            0
+          ],
+          "z": [
+            1,
+            0,
+            0
+          ]
+        },
+        {
+          "point_mm": [
+            0,
+            13.3,
+            40
+          ],
+          "x": [
+            -1,
+            0,
+            0
+          ],
+          "z": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "point_mm": [
+            -13.3,
+            0,
+            40
+          ],
+          "x": [
+            0,
+            -1,
+            0
+          ],
+          "z": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "point_mm": [
+            0,
+            -13.3,
+            40
+          ],
+          "x": [
+            1,
+            0,
+            0
+          ],
+          "z": [
+            0,
+            -1,
+            0
+          ]
+        }
+      ]
+    }
+  ]
+}
