@@ -156,6 +156,50 @@ conduit, fixture, clamps. Until IPG CAD arrives use the simplified head model of
   (allowed by Truong, 2026-10-27).
 - `~/ros2/welding_demo_ws/**`, container `ros2_jazzy_dev_env`, anything outside this workspace except `/tmp/`.
 
+## Superpowers workflow
+Superpowers skills are enabled for this project. Project rules above override skill defaults.
+
+### Build and test (always inside `awm_dev`, never on the host)
+- Build: `scripts/dx "colcon build --symlink-install [--packages-select <pkg>]"`
+- TDD loop (one test): `scripts/dx "python3 -m pytest src/<pkg>/test/<file>.py::<test> -v"`;
+  for `awm_geometry` (OCC): `$AWM_OCC_PYTHON -m pytest src/awm_geometry/test/<file>.py::<test> -v` (host conda, no ROS).
+- Package check: `scripts/dx "colcon test --packages-select <pkg> && colcon test-result --verbose"`
+- Full suite (before claiming a branch is done): `scripts/dx "colcon build --symlink-install && colcon test && colcon test-result --verbose"`
+  (includes sim tests on mock hardware; `AWM_OCC_PYTHON` must be set). The only allowed skip is `AWM_CELL_STEP not set`.
+- Real-CAD acceptance tests (e.g. TST-002 G1, ~40 s; the cell STEP is not in git), run before closing a WP-S / WP0 task:
+  `AWM_CELL_STEP="$PWD/docs/3D/APLSMN601_Automated Weldment System.step" PYTHONPATH=src/awm_geometry:src/awm_core $AWM_OCC_PYTHON -m pytest -rs src/awm_geometry/test`
+  (expect 0 skipped).
+- verification-before-completion: quote the command and its pass / fail counts. A skipped test is not a pass; say which were skipped and why.
+
+### Specs and plans
+- Specs: `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`; plans: `docs/superpowers/plans/YYYY-MM-DD-<wp-task>-<topic>.md`
+  (e.g. `2026-11-03-ws-s2-m4-core.md`). English. Dated, no Rev numbers.
+- A spec is feature-level and must cite DES-001 / TST-002 / ADR / OI / CP IDs. It never changes the architecture:
+  a design change goes to `docs/generated/DES-001_change_proposal.md` and waits for Truong.
+- `PLAN.md` stays the master plan (work packages); `PROGRESS.md` links each detailed plan and its status.
+
+### Git
+- No git worktrees (colcon scans the whole workspace, `build/` and `install/` are shared, `scripts/dx` uses a fixed path).
+  Work on a feature branch `<wp-task>-<topic>` from `GotoCode` in the main workspace.
+- Commit prefixes: `<package>:`, `docs:`, `plan:` (specs, plans), `env:`; wiki commits separately with `wiki:`.
+- finishing-a-development-branch: base branch = `GotoCode`. Present the options and wait; never push or merge without Truong's choice.
+- `.superpowers/` (subagent ledgers) is git-ignored.
+
+### When skills are required
+- brainstorming: required for new behaviour not already specified in `PLAN.md` / DES-001, or with an open design choice.
+  A `PLAN.md` task with a defined test may go straight to writing-plans.
+- TDD: required for all code under `src/`. Skipped (state it) for documents, doc generators
+  (`docs/generated/drafts/*.py`, `scripts/export_function_register.py`), `docker/Dockerfile`, YAML / launch config without logic,
+  and throwaway spikes explicitly marked as such.
+- Subagent-driven execution must stop and ask (no "ruling") when a task conflicts with DES-001, touches safety, hardware,
+  laser events, speed / acceleration limits or units.
+
+### Constraints that every skill and subagent inherits
+- Simulation only: mock hardware / URSim. Never connect to a real robot, PLC, LightWELD or laser; no real IP addresses.
+- `docs/LLM_Wiki/**` and `docs/reference/**` are read-only in coding sessions.
+- Units: mm / deg / s in project data; m / rad only via the `awm_core` adapter.
+- Subagent prompts must include these constraints and the `scripts/dx` rule.
+
 ## Project wiki (docs/LLM_Wiki)
 - `docs/LLM_Wiki/` is the project knowledge wiki (schema: `docs/LLM_Wiki/PROJECT.md`). Use it for context; DES / TST documents in `docs/reference/` remain the design source of truth.
 - Coding sessions (Claude Code opened at the workspace root): `docs/LLM_Wiki/**` is read-only. List the wiki updates needed at the end of the session instead of editing.
