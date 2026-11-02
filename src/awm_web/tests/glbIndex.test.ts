@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { buildGlbIndex, checkGlbAsset, crossCheck } from '../src/lib/glbIndex';
+import { buildGlbIndex, checkGlbAsset, consistencyWarnings, crossCheck } from '../src/lib/glbIndex';
 import { parseTopology } from '../src/lib/topology';
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'two_tubes');
@@ -46,5 +46,33 @@ describe('view.glb index', () => {
     expect(p.getZ(0)).toBeCloseTo(40, 4);
     expect(crossCheck(idx, topo.faces.map((f) => f.face_id), topo.edges.map((e) => e.edge_id))).toEqual([]);
     expect(crossCheck(idx, ['F1', 'F99'], [])).toHaveLength(3);
+  });
+
+  it('warns about duplicate ids and extras that differ from topology.json', async () => {
+    const gltf = await loadGlb();
+    const topo = parseTopology(readFileSync(join(DIR, 'topology.json'), 'utf8'));
+    const idx = buildGlbIndex(gltf.scene);
+    expect(consistencyWarnings(idx, topo)).toEqual([]);
+    // duplicate node ids in the GLB
+    const f1 = idx.faces.get('F1')!;
+    const e1 = idx.edges.get('E1')!;
+    f1.parent!.add(f1.clone());
+    e1.parent!.add(e1.clone());
+    const dupIdx = buildGlbIndex(gltf.scene);
+    expect(dupIdx.duplicateFaces).toEqual(['F1']);
+    expect(dupIdx.duplicateEdges).toEqual(['E1']);
+    // extras that differ, and repeated ids in topology.json
+    const je = topo.joints[0].edge_a;
+    dupIdx.edges.get(je)!.userData.joint_edge_id = null;
+    dupIdx.edges.get('E2')!.userData.solid_id = 'B2';
+    const topo2 = { ...topo, faces: [...topo.faces, topo.faces[0]], edges: [...topo.edges, topo.edges[1]] };
+    const w = consistencyWarnings(dupIdx, topo2);
+    expect(w).toContain('duplicate face_id in view.glb: F1');
+    expect(w).toContain('duplicate edge_id in view.glb: E1');
+    expect(w).toContain('duplicate face_id in topology.json: F1');
+    expect(w).toContain('duplicate edge_id in topology.json: E2');
+    const mism = w.find((x) => x.startsWith('view.glb extras differ'))!;
+    expect(mism).toContain(`${je} joint_edge_id null ≠ JE1`);
+    expect(mism).toContain('E2 solid_id B2 ≠ B1');
   });
 });

@@ -71,13 +71,34 @@ export function viewDataMiddleware(rootDir: string | undefined) {
     }
     const r = relative(rootReal, real);
     if (r === '' || r.startsWith('..') || isAbsolute(r)) return send(403, 'forbidden');
-    const st = statSync(real);
-    if (!st.isFile()) return send(404, 'not found');
-    res.statusCode = 200;
-    res.setHeader('Content-Type', TYPES[extname(real).toLowerCase()] ?? 'application/octet-stream');
-    res.setHeader('Content-Length', String(st.size));
-    res.setHeader('Cache-Control', 'no-store');
-    if (req.method === 'HEAD') return void res.end();
-    createReadStream(real).pipe(res);
+    let size: number;
+    try {
+      const st = statSync(real);
+      if (!st.isFile()) return send(404, 'not found');
+      size = st.size;
+    } catch {
+      return send(404, 'not found');
+    }
+    // Open first; status and headers are sent only once the file is open, so an unreadable file or one removed
+    // after the stat gives an error status instead of an uncaught exception that would stop the Vite server.
+    const stream = createReadStream(real);
+    stream.on('error', (err: NodeJS.ErrnoException) => {
+      stream.destroy();
+      if (res.headersSent) return void res.destroy(err);
+      if (err.code === 'ENOENT') return send(404, 'not found');
+      if (err.code === 'EACCES' || err.code === 'EPERM') return send(403, 'forbidden');
+      return send(500, 'read error');
+    });
+    stream.on('open', () => {
+      res.statusCode = 200;
+      res.setHeader('Content-Type', TYPES[extname(real).toLowerCase()] ?? 'application/octet-stream');
+      res.setHeader('Content-Length', String(size));
+      res.setHeader('Cache-Control', 'no-store');
+      if (req.method === 'HEAD') {
+        stream.destroy();
+        return void res.end();
+      }
+      stream.pipe(res);
+    });
   };
 }

@@ -17,7 +17,7 @@ function jointBox(model: Model, j: JointInfo): Box3 {
 }
 
 export function App() {
-  const base = useMemo(() => dataBase(window.location.search), []);
+  const { base, error: baseError } = useMemo(() => dataBase(window.location.search, window.location.origin), []);
   const [model, setModel] = useState<Model | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,6 +38,11 @@ export function App() {
 
   useEffect(() => {
     let live = true;
+    if (!base) {
+      setError(`${baseError}. Drop view.glb and topology.json here or use "Open files".`);
+      setLoading(false);
+      return;
+    }
     loadFromUrl(base)
       .then((m) => live && accept(m))
       .catch((e: Error) => live && setError(`${e.message}. Drop view.glb and topology.json here or use "Open files".`))
@@ -45,7 +50,7 @@ export function App() {
     return () => {
       live = false;
     };
-  }, [base, accept]);
+  }, [base, baseError, accept]);
 
   const takeFiles = useCallback(
     (files: FileList | File[]) => {
@@ -267,7 +272,7 @@ export function App() {
             <span>hover: {hover ? `${hover.kind} ${hover.id}` : '—'}</span>
           </>
         ) : (
-          <span className="muted">data base URL: {base} (set with ?data=…)</span>
+          <span className="muted">data base URL: {base ?? 'refused'} (set with ?data=…)</span>
         )}
       </footer>
     </div>

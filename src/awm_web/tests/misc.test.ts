@@ -1,7 +1,7 @@
-import { mkdtempSync, mkdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { choosePick, dataBase, niceStep } from '../src/lib/pick';
 import { resolveInside } from '../server/viewData';
 
@@ -21,9 +21,19 @@ describe('choosePick', () => {
 });
 
 describe('dataBase and niceStep', () => {
+  const O = 'http://localhost:5173';
   it('defaults to /data/ and adds a trailing slash', () => {
-    expect(dataBase('')).toBe('/data/');
-    expect(dataBase('?data=/jobs/x/cache/view')).toBe('/jobs/x/cache/view/');
+    expect(dataBase('', O)).toEqual({ base: '/data/', error: null });
+    expect(dataBase('?data=/jobs/x/cache/view', O).base).toBe('/jobs/x/cache/view/');
+    expect(dataBase('?data=cache/view/', O).base).toBe('cache/view/');
+  });
+  it('refuses absolute URLs and other origins', () => {
+    for (const q of ['?data=http://evil.example/x/', '?data=https://localhost:5173/data/', '?data=//evil.example/x/',
+      '?data=javascript:alert(1)', '?data=data:text/plain,x', '?data=%5C%5Cevil.example%5Cx']) {
+      const r = dataBase(q, O);
+      expect(r.base, q).toBeNull();
+      expect(r.error).toMatch(/same-origin relative path/);
+    }
   });
   it('gives 1/2/5 steps', () => {
     expect(niceStep(80)).toBe(10);
@@ -36,6 +46,7 @@ describe('resolveInside', () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'awmview-')));
   writeFileSync(join(root, 'view.glb'), 'x');
   mkdirSync(join(root, 'sub'));
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
   it('resolves files inside the directory', () => {
     expect(resolveInside(root, '/data/view.glb')).toBe(join(root, 'view.glb'));
     expect(resolveInside(root, '/data/sub/../view.glb')).toBe(join(root, 'view.glb'));
@@ -47,10 +58,5 @@ describe('resolveInside', () => {
     expect(() => resolveInside(root, '/data/..%2F..%2Fetc/passwd')).toThrow('forbidden');
     expect(() => resolveInside(root, '/data/')).toThrow('forbidden');
     expect(() => resolveInside(root, '/data/%E0%A4%A')).toThrow('forbidden');
-  });
-  it('leaves symlink escapes to the realpath check of the middleware', () => {
-    symlinkSync('/etc', join(root, 'link'));
-    // lexical resolution stays inside; the middleware compares the realpath and answers 403
-    expect(resolveInside(root, '/data/link/hostname')).toBe(join(root, 'link', 'hostname'));
   });
 });

@@ -28,11 +28,24 @@ export function choosePick(hits: readonly Hit[], depthSlack: number): PickTarget
   return null;
 }
 
-/** Normalise the ?data= base URL: default /data/, always ending in a slash. */
-export function dataBase(search: string): string {
-  const raw = new URLSearchParams(search).get('data');
-  const base = raw && raw.trim() ? raw.trim() : '/data/';
-  return base.endsWith('/') ? base : `${base}/`;
+/**
+ * Base URL of the view model from the ?data= query: default /data/, always ending in a slash. Only same-origin
+ * relative paths are accepted; an absolute URL (scheme or //host) is refused so a link cannot point the viewer at
+ * another server. `origin` is window.location.origin.
+ */
+export function dataBase(search: string, origin: string): { base: string | null; error: string | null } {
+  const raw = (new URLSearchParams(search).get('data') ?? '').trim();
+  if (!raw) return { base: '/data/', error: null };
+  const bad = { base: null, error: `?data=${raw} refused: only a same-origin relative path is allowed (e.g. /data/)` };
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith('//') || raw.includes('\\')) return bad;
+  let u: URL;
+  try {
+    u = new URL(raw, `${origin}/`);
+  } catch {
+    return bad;
+  }
+  if (u.origin !== origin) return bad;
+  return { base: raw.endsWith('/') ? raw : `${raw}/`, error: null };
 }
 
 /** Grid step in mm: a 1 / 2 / 5 × 10^n value giving about 10–20 cells over the model size. */

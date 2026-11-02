@@ -1,6 +1,6 @@
 import { Box3, Color, DoubleSide, Group, Matrix4, MeshStandardMaterial, Vector3 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { buildGlbIndex, checkGlbAsset, crossCheck } from './glbIndex';
+import { buildGlbIndex, checkGlbAsset, consistencyWarnings } from './glbIndex';
 import { indexTopology, parseTopology, ViewModelError, type Topology, type TopologyIndex } from './topology';
 import { upAxisToZ } from './upAxis';
 
@@ -41,7 +41,7 @@ export async function buildModel(glbBuf: ArrayBuffer, topoText: string, label: s
   const scene = gltf.scene;
   scene.updateMatrixWorld(true);
   const glb = buildGlbIndex(scene);
-  const warnings = crossCheck(glb, tidx.faces.keys(), tidx.edges.keys());
+  const warnings = consistencyWarnings(glb, topo);
 
   const solidColour = new Map<string, string>();
   topo.solids.forEach((s, i) => solidColour.set(s.solid_id, SOLID_COLOURS[i % SOLID_COLOURS.length]));

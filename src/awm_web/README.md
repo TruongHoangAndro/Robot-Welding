@@ -29,10 +29,12 @@ Data loading:
 - The dev and preview servers serve the directory `$AWM_VIEW_DIR` read-only at `/data/` (GET / HEAD only, files
   inside that directory only; `..`, encoded `..` and symlinks leaving it get 403).
 - The page loads `<base>view.glb` and `<base>topology.json`; `base` is the URL query `?data=` (default `/data/`),
-  e.g. `http://localhost:5173/?data=/data/`.
+  e.g. `http://localhost:5173/?data=/data/`. Only same-origin relative paths are accepted; an absolute URL
+  (scheme or `//host`) is refused with a message.
 - Fallback: drag and drop both files onto the page, or use "Open files".
 - The viewer refuses files with `schema_version` ≠ "2.0" or `unit` ≠ "mm" (topology.json and `asset.extras` of
-  view.glb) and says why. Ids present in only one of the two files are listed under "Warnings".
+  view.glb) and says why. Under "Warnings" it lists ids present in only one of the two files, duplicate ids in
+  either file, and GLB node extras (`solid_id`, `joint_edge_id`) that differ from topology.json.
 
 ## What it shows
 
@@ -59,6 +61,8 @@ Data loading:
   the Vite dev / preview servers and is replaced by `awm_api` `GET /jobs/{id}/view` later.
 - `topology.json` is checked for version, unit and the fields the viewer uses, not against the full JSON schema
   (the producer and `awm_core` validate that).
+- Edge picking: an edge wins over the face in front of it only within a depth slack of 1 % of the model radius
+  (≥ 0.2 mm); on large parts an edge just behind a nearby face may still be picked — zoom in to disambiguate.
 - Every edge is drawn as its own fat line; parts with many thousands of edges may be slow.
 
 ## Development
