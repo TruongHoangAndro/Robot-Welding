@@ -21,6 +21,17 @@ Location in the job package: `jobs/<PartNo>_<PartRev>/cache/view/{view.glb, topo
 4. **Header** as every job file: `schema_version` "2.0", `created_by`, `created_at`, `inputs` with SHA-256 of the
    STEP file.
 
+5. **Same shape as the edge catalogue** (clarified 2026-11-02 after review of the first exporter). `E<n>` / `F<n>` in
+   D20 must equal the ids of the A21 edge catalogue (`edges.json`) of the same job: both are built by one shared
+   load + heal function from the same STEP **and component**, and the fingerprint is computed by the same function
+   on the same evaluation. A parity test (catalogue vs D20 on the same file) guards this.
+6. **Preview frames are best effort** (clarified 2026-11-02). If the frame of a joint cannot be computed (for example
+   two solids touching along a line, so the exterior face is ambiguous), the joint is still listed with
+   `preview_frames: []` and the exporter logs a warning; the export does not fail. An edge that would belong to two
+   joints is an error (export fails with a clear message) because `joint_edge_id` holds one id.
+7. **Paths** (`source.file`, `inputs[].name`) are relative to the job folder; the STEP is the job's `model.step`
+   copy (D01). A preview export outside a job records the bare file name.
+
 ## view.glb (glTF 2.0 binary)
 
 | Element | Convention |
