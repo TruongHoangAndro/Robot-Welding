@@ -58,7 +58,7 @@ The spike code is written as the M4 core library (DES-001 B-06): pure Python, mm
 | I3 | Fixture, holders, positioner rotating set | Cell CAD | Available; which holders rotate = OI-27, due 2026-11-06 — until then all holders on `positioner_flange` (conservative) |
 | I4 | Part pose in the cell, robot base pose | Cell CAD component placements (no `REF_*` markers yet, OI-23) | **Assumption**, recorded per result |
 | I5 | Filler wire on J1 / J2, wire side | Welding engineer via Truong (escalation E-05) | Open, due 2026-11-04 — both ψ cases are run anyway |
-| E1 | `awm_dev` (Jazzy, MoveIt2), pythonocc-core 8.0.1 in conda `awm_occ`, `ur-analytic-ik` (version pinned in `docker/Dockerfile`) | — | pythonocc available; ur-analytic-ik to install (T0.6) |
+| E1 | `awm_dev` (Jazzy, MoveIt2), pythonocc-core 8.0.1 in conda `awm_occ`, `ur-analytic-ik` (version pinned in `docker/Dockerfile`) | — | Available: pythonocc-core 8.0.1; `ur-analytic-ik` 0.1.0.post3 installed 2026-11-02 in the venv `/opt/awm_venv` of `awm_dev` (built from the PyPI sdist, WP-S S.2); UR5e FK checked against the `ur_description` URDF (library base = UR `base`, Rz 180° from `base_link`) |
 
 ### 3.1 Head models (both are run)
 | Model | Content | Status |
