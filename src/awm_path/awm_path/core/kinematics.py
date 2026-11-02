@@ -6,7 +6,9 @@ positioner joint is not part of the robot kinematics). Conversion to m / rad hap
 ``awm_core.units``. This module never imports rclpy or ROS messages (B-06).
 
 Frames: ``base_link`` -> ``tool0`` of ``ur_description`` (the frames MoveIt uses). The library's own base frame is
-related to ``base_link`` by the fixed transform ``LIB_BASE_T_BASE_LINK``, absorbed in ``fk`` / ``ik``.
+the UR controller ``base`` frame, which is ``base_link`` rotated 180 deg about Z (DES-001 §5.3). The fixed transform
+``LIB_BASE_T_BASE_LINK`` = Rz(180 deg) is applied in ``fk`` and its inverse in ``ik``; verified against the
+``ur_description`` URDF chain for 200 seeded states (``test_core_kinematics_urdf.py``, < 0.01 mm, < 1e-6 rad).
 """
 
 from __future__ import annotations
@@ -18,8 +20,11 @@ import numpy as np
 
 from awm_core import units
 
-#: Fixed transform library base -> ``base_link`` (set by the URDF check of Task 4).
-LIB_BASE_T_BASE_LINK = np.eye(4)
+#: Fixed transform library base (UR ``base``) -> ``base_link``: rotation of 180 deg about Z, no translation.
+LIB_BASE_T_BASE_LINK = np.array([[-1.0, 0.0, 0.0, 0.0],
+                                 [0.0, -1.0, 0.0, 0.0],
+                                 [0.0, 0.0, 1.0, 0.0],
+                                 [0.0, 0.0, 0.0, 1.0]])
 
 _RIGID_TOL = 1e-9
 #: An IK solution is returned only if its FK reproduces the target this closely (filters degenerate solutions at
