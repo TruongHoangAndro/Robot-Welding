@@ -26,9 +26,13 @@ from awm_path.core.contact import ContactParams, ContactResult, PartMesh, contac
 from awm_path.core.ladder import NodeScore
 from awm_path.core.sweep import Candidate, tcp_pose
 
-#: Scene columns added to ``candidates.csv`` (same nested shape as the candidate layers).
-SCENE_COLUMNS = ('scene_valid', 'scene_contacts', 'clear_5mm', 'clear_10mm', 'clearance_lb_mm', 'clearance_blocking',
-                 'contact_ok', 'contact_reason', 'node_valid')
+#: Scene columns of ``candidates.csv`` before / after the clearance-level columns ``clear_<level>mm``.
+_COLUMNS_HEAD = ('scene_valid', 'scene_contacts')
+_COLUMNS_TAIL = ('clearance_lb_mm', 'clearance_blocking', 'contact_ok', 'contact_reason', 'node_valid')
+
+
+def _level_column(level_mm: float) -> str:
+    return f'clear_{level_mm:g}mm'
 
 
 @dataclass(frozen=True)
@@ -45,6 +49,11 @@ class SceneScoreParams:
         if float(self.weld_clearance_mm) not in levels:
             raise ValueError('weld_clearance_mm must be one of the clearance levels')
         object.__setattr__(self, 'clearance_levels_mm', levels)
+
+
+def scene_columns(params: 'SceneScoreParams') -> List[str]:
+    """Names of the scene columns added to ``candidates.csv`` (one ``clear_<level>mm`` column per level)."""
+    return list(_COLUMNS_HEAD) + [_level_column(lv) for lv in params.clearance_levels_mm] + list(_COLUMNS_TAIL)
 
 
 @dataclass
@@ -107,11 +116,12 @@ def score_candidates(layers: Sequence[Sequence[Candidate]], frames_base_mm: Sequ
     t_clear = time.perf_counter() - t0
 
     scores: List[List[NodeScore]] = []
-    cols: Dict[str, List[List[Any]]] = {name: [] for name in SCENE_COLUMNS}
+    names = scene_columns(params)
+    cols: Dict[str, List[List[Any]]] = {name: [] for name in names}
     for li, layer in enumerate(layers):
         cres = contact[li]
         row_s: List[NodeScore] = []
-        row = {name: [] for name in SCENE_COLUMNS}
+        row = {name: [] for name in names}
         for ci, c in enumerate(layer):
             k = (li, ci)
             checked = c.reason is None
@@ -122,15 +132,15 @@ def score_candidates(layers: Sequence[Sequence[Candidate]], frames_base_mm: Sequ
             row_s.append(NodeScore(valid, lb))
             row['scene_valid'].append(v4)
             row['scene_contacts'].append(';'.join(f4[k].contacts) if checked else None)
-            row['clear_5mm'].append(level_ok.get(5.0, {}).get(k))
-            row['clear_10mm'].append(level_ok.get(10.0, {}).get(k))
+            for lv in params.clearance_levels_mm:
+                row[_level_column(lv)].append(level_ok[lv].get(k))
             row['clearance_lb_mm'].append(lb)
             row['clearance_blocking'].append(blocking.get(k))
             row['contact_ok'].append(cres.ok)
             row['contact_reason'].append(cres.reason)
             row['node_valid'].append(valid)
         scores.append(row_s)
-        for name in SCENE_COLUMNS:
+        for name in names:
             cols[name].append(row[name])
     total = time.perf_counter() - t_start
     n = len(index)
@@ -142,4 +152,4 @@ def score_candidates(layers: Sequence[Sequence[Candidate]], frames_base_mm: Sequ
     return ScoredLayers(scores, cols, contact, timing)
 
 
-__all__ = ['SCENE_COLUMNS', 'SceneScoreParams', 'ScoredLayers', 'score_candidates']
+__all__ = ['scene_columns', 'SceneScoreParams', 'ScoredLayers', 'score_candidates']

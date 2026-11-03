@@ -9,7 +9,7 @@ import pytest
 from awm_path.core.contact import ContactParams, PartMesh
 from awm_path.core.ladder import NodeScore
 from awm_path.core.scene import StateCheck
-from awm_path.core.scoring import SCENE_COLUMNS, SceneScoreParams, score_candidates
+from awm_path.core.scoring import SceneScoreParams, scene_columns, score_candidates
 from awm_path.core.sweep import Candidate, write_candidates_csv
 
 
@@ -81,7 +81,7 @@ def test_scores_combine_validity_clearance_and_contact() -> None:
     assert c['contact_ok'][1] == [False] and c['contact_reason'][1] == ['contact_off_seam']
     assert c['node_valid'][0] == [True, True, False, False, False]
     assert c['scene_contacts'][0][2] == 'a<->b' and c['clearance_blocking'][0][3] == 'head_body<->part'
-    assert set(c) == set(SCENE_COLUMNS)
+    assert list(c) == scene_columns(SceneScoreParams(5.0, (5.0, 10.0)))
     # one batched F4 call, then one clearance call per level on the survivors only
     assert scene.calls == [('check', 5, 0.0), ('clear', 4, 5.0), ('clear', 3, 10.0)]
     t = res.timing
@@ -105,3 +105,15 @@ def test_columns_fit_candidates_csv(tmp_path) -> None:
     write_candidates_csv(str(path), layers, res.columns)
     rows = list(csv.DictReader(path.open()))
     assert len(rows) == 6 and rows[0]['node_valid'] == 'true' and rows[4]['scene_valid'] == ''
+
+
+def test_clearance_columns_follow_the_levels() -> None:
+    p = SceneScoreParams(weld_clearance_mm=5.0, clearance_levels_mm=(5.0, 7.5, 12.0))
+    cols = scene_columns(p)
+    assert [c for c in cols if c.startswith('clear_')] == ['clear_5mm', 'clear_7.5mm', 'clear_12mm']
+    res = score_candidates(_layers(), [_frame(-10.0), _frame(25.0)], np.eye(4), 0.0, FakeScene(), _plate(),
+                           (('A',), ('B',)), ContactParams(), p)
+    assert list(res.columns) == cols
+    assert res.columns['clear_7.5mm'][0] == [True, False, None, None, None]
+    assert res.columns['clear_12mm'][0] == [True, None, None, None, None]
+    assert res.scores[0][0].clearance_mm == 12.0
