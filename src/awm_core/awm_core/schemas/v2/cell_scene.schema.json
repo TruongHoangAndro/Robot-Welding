@@ -237,6 +237,34 @@
             "type": "number",
             "minimum": 0,
             "description": "deepest part surface sample inside this object at theta = 0"
+          },
+          "retried_faces": {
+            "type": "array",
+            "description": "faces BRepMesh left empty that were meshed again alone at the same chord with a coarser angle (scene export log)",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "face",
+                "angular_deflection_deg",
+                "achieved_chord_mm"
+              ],
+              "properties": {
+                "face": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "1-based face number in the component's face order (TopExp)"
+                },
+                "angular_deflection_deg": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "achieved_chord_mm": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            }
           }
         }
       },

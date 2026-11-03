@@ -93,7 +93,14 @@
       },
       "padding_mm": 3.0,
       "hull_volume_ratio": 1.21,
-      "part_max_depth_mm": 0.923
+      "part_max_depth_mm": 0.923,
+      "retried_faces": [
+        {
+          "face": 230,
+          "angular_deflection_deg": 45.0,
+          "achieved_chord_mm": 0.0
+        }
+      ]
     }
   ],
   "scene_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
