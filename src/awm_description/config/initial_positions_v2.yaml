@@ -1,0 +1,9 @@
+# Cell v2 mock-hardware start state, rad (ur_description / ros2_control format, REP 103 -- not project data).
+# Home (Assumption): beam axis down, tcp_laser 219 mm above the base_link plane. Must match the SRDF group_state "home" of awm_cell_v2.srdf.xacro.
+shoulder_pan_joint: 0.0
+shoulder_lift_joint: -1.5708
+elbow_joint: 1.0
+wrist_1_joint: -1.0
+wrist_2_joint: -1.5708
+wrist_3_joint: 0.0
+positioner_joint: 0.0

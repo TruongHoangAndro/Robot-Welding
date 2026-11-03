@@ -1,0 +1,8 @@
+# Single source of the positioner_joint limits (deg, deg/s, deg/s^2; ADR-14). Read by awm_cell_v2.urdf.xacro (URDF
+# <limit>) and by awm_bringup sim_mock.launch.py (MoveIt joint limits, converted with awm_core.units).
+# All values: Assumption until the drive, belts and cables are known (OI-14, OI-27). Do not raise.
+positioner_joint:
+  lower_deg: -400
+  upper_deg: 400
+  max_velocity_deg_s: 30
+  max_acceleration_deg_s2: 50

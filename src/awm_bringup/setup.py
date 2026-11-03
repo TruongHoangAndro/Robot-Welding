@@ -26,6 +26,7 @@ setup(
         ('share/' + package_name + '/config', glob('config/*')),
     ] + tree('repo_template'),
     install_requires=['setuptools'],
+    entry_points={'console_scripts': ['cell_scene_loader = awm_bringup.cell_scene:main']},
     zip_safe=False,
     maintainer='Truong Hoang',
     maintainer_email='truongxhoang@apillis.com',
