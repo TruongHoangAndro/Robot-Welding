@@ -31,8 +31,8 @@ A2. Lead + Truong write `docs/generated/spike/cad_map_cell.yaml` from A1 (roles:
     unmapped components are an error). **Stop after A1 and report; the lead writes the map.**
 
 A3. `export-scene --step <file> --map <cad_map.yaml> --repo <spike_repo> --job <job> --chord-near-mm 0.1`:
-    - world frame = CAD frame rotated to Z up (per map); origin at the `ur_base` component placement projected on its
-      mounting plane (**Assumption** until `REF_WORLD` / `REF_UR_BASE`). Writes `cell/model/frames.yaml` (world_T_base,
+    - world frame = CAD frame rotated to Z up (per map); origin at the `ur_base` component placement (scene decision
+      D2; **Assumption** until `REF_WORLD` / `REF_UR_BASE`). Writes `cell/model/frames.yaml` (world_T_base,
       world_T_positioner_axis, axis direction) in mm / quaternion.
     - `cell_static` and `positioner_rotating` objects: convex hull per component (STL, mm) in `cell/model/` with a
       manifest (object id, role, parent `world` or `positioner_flange`, pose, mesh SHA-256).
