@@ -40,6 +40,9 @@ def test_header_and_unit(tree):
     assert tree['units']['length'] == 'mm' and tree['unit_source'] == 'mm'
     assert tree['source']['file'] == 'asm.step' and len(tree['source']['sha256']) == 64
     assert tree['frame'] == 'file'
+    # full header (S.4 A re-review F5): inputs with the STEP hash
+    assert tree['schema_version'] == '2.0' and tree['created_by'] and tree['created_at']
+    assert tree['inputs'] == [{'name': 'asm.step', 'sha256': tree['source']['sha256']}]
 
 
 def test_paths_names_depth_and_order(tree):
@@ -121,6 +124,9 @@ def test_cell_cad_tree(tmp_path, occ):
     assert cli.main(['inspect-assembly', '--step', os.environ['AWM_CELL_STEP'],
                      '--out', str(out)]) == 0
     comps = json.loads(out.read_text())['components']
-    name = os.environ.get('AWM_GOLDEN_COMPONENT', '564082-Assembly-3 parts')
-    golden = [c for c in comps if name in (c['product_name'], c['instance_name'].rsplit(':', 1)[0])]
-    assert len(golden) == 1 and golden[0]['solids'] == 3
+    from conftest import golden_record
+
+    rec = golden_record()
+    golden = [c for c in comps if c['instance_name'] == rec['component']]
+    assert len(golden) == 1 and golden[0]['solids'] == rec['solids']
+    assert golden[0]['product_name'] == rec['product']

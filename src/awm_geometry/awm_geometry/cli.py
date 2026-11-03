@@ -13,7 +13,7 @@ Commands (lengths in metres, except export-view: mm per the D20 contract):
   export-scene --step FILE --map MAP.yaml --repo DIR --job JOB [--chord-near-mm 0.1]
                                              A15 / A18 spike scene (mm): cell/model hulls + frames.yaml +
                                              scene_manifest.json; job import, D20, collision mesh, placement
-  export-cell-view --step FILE --components FILE.json --out DIR [--up-axis +Y]
+  export-cell-view --step FILE --components FILE.json --out DIR --up-axis AXIS
                                              S10-lite display model DIR/cell_view.glb (one node per leaf
                                              component, file frame, mm; contract S10_lite_cell_model.md)
   inspect-assembly --step FILE --out FILE.json [--no-cylinders]
@@ -182,12 +182,12 @@ def cmd_inspect_assembly(args) -> dict:
               if abs(abs(np.linalg.det(np.asarray(c['local_placement_mm'])[:3, :3])) - 1.0) > 1e-9]
     if scaled:
         LOG.warning('%d placement(s) are not rigid (scale != 1): %s', len(scaled), scaled[:10])
-    doc = {'created_by': _created_by(), 'created_at': jsonio.utc_now_iso(),
-           'source': {'file': step.name, 'sha256': sha256_file(step)},
-           'unit_source': unit, 'units': {'length': 'mm'}, 'frame': 'file',
-           'components': components}
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
+    doc = dict(jsonio.make_header(_created_by(), [step], out.parent), schema_version='2.0')
+    doc.update({'source': {'file': step.name, 'sha256': sha256_file(step)},
+                'unit_source': unit, 'units': {'length': 'mm'}, 'frame': 'file',
+                'components': components})
     out.write_text(json.dumps(doc, indent=1) + '\n')
     roots = [c for c in components if c['parent'] is None]
     return {'out': str(out), 'components': len(components),
@@ -260,8 +260,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--step', required=True, help='cell CAD STEP assembly')
     p.add_argument('--components', required=True, help='cell_components.json of inspect-assembly')
     p.add_argument('--out', required=True, help='folder for cell_view.glb')
-    p.add_argument('--up-axis', default='+Y', choices=['+X', '-X', '+Y', '-Y', '+Z', '-Z'],
-                   help='up axis of the file (recorded only; no rotation is applied)')
+    p.add_argument('--up-axis', required=True, choices=['+X', '-X', '+Y', '-Y', '+Z', '-Z'],
+                   help='up axis of the file (recorded only; no rotation is applied); no default: it is cell data')
     return parser
 
 

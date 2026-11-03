@@ -306,6 +306,13 @@ def test_hull_around_part_is_refused(tmp_path, occ, caplog):
     _fails(tmp_path, caplog, lambda s: _map(s, collision={'jig:1': 'hull'}), 'jig_1', 'deeper than', 'F')
 
 
+def test_export_cell_view_needs_up_axis(tmp_path, occ):
+    from awm_geometry import cli
+
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(['export-cell-view', '--step', 'a', '--components', 'b', '--out', 'c'])
+
+
 def test_contact_within_tolerance_passes_beyond_fails(tmp_path, occ, caplog):
     """Clamp under the middle of the tube (no tessellation vertex there): found by the surface samples."""
     step = _cell(tmp_path, clamp_overlap_mm=0.5, name='c05.step')
@@ -344,6 +351,97 @@ def test_stale_files_are_removed(tmp_path, occ):
     assert files == {'frames.yaml', 'scene_manifest.json'} | {o['mesh']['file'] for o in _manifest(repo)['objects']}
 
 
+def _tree_snapshot(root):
+    return {str(p.relative_to(root)): hashing.sha256_file(p) for p in sorted(root.rglob('*')) if p.is_file()}
+
+
+def test_failing_model_check_writes_nothing(tmp_path, occ, caplog):
+    """A part without a solid fails the model check: the previous export stays as it was (S.4 A re-review F2)."""
+    step = _cell(tmp_path)
+    code, repo = _run(tmp_path, _map, step=step)
+    assert code == 0
+    before = _tree_snapshot(repo)
+    bad = lambda s: _map(s, part=['sheet:1'], ignore=['robot:1', 'dup:1', 'dup:2', 'weldment:1'])  # noqa: E731
+    code, _ = _run(tmp_path, bad, step=step)
+    assert code == 1 and 'has_solid' in caplog.text
+    assert _tree_snapshot(repo) == before
+
+
+def test_failing_view_export_writes_nothing(tmp_path, occ, caplog, monkeypatch):
+    from awm_geometry import view
+    from awm_geometry.occ_io import GeometryError
+
+    step = _cell(tmp_path)
+    code, repo = _run(tmp_path, _map, step=step)
+    assert code == 0
+    before = _tree_snapshot(repo)
+
+    def broken(*_a, **_k):
+        raise GeometryError('edge E1 belongs to two joints (test)')
+    monkeypatch.setattr(view, 'export', broken)
+    code, _ = _run(tmp_path, _map, step=step)
+    assert code == 1 and 'two joints' in caplog.text
+    assert _tree_snapshot(repo) == before
+    assert not any(p.name.startswith('.staging') for p in repo.iterdir())
+
+
+def test_inside_out_shell_is_refused(occ):
+    from awm_geometry import scene
+    from awm_geometry.hull import convex_hull
+    from awm_geometry.occ_io import GeometryError
+
+    verts, tris = convex_hull(np.array([[x, y, z] for x in (0, 1) for y in (0, 1) for z in (0, 1)], float))
+    v, t = scene.closed_shell(verts, tris, 'box:1', 1)
+    assert len(t) == 12
+    with pytest.raises(GeometryError, match=r"inside-out.*'box:1'|'box:1'.*inside-out"):
+        scene.closed_shell(verts, tris[:, [0, 2, 1]], 'box:1', 1)
+
+
+def _drop_first_face(monkeypatch):
+    from awm_geometry import scene
+
+    original, calls = scene._face_triangles, []
+
+    def patched(face):
+        calls.append(1)
+        return (None, None, 0.0) if len(calls) == 1 else original(face)
+    monkeypatch.setattr(scene, '_face_triangles', patched)
+
+
+def test_untessellated_cell_face_is_an_error(occ, monkeypatch):
+    from awm_geometry import scene, testparts
+    from awm_geometry.occ_io import GeometryError, scale_shape
+
+    shape = scale_shape(testparts.box((0, 0, 0), (0.01, 0.01, 0.01)), units.m_to_mm(1.0))
+    _drop_first_face(monkeypatch)
+    with pytest.raises(GeometryError, match=r"'table:1'.*face 1"):
+        scene._tessellate_mm(shape, 0.5, 15.0, 'table:1')
+
+
+def test_empty_part_face_is_an_error(tmp_path, occ, monkeypatch):
+    from awm_geometry import part, scene
+    from awm_geometry.occ_io import GeometryError
+
+    loaded = part.load_part(_cell(tmp_path), 'weldment:1')
+    _drop_first_face(monkeypatch)
+    with pytest.raises(GeometryError, match='part face F1 has no triangulation'):
+        scene.part_collision_mesh(loaded.shape, 0.1, 0.5)
+
+
+def test_headers_and_guard_record(scene):
+    """Full headers on the cell outputs, manifest valid against v2/cell_scene, guard method recorded (F3, F5)."""
+    model = scene / 'cell' / 'model'
+    man = jsonio.read_json(model / 'scene_manifest.json', 'v2/cell_scene', base_dir=model)
+    assert [Path(i['name']).name for i in man['inputs']] == ['cell.step', 'map.yaml']
+    guard = man['export_guard']
+    assert guard['theta_deg'] == 0.0 and guard['sample_spacing_mm'] == 1.0
+    assert guard['part_chord_near_mm'] == 0.1 and guard['object_chord_mesh_mm'] == 0.5
+    assert 'exceed' in guard['note']
+    frames_doc = miniyaml.load(model / 'frames.yaml')
+    assert frames_doc['schema_version'] == '2.0' and frames_doc['created_at']
+    jsonio.check_inputs(frames_doc, model)
+
+
 def test_object_ids_are_sanitised(occ):
     from awm_geometry.scene import object_id
 
@@ -352,32 +450,37 @@ def test_object_ids_are_sanitised(occ):
     assert object_id('Rotary Shaft:1') == 'rotary_shaft_1'
 
 
-def _cell_map_path():
-    env = os.environ.get('AWM_CELL_MAP')
-    if env:
-        return Path(env)
-    return Path(__file__).resolve().parents[3] / 'docs' / 'generated' / 'spike' / 'cad_map_cell.yaml'
-
-
 @pytest.mark.skipif(not os.environ.get('AWM_CELL_STEP'), reason='AWM_CELL_STEP not set')
 def test_cell_cad_scene(tmp_path, occ):
-    """Real run: every component mapped, golden part on the positioner axis, placement valid."""
+    """Real run: every component mapped, collision modes as the map says, no part deeper than the contact
+    tolerance, golden part on the positioner axis, placement valid."""
+    from conftest import cell_map_path, golden_record
+
     from awm_geometry import cli
 
-    map_path = _cell_map_path()
+    rec = golden_record()
+    map_path = cell_map_path()
     assert map_path.is_file(), f'role map not found: {map_path} (set AWM_CELL_MAP)'
+    cmap = miniyaml.load(map_path)
     repo = tmp_path / 'repo'
     assert cli.main(['export-scene', '--step', os.environ['AWM_CELL_STEP'], '--map', str(map_path),
-                     '--repo', str(repo), '--job', '564082_A']) == 0
-    man = _manifest(repo)
-    roles = {o['role'] for o in man['objects']}
-    assert roles == {'cell_static', 'positioner_rotating'}
-    job = repo / 'jobs' / '564082_A'
+                     '--repo', str(repo), '--job', str(rec['job'])]) == 0
+    man = jsonio.read_json(repo / 'cell' / 'model' / 'scene_manifest.json', 'v2/cell_scene',
+                           base_dir=repo / 'cell' / 'model')
+    assert {o['role'] for o in man['objects']} == {'cell_static', 'positioner_rotating'}
+    by_component = {o['component']: o for o in man['objects']}
+    for name, mode in (cmap.get('collision') or {}).items():
+        assert by_component[name]['collision'] == mode, name          # e.g. Jig:1 -> mesh (jig_1)
+    assert any(o['collision'] == 'mesh' for o in man['objects'])
+    tolerance = cmap.get('contact_tolerance_mm', 1.0)
+    assert all(o['part_max_depth_mm'] <= tolerance for o in man['objects'])
+    assert man['export_guard']['contact_tolerance_mm'] == tolerance
+    job = repo / 'jobs' / str(rec['job'])
     doc = jsonio.read_json(job / 'placement.json', 'v2/placement', base_dir=job)
     verts, _ = stl.read_stl(job / 'cache' / 'collision.stl')
     t = _pose(doc['flange_T_part'])
     flange = verts @ t[:3, :3].T + t[:3, 3]
-    # nipple and solid are coaxial with the axis (outer radius 13.335 mm), the elbow reaches further out
-    assert np.hypot(flange[:, 1], flange[:, 2]).min() < 13.335
+    # nipple and solid are coaxial with the axis, the elbow reaches further out
+    assert np.hypot(flange[:, 1], flange[:, 2]).min() < rec['outer_radius_mm']
     topo = json.loads((job / 'cache' / 'view' / 'topology.json').read_text())
-    assert len(topo['solids']) == 3 and len(topo['joints']) == 4
+    assert len(topo['solids']) == rec['solids'] and len(topo['joints']) == rec['joints']

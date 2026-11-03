@@ -77,7 +77,7 @@ def test_components_json_of_another_file_fails(cell, tmp_path):
     bad = tmp_path / 'bad.json'
     bad.write_text(json.dumps(doc))
     assert cli.main(['export-cell-view', '--step', str(step), '--components', str(bad),
-                     '--out', str(tmp_path / 'o')]) == 1
+                     '--out', str(tmp_path / 'o'), '--up-axis', '+Y']) == 1
     assert not (tmp_path / 'o' / 'cell_view.glb').exists()
 
 
@@ -90,7 +90,7 @@ def test_components_json_in_another_order_fails(cell, tmp_path, caplog):
     bad = tmp_path / 'swapped.json'
     bad.write_text(json.dumps(dict(doc, components=comps)))
     assert cli.main(['export-cell-view', '--step', str(step), '--components', str(bad),
-                     '--out', str(tmp_path / 'o')]) == 1
+                     '--out', str(tmp_path / 'o'), '--up-axis', '+Y']) == 1
     assert 'same order' in caplog.text
     assert not (tmp_path / 'o' / 'cell_view.glb').exists()
 
