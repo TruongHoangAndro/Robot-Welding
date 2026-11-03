@@ -1,6 +1,8 @@
 """Shared fixtures: generated test parts imported into a temporary job package."""
 
 import json
+import os
+from pathlib import Path
 
 import pytest
 
@@ -50,3 +52,23 @@ def imported_parts(tmp_path_factory, occ):
                          '--part-no', kind, '--part-rev', 'A']) == 0
         jobs[kind] = job
     return jobs
+
+
+REPO = Path(__file__).resolve().parents[3]
+
+
+def golden_record():
+    """Golden-part facts for real-CAD tests: ``AWM_GOLDEN_RECORD`` or the spike record in the repository."""
+    from awm_geometry import miniyaml
+
+    path = Path(os.environ.get('AWM_GOLDEN_RECORD') or
+                REPO / 'docs' / 'generated' / 'spike' / 'golden_part_record.yaml')
+    if not path.is_file():
+        pytest.skip(f'golden-part record not found: {path} (set AWM_GOLDEN_RECORD)')
+    return miniyaml.load(path)
+
+
+def cell_map_path():
+    """Role map of the cell CAD for real-CAD tests: ``AWM_CELL_MAP`` or the spike record in the repository."""
+    return Path(os.environ.get('AWM_CELL_MAP') or
+                REPO / 'docs' / 'generated' / 'spike' / 'cad_map_cell.yaml')
