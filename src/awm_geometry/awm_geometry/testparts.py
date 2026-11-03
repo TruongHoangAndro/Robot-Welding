@@ -137,12 +137,15 @@ def separate(*shapes: TopoDS_Shape) -> TopoDS_Shape:
 
 def write_assembly(path: Union[str, Path],
                    components: List[Tuple[str, List[TopoDS_Shape]]],
-                   placements_mm: Optional[Sequence[Optional[Sequence[Sequence[float]]]]] = None) -> None:
+                   placements_mm: Optional[Sequence[Optional[Sequence[Sequence[float]]]]] = None,
+                   instance_names: bool = False) -> None:
     """Write a STEP assembly (mm): one sub-assembly per ``(name, solids in metres)``, one part per solid.
 
     Part names are ``<name>-body<k>``. ``placements_mm`` (optional, one entry per component) gives the
     placement of each sub-assembly in the root as a 4x4 rigid transform with the translation in mm
-    (``None`` = identity). Used to test component reading (A15 / D20 / A18) without the cell CAD.
+    (``None`` = identity). ``instance_names``: name each instance ``<name>:<k>`` (k counts equal names) and
+    each part instance ``<name>-body<j>:1``, as a Fusion export does. Used to test component reading
+    (A15 / D20 / A18) without the cell CAD.
     """
     from OCC.Core.IFSelect import IFSelect_RetDone
     from OCC.Core.Interface import Interface_Static
@@ -158,16 +161,22 @@ def write_assembly(path: Union[str, Path],
     tool = XCAFDoc_DocumentTool.ShapeTool(doc.Main())
     root = tool.NewShape()
     TDataStd_Name.Set(root, TCollection_ExtendedString('assembly'))
+    seen: Dict[str, int] = {}
     for index, (name, solids) in enumerate(components):
         sub = tool.NewShape()
         TDataStd_Name.Set(sub, TCollection_ExtendedString(name))
         for k, solid in enumerate(solids, start=1):
             label = tool.AddShape(scale_shape(solid, units.m_to_mm(1.0)), False)
             TDataStd_Name.Set(label, TCollection_ExtendedString(f'{name}-body{k}'))
-            tool.AddComponent(sub, label, TopLoc_Location())
+            body = tool.AddComponent(sub, label, TopLoc_Location())
+            if instance_names:
+                TDataStd_Name.Set(body, TCollection_ExtendedString(f'{name}-body{k}:1'))
         placement = placements_mm[index] if placements_mm else None
-        tool.AddComponent(root, sub, TopLoc_Location() if placement is None
-                          else TopLoc_Location(_trsf(placement)))
+        inst = tool.AddComponent(root, sub, TopLoc_Location() if placement is None
+                                 else TopLoc_Location(_trsf(placement)))
+        if instance_names:
+            seen[name] = seen.get(name, 0) + 1
+            TDataStd_Name.Set(inst, TCollection_ExtendedString(f'{name}:{seen[name]}'))
     tool.UpdateAssemblies()
     Interface_Static.SetCVal('write.step.unit', 'MM')
     writer = STEPCAFControl_Writer()

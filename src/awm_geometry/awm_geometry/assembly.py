@@ -222,14 +222,16 @@ def main_cylinder(shape: TopoDS_Shape) -> Optional[Dict[str, object]]:
             'radius_mm': cyl.Radius(), 'area_mm2': area}
 
 
-def component_tree(step: PathLike, cylinders: bool = True) -> Tuple[List[Dict[str, object]], str]:
+def component_tree(step: PathLike, cylinders: bool = True,
+                   shapes: bool = False) -> Tuple[List[Dict[str, object]], str]:
     """Every node of the assembly tree in depth-first order (parents first), placed in the file frame.
 
     Returns ``(components, file length unit)``. Each component dict has: ``index``, ``parent`` (index
     or None), ``depth``, ``path`` (names joined by `` / ``), ``instance_name``, ``product_name``,
     ``is_assembly``, ``children``, ``local_placement_mm`` and ``placement_mm`` (4x4, translation in
     mm, file frame), ``bbox_mm`` (``{min, max}`` or None), ``solids`` and, for leaf parts when
-    ``cylinders`` is set, ``main_cylinder`` (see :func:`main_cylinder`). No unit conversion: OCCT
+    ``cylinders`` is set, ``main_cylinder`` (see :func:`main_cylinder`). With ``shapes`` every dict also holds
+    ``_shape``: the node's shape placed in the file frame (not JSON-serialisable). No unit conversion: OCCT
     reads STEP into its session unit (mm).
     """
     path = Path(step)
@@ -257,6 +259,8 @@ def component_tree(step: PathLike, cylinders: bool = True) -> Tuple[List[Dict[st
             'local_placement_mm': _matrix(local.Transformation()),
             'placement_mm': _matrix(location.Transformation()),
             'bbox_mm': None, 'solids': 0}
+        if shapes:
+            node['_shape'] = tool.GetShape(ref).Moved(location)
         out.append(node)
         boxes.append(None)
         if node['is_assembly']:
