@@ -527,9 +527,12 @@ the tube-rule fallback (n1 = n2 = radial) stays documented in TST-002 Rev 0.3 §
 UI, not chosen by software — Truong, 2026-11-03); pitch rule decided by the lead within F1 (≤ ceiling).
 **Finding (WP-S S.3):** a closed 360° seam welded by the robot alone makes the tool orientation turn once about the
 seam axis. That loop is not contractible in SO(3) (generator of π1(SO(3)) = Z2), while the forward-kinematics image of
-a joint path that returns to the same unwrapped state is contractible. Hence at fixed ψ some joint must make a net
-360° turn; F11 (wrist 3 ±180° within one seam, fiber / conduit) and F3 (closure on the same first-layer state) reject
-every such path, and ψ cannot unwind it (10° ψ step > Δq_max 5°; Ψ-WIRE ±15°). Measured: ψ 90°, 288 points, the DP
+a joint path that returns to the same unwrapped state is contractible. Hence **at fixed ψ** some joint must make a net
+360° turn (topological fact); F11 (wrist 3 ±180° within one seam, fiber / conduit) and F3 (closure on the same
+first-layer state) reject every such path. With ψ allowed to vary, a net ±360° ψ unwinding would make the loop
+contractible; with the 10° ψ grid (step > Δq_max 5°) this did not happen on the synthetic r 13.3 mm placement
+(all 36 ψ, 288 points: no path, open or closed) — an **empirical** result for that placement, not a proof (review of
+S.3). Ψ-WIRE (±15°) cannot unwind 360°. Measured: ψ 90°, 288 points, the DP
 stops at layer 145 on wrist-3 travel; without F11 it closes only on q6 + 360°. Second finding: at the F1 pitch
 (1.16 mm, r 13.3 mm) joint steps reach 13°; at 0.29 mm they are ≤ 3.3°.
 **Decision:** (1) The Engineer decides whether a seam is split: seam attribute `arcs` (integer ≥ 1, default 1) and
@@ -543,6 +546,9 @@ Mode C (J1) is unaffected: the robot is at rest. (2) F1 is a ceiling: the planne
 IK solutions of one label move ≤ Δq_max and records the pitch used.
 **Open:** weld quality at the arc restart / overlap (welding engineer; OI-11 / OI-16); whether a 360° wrist-3 turn is
 acceptable for the fiber and wire conduit (Khang Doan / Nghia Nguyen) — if yes, a later CP can relax F11.
+**F6 wording (S.3 review):** the shoulder-singularity metric is the distance |u| of the wrist centre from the plane of
+the joint-1 and joint-2 axes (≥ 50 mm, Assumption); the literal "distance from the base Z axis" is always ≥ d4 =
+133.3 mm on the UR5e and could never trigger. TST-002 Rev 0.3 F6 row updated.
 **DES-001 impact:** §4.3 step 4 / 5 note "closed seams welded robot-only are split into arcs (CP-53)"; A22 (split) and
 A42 (overlap) descriptions; TST-002 Rev 0.3 F1, C3, C8 rows updated in the draft.
 

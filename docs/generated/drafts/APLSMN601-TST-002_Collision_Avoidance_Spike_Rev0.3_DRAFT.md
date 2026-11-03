@@ -114,7 +114,7 @@ The software agent runs the spike; Truong Hoang runs the checks.
 | F3 | Edge | same configuration label and max \|Δq\| ≤ 5° (Δq_max) on unwrapped values; closed seams: the overlap reconnects to the first-layer state |
 | F4 | Validity | Collision check with 3 mm padding on every link except `nozzle_tip` |
 | F5 | Clearance (C2, C4) | Distance on **unpadded** geometry, by distance query or by a separate validity check with head / mount / conduit inflated by exactly the clearance. Method recorded |
-| F6 | Singularity (D16) | wrist \|sin q5\| ≥ sin 8.6°; elbow \|sin q3\| ≥ sin 5° (Assumption); shoulder: wrist centre ≥ 50 mm from the base Z axis (Assumption). Per-point values in `candidates.csv` |
+| F6 | Singularity (D16) | wrist \|sin q5\| ≥ sin 8.6°; elbow \|sin q3\| ≥ sin 5° (Assumption); shoulder: wrist centre ≥ 50 mm from the plane of the joint-1 and joint-2 axes, |u| (Assumption; the literal distance from the base Z axis is always ≥ d4 = 133.3 mm on the UR5e and could never trigger — CP-53). Per-point values in `candidates.csv` |
 | F7 | Tie-break | lowest cost, then lowest ψ index, then configuration-label order |
 | F8 | Mode C | seam axis within 0.05 mm / 0.1° of the positioner axis (D16, Assumption); otherwise Mode B / robot-only |
 | F9 | Contact | No ACM entry between any head link and the part. Nozzle collision geometry stops s_c = 0.3 mm (Assumption) short of the contact point. Per weld state: contact point(s) on the seam faces (faces of n1 / n2) within tolerance; no other face within s_c |
