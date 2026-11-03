@@ -571,3 +571,21 @@ cannot change the cell part. Enforced by `awm_api` when saving moves there (T3.1
 **Open:** re-matching map entries after a new STEP export (component path + geometric fingerprint, A18 follow-up).
 **DES-001 impact:** §4.5 screens table S10 (Phase 1 lite; roles Admin = cell part, Engineer = job fixture part), build
 steps UI-1; §7.3 roles table (Engineer: "edit the job fixture role map"); §11 A18 UI; PLAN WP3.
+
+## CP-55 Cell static and rotating geometry are planning-scene objects, not URDF links (decided by Truong, 2026-11-03)
+
+**Finding (WP-S S.4 B, confirmed by review):** in MoveIt 2.12 (Jazzy) `check_state_validity` pads robot links only
+against world (scene) objects; self-collisions between URDF links are checked unpadded (`CollisionRequest`
+defaults `pad_environment_collisions = true`, `pad_self_collisions = false`; the service cannot change them). With the
+Pismo frame, jig, holders and the positioner rotating set as URDF links (D14 wording), the 3 mm padding (F4) and the
+clearance-by-padding method (F5) would silently not apply between the head and these objects.
+**Decision:** D14 (`awm_description`) holds the kinematics and the robot-mounted geometry only: UR5e from
+`ur_description`, LightWELD head / mount / nozzle / conduit, `positioner_joint` with `positioner_axis` /
+`positioner_flange` frames (no geometry). Cell static geometry and the positioner rotating set come from the A18 cell
+manifest as world collision objects; the rotating set is re-posed with the positioner angle; part / fixture from D19.
+**Rules that follow:** (1) a validity / clearance check at positioner angle θ is valid only when the scene reports θ
+applied (guard in the loader / checker; review finding 1 of S.4 B); (2) head ↔ UR arm links are checked unpadded —
+stated in the TST-002 record; (3) the URDF `positioner_flange` and the loader must use one source for
+world_T_positioner_axis.
+**DES-001 impact:** §5.1 D14 row ("cell statics … and permanent holders" → kinematics and robot-mounted geometry; static
+and rotating cell geometry = scene objects from A18), §5.4 rows Pismo frame / positioner, §4.2 `awm_description` row.
