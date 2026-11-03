@@ -73,6 +73,7 @@ MESH_ANGULAR_DEFLECTION_DEG = 15.0
 MESH_WELD_MM = 1.0e-4             # coincident tessellation nodes of neighbouring faces are merged
 COLLISION_MODES = ('hull', 'mesh')
 RETRY_ANGULAR_DEG = (20.0, 30.0, 45.0, 60.0)  # face-alone retries of a face left empty (same chord)
+RETRY_MIN_AREA_FRACTION = 0.99  # a retry must cover the B-Rep face area (degenerate meshes report chord 0)
 DEFAULT_CONTACT_TOLERANCE_MM = 1.0  # cad_map default (Assumption, scene decision D8)
 GUARD_SPACING_MM = 1.0            # sample spacing on the part surface for the export guard
 PART_NEAR_ANGULAR_DEG = 5.0
@@ -293,10 +294,27 @@ def _face_triangles(face) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], f
     return pos, idx, float(tri.Deflection())
 
 
+def _face_area_mm2(face) -> float:
+    props = GProp_GProps()
+    brepgprop.SurfaceProperties(face, props)
+    return float(props.Mass())
+
+
+def _covers_face(face, pos: np.ndarray, idx: np.ndarray) -> bool:
+    """True when the triangulation has no zero-area triangle and covers >= RETRY_MIN_AREA_FRACTION of the face."""
+    a, b, c = pos[idx[:, 0]], pos[idx[:, 1]], pos[idx[:, 2]]
+    areas = 0.5 * np.linalg.norm(np.cross(b - a, c - a), axis=1)
+    if not len(areas) or float(areas.min()) <= 0.0:
+        return False
+    return float(areas.sum()) >= RETRY_MIN_AREA_FRACTION * _face_area_mm2(face)
+
+
 def _tessellate_mm(shape: TopoDS_Shape, linear_mm: float, angular_deg: float, label: str,
-                   retried: Optional[List[Dict[str, Any]]] = None) -> List[Tuple[np.ndarray, np.ndarray]]:
+                   retried: Optional[List[Dict[str, Any]]] = None,
+                   hull_mode: bool = False) -> List[Tuple[np.ndarray, np.ndarray]]:
     """Triangles (file frame, mm, not welded) per solid of a component shape read from the STEP (session unit
-    mm); a component without solids (surfaces only) gives one entry for all its faces."""
+    mm); a component without solids (surfaces only) gives one entry for all its faces. In hull mode a face whose
+    retries never cover it keeps its nodes only (no triangles), recorded as ``nodes_only``; mesh mode refuses it."""
     breptools.Clean(shape)
     mesher = BRepMesh_IncrementalMesh(shape, linear_mm, False, units.deg_to_rad(angular_deg), True)
     mesher.Perform()
@@ -316,6 +334,7 @@ def _tessellate_mm(shape: TopoDS_Shape, linear_mm: float, angular_deg: float, la
             face_no += 1
             face = topods.Face(exp.Current())
             pos, idx, _ = _face_triangles(face)
+            nodes = None  # hull mode fallback: nodes of the last retry that did not cover the face
             for retry_deg in RETRY_ANGULAR_DEG if pos is None else ():
                 # BRepMesh sometimes leaves a small valid face empty (cell CAD: a 6 mm2 cone); mesh it alone
                 # with the same chord and a coarser angle (accepted only if the achieved chord holds). Logged; an error
@@ -323,7 +342,9 @@ def _tessellate_mm(shape: TopoDS_Shape, linear_mm: float, angular_deg: float, la
                 breptools.Clean(face)
                 BRepMesh_IncrementalMesh(face, linear_mm, False, units.deg_to_rad(retry_deg), False).Perform()
                 pos, idx, deflection = _face_triangles(face)
-                if pos is not None and deflection > linear_mm:
+                if pos is not None and not _covers_face(face, pos, idx):
+                    nodes, pos, idx = (pos, retry_deg), None, None  # degenerate: a zero-area mesh reports chord 0
+                elif pos is not None and deflection > linear_mm:
                     pos = idx = None  # the chord must still hold
                 if pos is not None:
                     LOG.warning('%r: face %d meshed again alone (angular %.0f deg, chord %.2f mm, achieved '
@@ -332,6 +353,13 @@ def _tessellate_mm(shape: TopoDS_Shape, linear_mm: float, angular_deg: float, la
                         retried.append({'face': face_no, 'angular_deflection_deg': float(retry_deg),
                                         'achieved_chord_mm': float(deflection)})
                     break
+            if pos is None and nodes is not None and hull_mode:
+                pos, idx = nodes[0], np.zeros((0, 3), dtype=np.int64)
+                LOG.warning('%r: face %d kept as nodes only for the hull (angular %.0f deg; no covering mesh)',
+                            label, face_no, nodes[1])
+                if retried is not None:
+                    retried.append({'face': face_no, 'angular_deflection_deg': float(nodes[1]),
+                                    'achieved_chord_mm': None, 'nodes_only': True})
             if pos is None:
                 raise GeometryError(f'{label!r}: face {face_no} has no triangulation: its collision geometry '
                                     'would have a hole')
@@ -442,7 +470,7 @@ def _cell_objects(tree, direct, modes, fr, padding_mm: float) -> List[Dict[str, 
         retried: List[Dict[str, Any]] = []
         if mode == 'hull':
             pieces = _tessellate_mm(node['_shape'], HULL_LINEAR_DEFLECTION_MM, HULL_ANGULAR_DEFLECTION_DEG, label,
-                                    retried)
+                                    retried, hull_mode=True)
             pts = np.vstack([v for v, _ in pieces])
             local = (pts - file_T_comp[:3, 3]) @ file_T_comp[:3, :3]  # inverse of a rigid placement
             verts, tris = hull.convex_hull(local)
@@ -703,9 +731,8 @@ def export_scene(step: Path, map_path: Path, repo_root: Path, job_name: str, cho
                          'mesh': {'file': 'cache/collision.stl', 'sha256': sha256_file(collision),
                                   'face_ids': True},
                          'padding_mm': PART_PADDING_MM}]
-        # the cell manifest is an input: a new cell with an old job (or the reverse) fails the hash check
-        placement = jsonio.make_header(created_by, [job.model_step, collision, faces_json,
-                                                    stage_model / 'scene_manifest.json'], job.dir)
+        # the cell manifest file is not an input (another job's export would make this one stale, D10)
+        placement = jsonio.make_header(created_by, [job.model_step, collision, faces_json], job.dir)
         placement.update({'schema_version': '2.0', 'source': 'fixture_cad', 'verified': False,
                           'flange_T_part': pose_mm(flange_T_part), 'objects': part_objects,
                           'scene_sha256': canonical_sha256(part_objects)})

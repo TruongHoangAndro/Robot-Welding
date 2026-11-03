@@ -450,6 +450,48 @@ def test_retry_rejected_when_chord_does_not_hold(occ, monkeypatch):
     assert state['calls'] == 1 + len(scene.RETRY_ANGULAR_DEG)
 
 
+def _degenerate_retry(monkeypatch):
+    """First face: unmeshed, then every retry gives nodes with one zero-area triangle (real case: pulley face 230)."""
+    from awm_geometry import scene
+
+    original, state = scene._face_triangles, {'face': None}
+
+    def patched(face):
+        if state['face'] is None:
+            state['face'] = face
+            return None, None, 0.0
+        if face.IsSame(state['face']):
+            pos, _, _ = original(face)
+            return pos, np.array([[0, 0, 1]], dtype=np.int64), 0.0
+        return original(face)
+    monkeypatch.setattr(scene, '_face_triangles', patched)
+
+
+def test_degenerate_retry_is_nodes_only_in_hull_mode(occ, monkeypatch):
+    """M1: a zero-area retry mesh never passes as 'chord holds'; hull mode keeps the face nodes, recorded nodes_only."""
+    from awm_geometry import scene, testparts
+    from awm_geometry.occ_io import scale_shape
+
+    _degenerate_retry(monkeypatch)
+    shape = scale_shape(testparts.box((0, 0, 0), (0.01, 0.01, 0.01)), units.m_to_mm(1.0))
+    retried = []
+    pieces = scene._tessellate_mm(shape, 0.5, 15.0, 'table:1', retried, hull_mode=True)
+    assert retried == [{'face': 1, 'angular_deflection_deg': scene.RETRY_ANGULAR_DEG[-1],
+                        'achieved_chord_mm': None, 'nodes_only': True}]
+    assert sum(len(t) for _, t in pieces) == 10  # the face adds nodes, no triangles
+
+
+def test_degenerate_retry_is_an_error_in_mesh_mode(occ, monkeypatch):
+    """M1: mesh mode never accepts a face without a covering triangulation."""
+    from awm_geometry import scene, testparts
+    from awm_geometry.occ_io import GeometryError, scale_shape
+
+    _degenerate_retry(monkeypatch)
+    shape = scale_shape(testparts.box((0, 0, 0), (0.01, 0.01, 0.01)), units.m_to_mm(1.0))
+    with pytest.raises(GeometryError, match=r"'table:1': face 1 has no triangulation"):
+        scene._tessellate_mm(shape, 0.5, 15.0, 'table:1')
+
+
 def test_retried_face_is_recorded_in_manifest(tmp_path, occ, monkeypatch):
     """N1: a retried face appears in the object's retried_faces and in the CLI summary."""
     import io
@@ -488,13 +530,12 @@ def test_orphaned_staging_folders_are_removed(tmp_path, occ):
     assert not dead.exists() and alive.exists()
 
 
-def test_placement_links_the_cell_manifest(scene):
-    """N3a: placement.json lists cell/model/scene_manifest.json with its SHA-256 (stale-mix check)."""
+def test_placement_does_not_hash_the_cell_manifest(scene):
+    """M2 / D10: the cell manifest file is not a placement input (another job's export must not make this job
+    stale); the content-based cell <-> job link comes with T0.2."""
     job = scene / 'jobs' / 'TEST_A'
     doc = jsonio.read_json(job / 'placement.json', 'v2/placement', base_dir=job)
-    names = {Path(i['name']).as_posix(): i['sha256'] for i in doc['inputs']}
-    assert names['../../cell/model/scene_manifest.json'] == hashing.sha256_file(
-        scene / 'cell' / 'model' / 'scene_manifest.json')
+    assert not any('scene_manifest' in i['name'] for i in doc['inputs'])
 
 
 def test_failed_swap_restores_previous_outputs(tmp_path, occ, monkeypatch, caplog):
