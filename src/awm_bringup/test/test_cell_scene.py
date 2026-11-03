@@ -1,6 +1,5 @@
 """Pure logic of the cell scene loader (no ROS graph): manifest, padding, positioner pose, allowed pairs."""
 
-import math
 import struct
 import subprocess
 from pathlib import Path
@@ -9,7 +8,11 @@ import numpy as np
 import pytest
 import yaml
 
+import json
+
 from awm_bringup import cell_scene as cs
+from awm_core import units
+from awm_core.frames import axis_angle_to_matrix, matrix_to_quat
 from awm_core.hashing import sha256_file
 
 SHARE = Path(__file__).resolve().parents[1]
@@ -54,6 +57,16 @@ def test_mesh_object_and_hash(tmp_path):
             'mesh': {'file': 'm/h.stl', 'sha256': '0' * 64}}]))
 
 
+@pytest.mark.parametrize('mesh', [{'file': 'm/h.stl'}, {'file': 'm/h.stl', 'sha256': ''},
+                                  {'file': 'm/h.stl', 'sha256': None}])
+def test_mesh_hash_required(tmp_path, mesh):
+    (tmp_path / 'm').mkdir()
+    _write_stl(tmp_path / 'm' / 'h.stl', [[(0, 0, 0), (10, 0, 0), (0, 10, 0)]])
+    with pytest.raises(cs.ManifestError, match='sha256'):
+        cs.load_manifest(_manifest(tmp_path, [{'object_id': 'h', 'parent_frame': 'world', 'pose_mm': POSE,
+                                               'mesh': mesh}]))
+
+
 @pytest.mark.parametrize('bad', [
     {'object_id': 'Bad-Id', 'parent_frame': 'world', 'pose_mm': POSE, 'box_mm': [1, 1, 1]},
     {'object_id': 'a', 'parent_frame': 'tool0', 'pose_mm': POSE, 'box_mm': [1, 1, 1]},
@@ -79,24 +92,50 @@ def test_link_padding_except_nozzle_tip():
         cs.link_padding_m(['a'], -1.0, [])
 
 
-def test_rotating_object_follows_positioner():
-    obj = cs.SceneObject('h', 'positioner_rotating', 'positioner_flange',
-                         np.array([[1, 0, 0, 0], [0, 1, 0, 50.0], [0, 0, 1, 0], [0, 0, 0, 1.0]]))
-    flange = cs.world_T_flange_mm(np.array([700.0, 0, 300]), np.array([0, 0, 0, 1.0]),
-                                  np.array([1.0, 0, 0]), math.pi / 2)
-    t = cs.world_pose_mm(obj, flange)
-    assert np.allclose(t[:3, 3], [700, 0, 350])  # +Y 50 mm rotated 90 deg about X -> +Z
-    static = cs.SceneObject('p', 'cell_static', 'world', np.eye(4))
-    assert np.allclose(cs.world_pose_mm(static, flange), np.eye(4))
+def _xacro(**args):
+    share = subprocess.run(['ros2', 'pkg', 'prefix', 'awm_description'], capture_output=True, text=True)
+    assert share.returncode == 0, 'awm_description not built'
+    xacro = Path(share.stdout.strip()) / 'share' / 'awm_description' / 'urdf' / 'awm_cell_v2.urdf.xacro'
+    cmd = ['xacro', str(xacro)] + [f'{k}:={v}' for k, v in args.items()]
+    return subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
 
 
 @pytest.fixture(scope='module')
 def urdf_xml():
-    share = subprocess.run(['ros2', 'pkg', 'prefix', 'awm_description'], capture_output=True, text=True)
-    if share.returncode != 0:
-        pytest.skip('awm_description not built')
-    xacro = Path(share.stdout.strip()) / 'share' / 'awm_description' / 'urdf' / 'awm_cell_v2.urdf.xacro'
-    return subprocess.run(['xacro', str(xacro)], capture_output=True, text=True, check=True).stdout
+    return _xacro()
+
+
+def test_positioner_pose_from_urdf():
+    """world_T_flange(theta) comes from the URDF (one source), also for a gimbal-lock axis pose."""
+    rot = axis_angle_to_matrix([0, 0, 1], 0.3) @ axis_angle_to_matrix([0, 1, 0], units.deg_to_rad(90.0))
+    q = ' '.join(f'{v:.17g}' for v in matrix_to_quat(rot))
+    xml = _xacro(positioner_xyz_mm='700 -50 300', positioner_quat_xyzw=q, positioner_axis_xyz='1 0 0')
+    chain = cs.PositionerChain.from_urdf(xml)
+    theta = units.deg_to_rad(90.0)
+    t = chain.world_T_flange_mm(theta)
+    assert np.allclose(t[:3, 3], [700, -50, 300], atol=1e-9)
+    assert np.allclose(t[:3, :3], rot @ axis_angle_to_matrix([1, 0, 0], theta), atol=1e-12)
+    obj = cs.SceneObject('h', 'positioner_rotating', 'positioner_flange',
+                         np.array([[1, 0, 0, 0], [0, 1, 0, 50.0], [0, 0, 1, 0], [0, 0, 0, 1.0]]))
+    assert np.allclose(cs.world_pose_mm(obj, t)[:3, 3], t[:3, :3] @ [0, 50, 0] + [700, -50, 300])
+    static = cs.SceneObject('p', 'cell_static', 'world', np.eye(4))
+    assert np.allclose(cs.world_pose_mm(static, t), np.eye(4))
+
+
+def test_status_message():
+    s = json.loads(cs.status_json(loaded=False, revision=0, theta_rad=None, base={}))
+    assert s == {'loaded': False, 'revision': 0, 'theta_deg': None}
+    s = json.loads(cs.status_json(loaded=True, revision=3, theta_rad=units.deg_to_rad(90.0), base={'objects': []}))
+    assert s['loaded'] and s['revision'] == 3 and s['theta_deg'] == pytest.approx(90.0) and s['objects'] == []
+
+
+def test_positioner_moveit_limits():
+    from awm_bringup.cell_config import load_positioner_limits, positioner_moveit_limits
+    lim = load_positioner_limits()
+    ml = positioner_moveit_limits(lim)
+    assert ml == {'has_velocity_limits': True, 'max_velocity': pytest.approx(units.deg_to_rad(lim['max_velocity_deg_s'])),
+                  'has_acceleration_limits': True,
+                  'max_acceleration': pytest.approx(units.deg_to_rad(lim['max_acceleration_deg_s2']))}
 
 
 def test_world_fixed_links_and_allowed_pairs(urdf_xml):

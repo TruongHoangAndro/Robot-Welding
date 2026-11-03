@@ -14,12 +14,16 @@ the A3 ``export-scene`` manifest (Part A); extra keys are ignored::
         parent_frame: world               # world | positioner_flange
         pose_mm: {position_mm: [x, y, z], quat_xyzw: [x, y, z, w]}
         box_mm: [sx, sy, sz]              # box centred at the pose, or
-        mesh: {file: meshes/a.stl, sha256: <hex>}   # STL in mm, path relative to the manifest
+        mesh: {file: meshes/a.stl, sha256: <hex>}   # STL in mm, path relative to the manifest; sha256 required
 
 Rules applied by :func:`build_scene`:
 
-- ``world`` objects are fixed; ``positioner_flange`` objects are placed at the *current* positioner angle and moved
-  when ``/joint_states`` reports a new ``positioner_joint`` value.
+- ``world`` objects are fixed; ``positioner_flange`` objects are placed at the *current* positioner angle (from
+  ``/joint_states``) and moved whenever it changes. ``world_T_positioner_flange(theta)`` is computed from the URDF
+  (robot_description), the one source of the positioner pose.
+- Status ``/awm/cell_scene/status`` (latched JSON): ``loaded``, ``revision`` (increases with every applied scene
+  change), ``theta_deg`` (the positioner angle the rotating set is placed at). A validity check is meaningful only
+  when the requested ``positioner_joint`` equals ``theta_deg`` (``awm_bringup.scene_sync``).
 - Padding (F4): every robot link with collision geometry gets ``padding_mm`` except the ``unpadded_links``
   (default ``nozzle_tip``).
 - Allowed collisions: only between ``world`` objects and robot links that are rigidly fixed to ``world`` (UR
@@ -41,7 +45,8 @@ import numpy as np
 import yaml
 
 from awm_core import units
-from awm_core.frames import axis_angle_to_matrix, compose, make_transform, matrix_to_quat, quat_to_matrix
+from awm_core.frames import (axis_angle_to_matrix, compose, make_transform, matrix_to_quat, quat_to_matrix,
+                              xyz_rpy_to_matrix)
 from awm_core.hashing import sha256_file
 from awm_core.stl import read_stl
 
@@ -120,9 +125,11 @@ def load_manifest(path: Path) -> List[SceneObject]:
                 raise ManifestError(f'{where}: box_mm must be positive')
         else:
             mesh_file = path.parent / e['mesh']['file']
-            digest = sha256_file(mesh_file)
             expected = e['mesh'].get('sha256')
-            if expected and expected != digest:
+            if not expected:
+                raise ManifestError(f'{where}: mesh.sha256 is required')
+            digest = sha256_file(mesh_file)
+            if expected != digest:
                 raise ManifestError(f'{where}: {mesh_file.name} sha256 {digest} != manifest {expected}')
             obj.vertices_mm, obj.triangles = read_stl(mesh_file)
             obj.mesh_sha256 = digest
@@ -159,11 +166,39 @@ def link_padding_m(links: Iterable[str], padding_mm: float, unpadded: Sequence[s
     return {link: (0.0 if link in unpadded else units.mm_to_m(padding_mm)) for link in links}
 
 
-def world_T_flange_mm(axis_xyz_mm: np.ndarray, axis_quat_xyzw: np.ndarray, axis_dir: np.ndarray,
-                      theta_rad: float) -> np.ndarray:
-    """world_T_positioner_flange (mm) at the positioner angle, same chain as positioner.xacro."""
-    world_T_axis = make_transform(axis_xyz_mm, quat_to_matrix(axis_quat_xyzw))
-    return compose(world_T_axis, make_transform(np.zeros(3), axis_angle_to_matrix(axis_dir, theta_rad)))
+@dataclass
+class PositionerChain:
+    """world_T_positioner_flange(theta) read from the URDF: fixed joints from ``world`` + the revolute joint."""
+
+    world_T_joint_mm: np.ndarray
+    axis: np.ndarray
+
+    @classmethod
+    def from_urdf(cls, urdf_xml: str, joint: str = 'positioner_joint', root: str = 'world') -> 'PositionerChain':
+        from urdf_parser_py.urdf import URDF
+        robot = URDF.from_xml_string(urdf_xml)
+        j = robot.joint_map[joint]
+        if j.type not in ('revolute', 'continuous'):
+            raise ValueError(f'{joint} is not revolute')
+
+        def origin_mm(jj) -> np.ndarray:
+            o = jj.origin
+            t = xyz_rpy_to_matrix(o.xyz or [0, 0, 0], o.rpy or [0, 0, 0]) if o else np.eye(4)
+            return units.transform_m_to_mm(t)
+
+        t = origin_mm(j)
+        link = j.parent
+        while link != root:
+            parent = robot.joint_map[robot.parent_map[link][0]]
+            if parent.type != 'fixed':
+                raise ValueError(f'{joint}: {parent.name} between {root} and the positioner is not fixed')
+            t = compose(origin_mm(parent), t)
+            link = parent.parent
+        return cls(t, np.asarray(j.axis or [1, 0, 0], dtype=float))
+
+    def world_T_flange_mm(self, theta_rad: float) -> np.ndarray:
+        """world_T_positioner_flange (mm) at the positioner angle."""
+        return compose(self.world_T_joint_mm, make_transform(np.zeros(3), axis_angle_to_matrix(self.axis, theta_rad)))
 
 
 def world_pose_mm(obj: SceneObject, flange_mm: np.ndarray) -> np.ndarray:
@@ -197,15 +232,23 @@ def merge_acm(names: List[str], values: List[List[bool]], pairs: Iterable[Tuple[
     return names, m
 
 
-def scene_summary(manifest: Path, objects: List[SceneObject], padding: Dict[str, float]) -> str:
-    """JSON status published by the loader (record for the spike: manifest hash, objects, padding in mm)."""
-    return json.dumps({
-        'manifest': str(manifest),
-        'manifest_sha256': sha256_file(manifest),
+def scene_summary(manifest: Optional[Path], objects: List[SceneObject], padding: Dict[str, float]) -> dict:
+    """Static part of the status (record for the spike: manifest hash, objects, padding in mm)."""
+    return {
+        'manifest': str(manifest) if manifest else '',
+        'manifest_sha256': sha256_file(manifest) if manifest else '',
         'objects': [{'object_id': o.object_id, 'role': o.role, 'parent_frame': o.parent_frame,
                      'mesh_sha256': o.mesh_sha256} for o in objects],
         'link_padding_mm': {k: units.m_to_mm(v) for k, v in sorted(padding.items())},
-    }, sort_keys=True)
+    }
+
+
+def status_json(loaded: bool, revision: int, theta_rad: Optional[float], base: dict) -> str:
+    """Latched status: loaded flag, scene revision and the positioner angle applied to the rotating set."""
+    out = dict(base) if loaded else {}
+    out.update({'loaded': loaded, 'revision': int(revision),
+                'theta_deg': None if theta_rad is None else units.rad_to_deg(theta_rad)})
+    return json.dumps(out, sort_keys=True)
 
 
 # --------------------------------------------------------------------------------------------------------------
@@ -250,7 +293,7 @@ def _collision_object(obj: SceneObject, t_mm: np.ndarray, operation: int):
 
 
 def main(args=None) -> None:
-    """ROS node: load the manifest into move_group's planning scene, set padding / ACM, follow the positioner."""
+    """Run the ROS node: load the manifest into the planning scene, set padding / ACM, follow the positioner."""
     import rclpy
     from moveit_msgs.msg import (AllowedCollisionEntry, CollisionObject, LinkPadding, PlanningScene,
                                  PlanningSceneComponents)
@@ -261,63 +304,77 @@ def main(args=None) -> None:
     from std_msgs.msg import String
 
     class CellSceneLoader(Node):
+        """Owns the cell objects in move_group's planning scene; one request in flight at a time."""
+
         def __init__(self) -> None:
             super().__init__('cell_scene_loader')
             self.declare_parameter('manifest', '')
             self.declare_parameter('robot_description', '')
             self.declare_parameter('padding_mm', 3.0)
             self.declare_parameter('unpadded_links', ['nozzle_tip'])
-            self.declare_parameter('positioner_xyz_mm', '0 0 0')
-            self.declare_parameter('positioner_quat_xyzw', '0 0 0 1')
-            self.declare_parameter('positioner_axis_xyz', '1 0 0')
             self.declare_parameter('positioner_joint', 'positioner_joint')
-            self.declare_parameter('theta_update_deg', 0.01)
             g = lambda n: self.get_parameter(n).value  # noqa: E731
-            self.manifest = Path(g('manifest'))
-            self.objects = load_manifest(self.manifest) if g('manifest') else []
+            self.manifest = Path(g('manifest')) if g('manifest') else None
+            self.objects = load_manifest(self.manifest) if self.manifest else []
+            self.rotating = [o for o in self.objects if o.parent_frame == 'positioner_flange']
             urdf = g('robot_description')
             if not urdf:
                 raise RuntimeError('cell_scene_loader: robot_description parameter is empty')
             self.padding = link_padding_m(collision_links(urdf), float(g('padding_mm')), list(g('unpadded_links')))
             self.pairs = allowed_pairs(self.objects, world_fixed_links(urdf), self.padding.keys())
-            self.axis_xyz = parse_vector(g('positioner_xyz_mm'), 3, 'positioner_xyz_mm')
-            self.axis_q = parse_vector(g('positioner_quat_xyzw'), 4, 'positioner_quat_xyzw')
-            self.axis_dir = parse_vector(g('positioner_axis_xyz'), 3, 'positioner_axis_xyz')
             self.joint = g('positioner_joint')
-            self.update_rad = units.deg_to_rad(float(g('theta_update_deg')))
-            self.theta: Optional[float] = None
+            self.chain = PositionerChain.from_urdf(urdf, self.joint)
+            self.base = scene_summary(self.manifest, self.objects, self.padding)
+            self.latest: Optional[float] = None    # last positioner angle seen on /joint_states (rad)
+            self.applied: Optional[float] = None   # angle the rotating set is placed at in the scene (rad)
+            self.revision = 0
+            self.loaded = False
+            self.busy = False
             self.get_client = self.create_client(GetPlanningScene, '/get_planning_scene')
             self.apply_client = self.create_client(ApplyPlanningScene, '/apply_planning_scene')
             latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
             self.status_pub = self.create_publisher(String, '/awm/cell_scene/status', latched)
-            self.loaded = False
-            self.pending = None
+            self._publish()
             self.create_subscription(JointState, '/joint_states', self._on_joint_states, 10)
-            self.create_timer(0.5, self._try_load)
+            self.create_timer(0.05, self._tick)
 
-        def _flange(self, theta: float) -> np.ndarray:
-            return world_T_flange_mm(self.axis_xyz, self.axis_q, self.axis_dir, theta)
+        def _publish(self) -> None:
+            self.status_pub.publish(String(data=status_json(self.loaded, self.revision, self.applied, self.base)))
 
         def _on_joint_states(self, msg: JointState) -> None:
             if self.joint in msg.name:
-                theta = msg.position[msg.name.index(self.joint)]
-                if not self.loaded:
-                    self.theta = theta
-                elif abs(theta - self.theta) >= self.update_rad and self.pending is None:
-                    self._move_rotating(theta)
+                self.latest = float(msg.position[msg.name.index(self.joint)])
+                self._tick()
 
-        def _try_load(self) -> None:
-            if self.loaded or self.pending is not None or self.theta is None:
+        def _tick(self) -> None:
+            if self.busy or self.latest is None:
                 return
             if not (self.get_client.service_is_ready() and self.apply_client.service_is_ready()):
                 return
-            req = GetPlanningScene.Request()
-            req.components.components = PlanningSceneComponents.ALLOWED_COLLISION_MATRIX
-            self.pending = self.get_client.call_async(req)
-            self.pending.add_done_callback(self._apply_initial)
+            if not self.loaded:
+                self.busy = True
+                req = GetPlanningScene.Request()
+                req.components.components = PlanningSceneComponents.ALLOWED_COLLISION_MATRIX
+                self.get_client.call_async(req).add_done_callback(self._apply_initial)
+            elif self.latest != self.applied:
+                self._move_rotating(self.latest)
+
+        def _result(self, future, what: str):
+            try:
+                res = future.result()
+            except Exception as exc:  # noqa: BLE001 -- logged and retried
+                self.get_logger().error(f'{what}: {exc}; retrying')
+                return None
+            if res is None:
+                self.get_logger().error(f'{what}: no response; retrying')
+            return res
 
         def _apply_initial(self, future) -> None:
-            acm = future.result().scene.allowed_collision_matrix
+            res = self._result(future, 'get_planning_scene')
+            if res is None:
+                self.busy = False
+                return
+            acm = res.scene.allowed_collision_matrix
             names, matrix = merge_acm(list(acm.entry_names), [list(e.enabled) for e in acm.entry_values],
                                       self.pairs)
             scene = PlanningScene(is_diff=True)
@@ -326,38 +383,53 @@ def main(args=None) -> None:
             scene.allowed_collision_matrix.default_entry_names = list(acm.default_entry_names)
             scene.allowed_collision_matrix.default_entry_values = list(acm.default_entry_values)
             scene.link_padding = [LinkPadding(link_name=k, padding=v) for k, v in sorted(self.padding.items())]
-            flange = self._flange(self.theta)
+            theta = self.latest
+            flange = self.chain.world_T_flange_mm(theta)
             scene.world.collision_objects = [_collision_object(o, world_pose_mm(o, flange), CollisionObject.ADD)
                                              for o in self.objects]
-            done = self.apply_client.call_async(ApplyPlanningScene.Request(scene=scene))
-            done.add_done_callback(self._initial_applied)
+            self.apply_client.call_async(ApplyPlanningScene.Request(scene=scene)).add_done_callback(
+                lambda f: self._initial_applied(f, theta))
 
-        def _initial_applied(self, future) -> None:
-            self.pending = None
-            if not future.result().success:
-                self.get_logger().error('apply_planning_scene refused the cell scene; retrying')
+        def _initial_applied(self, future, theta: float) -> None:
+            self.busy = False
+            res = self._result(future, 'apply_planning_scene (initial)')
+            if res is None or not res.success:
+                if res is not None:
+                    self.get_logger().error('apply_planning_scene refused the cell scene; retrying')
                 return
-            self.loaded = True
-            summary = (scene_summary(self.manifest, self.objects, self.padding) if self.manifest.is_file()
-                       else json.dumps({'objects': [], 'link_padding_mm': {
-                           k: units.m_to_mm(v) for k, v in sorted(self.padding.items())}}))
-            self.status_pub.publish(String(data=summary))
+            self.loaded, self.applied, self.revision = True, theta, self.revision + 1
+            self._publish()
             self.get_logger().info(
-                f'cell scene loaded: {len(self.objects)} objects from {self.manifest}, '
+                f'cell scene loaded (revision {self.revision}): {len(self.objects)} objects from {self.manifest}, '
                 f'{len(self.pairs)} allowed world-fixed pairs, padding {self.get_parameter("padding_mm").value} mm '
-                f'except {list(self.get_parameter("unpadded_links").value)}')
+                f'except {list(self.get_parameter("unpadded_links").value)}, '
+                f'positioner {units.rad_to_deg(theta):.3f} deg')
+            self._tick()  # the angle may have changed while loading
 
         def _move_rotating(self, theta: float) -> None:
-            rotating = [o for o in self.objects if o.parent_frame == 'positioner_flange']
-            self.theta = theta
-            if not rotating:
+            if not self.rotating:
+                self.applied, self.revision = theta, self.revision + 1
+                self._publish()
                 return
-            flange = self._flange(theta)
+            self.busy = True
+            flange = self.chain.world_T_flange_mm(theta)
             scene = PlanningScene(is_diff=True)
             scene.world.collision_objects = [_collision_object(o, world_pose_mm(o, flange), CollisionObject.MOVE)
-                                             for o in rotating]
-            self.pending = self.apply_client.call_async(ApplyPlanningScene.Request(scene=scene))
-            self.pending.add_done_callback(lambda _f: setattr(self, 'pending', None))
+                                             for o in self.rotating]
+            self.apply_client.call_async(ApplyPlanningScene.Request(scene=scene)).add_done_callback(
+                lambda f: self._moved(f, theta))
+
+        def _moved(self, future, theta: float) -> None:
+            self.busy = False
+            res = self._result(future, 'apply_planning_scene (move rotating set)')
+            if res is None or not res.success:
+                if res is not None:
+                    self.get_logger().error(f'MOVE of the rotating set to {units.rad_to_deg(theta):.3f} deg '
+                                            'refused; retrying')
+                return  # applied / revision unchanged: the status keeps the old angle
+            self.applied, self.revision = theta, self.revision + 1
+            self._publish()
+            self._tick()
 
     rclpy.init(args=args)
     node = CellSceneLoader()

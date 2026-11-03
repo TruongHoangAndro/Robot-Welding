@@ -5,6 +5,9 @@
         [positioner_xyz_mm:="x y z"] [positioner_quat_xyzw:="x y z w"] [positioner_axis_xyz:="x y z"]
         [padding_mm:=3.0] [<any H-BOX xacro arg>:=<mm or deg>]
 
+Positioner limits: only awm_description/config/positioner_limits.yaml (URDF and MoveIt). The rotating set follows
+positioner_joint; checkers use awm_bringup.scene_sync (set_positioner_and_wait, check_positioner).
+
 UR5e + H-BOX head + positioner_joint on ros2_control mock hardware (one controller manager, two components:
 joint_trajectory_controller for the arm, positioner_trajectory_controller for positioner_joint), MoveIt
 move_group, and cell_scene_loader (cell manifest -> world objects, 3 mm padding on every link except nozzle_tip,
@@ -22,6 +25,7 @@ from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from moveit_configs_utils import MoveItConfigsBuilder
 
+from awm_bringup.cell_config import load_positioner_limits, positioner_moveit_limits
 from awm_core import units
 
 POSE_ARGS = {
@@ -33,7 +37,6 @@ POSE_ARGS = {
 }
 # xacro args of awm_cell_v2.urdf.xacro forwarded only when set (empty = xacro default).
 XACRO_ARGS = (
-    'positioner_lower_deg', 'positioner_upper_deg', 'positioner_velocity_deg_s',
     'mount_w_mm', 'mount_d_mm', 'mount_h_mm', 'head_w_mm', 'head_d_mm', 'head_h_mm',
     'head_axis_x_mm', 'head_axis_y_mm', 'nozzle_dia_mm', 'nozzle_len_mm', 'nozzle_tip_len_mm',
     'contact_standoff_mm', 'conduit_dia_mm', 'conduit_len_mm', 'conduit_x_mm', 'conduit_y_mm', 'conduit_z_mm',
@@ -65,6 +68,9 @@ def _launch_setup(context, *args, **kwargs):
                                 publish_transforms_updates=True)
         .to_moveit_configs()
     )
+    # positioner_joint limits: one source (awm_description/config/positioner_limits.yaml, also read by the xacro).
+    moveit_config.joint_limits['robot_description_planning']['joint_limits']['positioner_joint'] = \
+        positioner_moveit_limits(load_positioner_limits())
     controllers = FindPackageShare('awm_description').perform(context) + '/config/ros2_controllers_v2.yaml'
     # Padding on every robot link from the start; cell_scene_loader then sets nozzle_tip to 0 (F4).
     padding = {'robot_description_planning.default_robot_padding': units.mm_to_m(padding_mm)}
@@ -81,10 +87,7 @@ def _launch_setup(context, *args, **kwargs):
         Node(package='moveit_ros_move_group', executable='move_group', output='log',
              parameters=[moveit_config.to_dict(), padding, {'publish_robot_description_semantic': True}]),
         Node(package='awm_bringup', executable='cell_scene_loader', output='log',
-             parameters=[{'manifest': manifest, 'padding_mm': padding_mm, 'unpadded_links': ['nozzle_tip'],
-                          'positioner_xyz_mm': mappings['positioner_xyz_mm'],
-                          'positioner_quat_xyzw': mappings['positioner_quat_xyzw'],
-                          'positioner_axis_xyz': mappings['positioner_axis_xyz']},
+             parameters=[{'manifest': manifest, 'padding_mm': padding_mm, 'unpadded_links': ['nozzle_tip']},
                          moveit_config.robot_description]),
     ]
     if not headless:
@@ -108,6 +111,6 @@ def generate_launch_description():
                               description='padding on every robot link except nozzle_tip (TST-002 F4, D16)'),
     ]
     decls += [DeclareLaunchArgument(n, default_value=d, description=t) for n, (d, t) in POSE_ARGS.items()]
-    decls += [DeclareLaunchArgument(n, default_value='', description='H-BOX / positioner xacro arg; empty = default')
+    decls += [DeclareLaunchArgument(n, default_value='', description='H-BOX xacro arg; empty = default')
               for n in XACRO_ARGS]
     return LaunchDescription(decls + [OpaqueFunction(function=_launch_setup)])
