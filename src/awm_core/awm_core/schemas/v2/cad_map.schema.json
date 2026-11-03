@@ -186,6 +186,22 @@
         "minLength": 1
       },
       "description": "instance name -> name shown in the UI (e.g. Part1:1 -> \"Holder left\"); never written back to the STEP"
+    },
+    "collision": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": [
+          "hull",
+          "mesh"
+        ]
+      },
+      "description": "instance name -> collision representation; default hull. Use mesh for non-convex parts that surround the part or the seam (e.g. a U-shaped jig). Added 2026-11-03 after the S.4 A review (jig hull covered J1)."
+    },
+    "contact_tolerance_mm": {
+      "type": "number",
+      "minimum": 0,
+      "description": "export-scene refuses a part vertex deeper than this inside any cell object (clamp contact allowed up to it); default 1.0 (Assumption)"
     }
   }
 }

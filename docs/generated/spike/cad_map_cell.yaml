@@ -48,3 +48,7 @@ roles:
       depth: 1                              # the top-level instance only
   ignore:
     - 'UR5E/UR7E:1'                         # all its solids (arm links, base, nested duplicate welding tool)
+
+collision:                                  # default hull; mesh for non-convex parts around the part (S.4 A review)
+  'Jig:1': mesh                             # U-shaped bearing frame: its hull covered the J1 seam by ~30 mm
+contact_tolerance_mm: 1.0                   # Assumption: holder Part3 clamps the elbow end (≤ 0.9 mm overlap)

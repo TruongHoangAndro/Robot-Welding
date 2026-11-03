@@ -12,3 +12,4 @@ Recorded with every TST-002 result that uses the spike scene (`.worktrees/spike_
 | D5 | No PyYAML in the conda env `awm_occ`; `awm_geometry.miniyaml` (strict subset) reads the role map | CLAUDE.md: do not change the env |
 | D6 | Head ↔ UR arm links checked unpadded (MoveIt self-collision), cell / part objects with 3 mm padding | CP-55 |
 | D7 | Conduit capsule leaves the head side (x 97, z 110 mm) along tool0 +X — TST-002 says "head rear"; Assumption pending Truong / Nghia | S.4 B |
+| D8 | Collision representation per component: convex hull by default, tessellated mesh where the map says `mesh`; `Jig:1` = mesh (its hull covered J1 by ≈ 30 mm). export-scene refuses part vertices deeper than `contact_tolerance_mm` (1.0, Assumption) inside any cell object | S.4 A review finding 1 |
