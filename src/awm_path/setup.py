@@ -20,6 +20,7 @@ setup(
     entry_points={
         'console_scripts': [
             'plan_path = awm_path.node:main',
+            'g2_gate = awm_path.gate_g2:main',
         ],
     },
 )
