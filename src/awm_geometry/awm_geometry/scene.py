@@ -72,7 +72,7 @@ MESH_LINEAR_DEFLECTION_MM = 0.5   # collision: mesh (S.4 A review: linear <= 0.5
 MESH_ANGULAR_DEFLECTION_DEG = 15.0
 MESH_WELD_MM = 1.0e-4             # coincident tessellation nodes of neighbouring faces are merged
 COLLISION_MODES = ('hull', 'mesh')
-RETRY_ANGULAR_DEG = (20.0, 30.0)  # face-alone retries for a face BRepMesh left empty (same chord)
+RETRY_ANGULAR_DEG = (20.0, 30.0, 45.0, 60.0)  # face-alone retries of a face left empty (same chord)
 DEFAULT_CONTACT_TOLERANCE_MM = 1.0  # cad_map default (Assumption, scene decision D8)
 GUARD_SPACING_MM = 1.0            # sample spacing on the part surface for the export guard
 PART_NEAR_ANGULAR_DEG = 5.0
@@ -318,13 +318,16 @@ def _tessellate_mm(shape: TopoDS_Shape, linear_mm: float, angular_deg: float,
             pos, idx, _ = _face_triangles(face)
             for retry_deg in RETRY_ANGULAR_DEG if pos is None else ():
                 # BRepMesh sometimes leaves a small valid face empty (cell CAD: a 6 mm2 cone); mesh it alone
-                # with the same chord and a coarser angle. Logged; an error if every retry fails.
+                # with the same chord and a coarser angle (accepted only if the achieved chord holds). Logged; an error
+                # if every retry fails.
                 breptools.Clean(face)
                 BRepMesh_IncrementalMesh(face, linear_mm, False, units.deg_to_rad(retry_deg), False).Perform()
-                pos, idx, _ = _face_triangles(face)
+                pos, idx, deflection = _face_triangles(face)
+                if pos is not None and deflection > linear_mm:
+                    pos = idx = None  # the chord must still hold
                 if pos is not None:
-                    LOG.warning('%r: face %d meshed again alone (angular %.0f deg, chord %.2f mm)', label,
-                                face_no, retry_deg, linear_mm)
+                    LOG.warning('%r: face %d meshed again alone (angular %.0f deg, chord %.2f mm, achieved '
+                                '%.3f mm)', label, face_no, retry_deg, linear_mm, deflection)
                     break
             if pos is None:
                 raise GeometryError(f'{label!r}: face {face_no} has no triangulation: its collision geometry '
