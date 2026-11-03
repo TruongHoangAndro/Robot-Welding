@@ -102,13 +102,16 @@ def test_run_gate_respects_the_parent_frame_of_the_part():
 def test_write_gate_log(tmp_path):
     poses, seams = load_pose_specs(_doc())
     results = run_gate(FakeScene(), FakeKin(), poses, seams, _plate(), _part(), ContactParams())
-    j, md = write_gate_log(tmp_path / 'g2_log.json', tmp_path / 'g2_log.md', {'commit': 'abc'}, results)
+    j, md = write_gate_log(tmp_path / 'g2_log.json', tmp_path / 'g2_log.md', {'commit': 'abc'}, results,
+                           notes=['rule (b) covered by Z5'])
     doc = json.loads(j.read_text())
     assert doc['record']['commit'] == 'abc'
     assert doc['summary']['pass'] is False and doc['summary']['missing']   # 4 poses only
     assert [p['id'] for p in doc['poses']] == ['C1', 'F1', 'Z1', 'F2']
     text = md.read_text()
     assert '| C1 |' in text and 'FAIL' in text
+    assert '## Notes' in text and '- rule (b) covered by Z5' in text
+    assert doc['notes'] == ['rule (b) covered by Z5']
 
 
 def test_launch_args_from_frames(tmp_path):

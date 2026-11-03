@@ -123,8 +123,9 @@ def _caught_by(r: GateResult) -> str:
     return ', '.join(causes) or '-'
 
 
-def write_gate_log(json_path, md_path, record: Mapping[str, Any], results: Sequence[GateResult]):
-    """Write the G2 log (JSON record + Markdown table). Returns the two paths."""
+def write_gate_log(json_path, md_path, record: Mapping[str, Any], results: Sequence[GateResult],
+                   notes: Sequence[str] = ()):
+    """Write the G2 log (JSON record + Markdown table + notes of the pose file). Returns the two paths."""
     summary = gate_summary(results)
     poses = [{'id': r.pose.pose_id, 'kind': r.pose.kind, 'description': r.pose.description,
               'expect_valid': r.pose.expect_valid, 'expect_objects': list(r.pose.expect_objects),
@@ -133,7 +134,8 @@ def write_gate_log(json_path, md_path, record: Mapping[str, Any], results: Seque
               **(r.details or {})} for r in results]
     json_path, md_path = Path(json_path), Path(md_path)
     json_path.parent.mkdir(parents=True, exist_ok=True)
-    json_path.write_text(json.dumps({'record': dict(record), 'summary': summary, 'poses': poses}, indent=1,
+    json_path.write_text(json.dumps({'record': dict(record), 'summary': summary, 'notes': list(notes),
+                                     'poses': poses}, indent=1,
                                     allow_nan=False) + '\n')
     c = summary['counts']
     lines = [f'# TST-002 G2 (C1 scene sanity) — {"PASS" if summary["pass"] else "FAIL"}', '',
@@ -153,6 +155,8 @@ def write_gate_log(json_path, md_path, record: Mapping[str, Any], results: Seque
                      f'{"valid" if p["expect_valid"] else "invalid"} | '
                      f'{"valid" if p["valid"] else "invalid"} {"PASS" if p["passed"] else "FAIL"} | {p["caught_by"]} | '
                      f'{pairs or "-"} | {"yes" if p.get("clearance_5mm_valid") else "no"} | {p["description"]} |')
+    if notes:
+        lines += ['', '## Notes', ''] + [f'- {n}' for n in notes]
     md_path.write_text('\n'.join(lines) + '\n')
     return json_path, md_path
 
@@ -191,7 +195,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     frames = repo / 'cell' / 'model' / 'frames.yaml'
     cell_manifest = repo / 'cell' / 'model' / 'scene_manifest.json'
     placement = job / 'placement.json'
-    poses, seams = load_pose_specs(yaml.safe_load(poses_file.read_text()))
+    pose_doc = yaml.safe_load(poses_file.read_text())
+    poses, seams = load_pose_specs(pose_doc)
     launch_args = dict(launch_args_from_frames(frames), cell_manifest=str(cell_manifest.resolve()))
     contact_params = ContactParams()
     kin = UrAnalyticKinematics()
@@ -229,7 +234,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             'contact point tolerance 0.15 mm (F9 gives no value)'],
     }
     out = Path(args.out_dir)
-    j, md = write_gate_log(out / 'g2_log.json', out / 'g2_log.md', record, results)
+    j, md = write_gate_log(out / 'g2_log.json', out / 'g2_log.md', record, results,
+                           notes=[str(n) for n in pose_doc.get('notes') or ()])
     s = gate_summary(results)
     print(f'G2 {"PASS" if s["pass"] else "FAIL"}: {s["counts"]}; failing {s["failing"]}; log {j}, {md}')
     return 0 if s['pass'] else 1
