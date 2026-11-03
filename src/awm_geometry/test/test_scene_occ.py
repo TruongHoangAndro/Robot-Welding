@@ -574,6 +574,65 @@ def test_rollback_failure_keeps_the_original_error(tmp_path, occ, monkeypatch, c
     with pytest.raises(OSError, match='disk full'):
         scene.swap_dirs([(staged_a, final_a), (staged_b, final_b)])
     assert 'restore failed' in caplog.text
+    # the placed folder was moved to trash, so `a` is missing and its old copy survives: recovery restores it
+    assert not final_a.exists() and len(list(tmp_path.glob('.a.old-*'))) == 1
+
+
+def test_recovery_restores_old_after_a_failed_undo(tmp_path, occ):
+    """Review F1: a half-deleted placed folder is never left under the final name; recovery brings the old back."""
+    from awm_geometry import scene
+
+    cell = tmp_path / 'cell'
+    (cell / '.model.old-1').mkdir(parents=True)
+    (cell / '.model.old-1' / 'scene_manifest.json').write_text('{}')
+    (cell / '.model.trash-1').mkdir()
+    (cell / '.model.trash-1' / 'half.stl').write_text('x')
+    scene.recover_leftovers(tmp_path)
+    assert sorted(p.name for p in cell.iterdir()) == ['model']
+    assert (cell / 'model' / 'scene_manifest.json').exists()
+
+
+def test_first_export_takes_the_lock(tmp_path, occ, monkeypatch):
+    """Review F2: a repository root that does not exist yet is created and locked before the export."""
+    from awm_geometry import scene
+
+    seen = []
+    real = scene.export_lock
+
+    def spy(root):
+        seen.append(root)
+        return real(root)
+    monkeypatch.setattr(scene, 'export_lock', spy)
+    code, repo = _run(tmp_path, _map, step=_cell(tmp_path))
+    assert code == 0 and seen == [repo]
+
+
+def test_hull_fallback_uses_the_latest_retry(occ, monkeypatch):
+    """Review F3: degenerate at the first retry, covering but too coarse later: the hull keeps the latest nodes."""
+    from awm_geometry import scene, testparts
+    from awm_geometry.occ_io import scale_shape
+
+    original, state = scene._face_triangles, {'face': None, 'calls': 0}
+
+    def patched(face):
+        if state['face'] is None:
+            state['face'] = face
+        if face.IsSame(state['face']):
+            state['calls'] += 1
+            if state['calls'] == 1:
+                return None, None, 0.0
+            pos, idx, _ = original(face)
+            if state['calls'] == 2:
+                return pos, np.array([[0, 0, 1]], dtype=np.int64), 0.0  # degenerate
+            return pos, idx, 99.0  # covers the face but the chord does not hold
+        return original(face)
+    monkeypatch.setattr(scene, '_face_triangles', patched)
+    shape = scale_shape(testparts.box((0, 0, 0), (0.01, 0.01, 0.01)), units.m_to_mm(1.0))
+    retried = []
+    pieces = scene._tessellate_mm(shape, 0.5, 15.0, 'table:1', retried, hull_mode=True)
+    assert retried[0]['nodes_only'] and retried[0]['angular_deflection_deg'] == scene.RETRY_ANGULAR_DEG[-1]
+    pts = np.vstack([v for v, _ in pieces])
+    assert np.isclose(pts, [0.0, 0.0, 0.0]).all(axis=1).any()  # the face's own nodes are in the point set
 
 
 def test_placement_does_not_hash_the_cell_manifest(scene):

@@ -336,7 +336,7 @@ def _tessellate_mm(shape: TopoDS_Shape, linear_mm: float, angular_deg: float, la
             face_no += 1
             face = topods.Face(exp.Current())
             pos, idx, _ = _face_triangles(face)
-            nodes = None  # hull mode fallback: nodes of the last retry that did not cover the face
+            nodes = None  # hull mode fallback: nodes of the latest rejected retry
             for retry_deg in RETRY_ANGULAR_DEG if pos is None else ():
                 # BRepMesh sometimes leaves a small valid face empty (cell CAD: a 6 mm2 cone); mesh it alone
                 # with the same chord and a coarser angle (accepted only if the achieved chord holds). Logged; an error
@@ -347,7 +347,7 @@ def _tessellate_mm(shape: TopoDS_Shape, linear_mm: float, angular_deg: float, la
                 if pos is not None and not _covers_face(face, pos, idx):
                     nodes, pos, idx = (pos, retry_deg), None, None  # degenerate: a zero-area mesh reports chord 0
                 elif pos is not None and deflection > linear_mm:
-                    pos = idx = None  # the chord must still hold
+                    nodes, pos, idx = (pos, retry_deg), None, None  # the chord must still hold
                 if pos is not None:
                     LOG.warning('%r: face %d meshed again alone (angular %.0f deg, chord %.2f mm, achieved '
                                 '%.3f mm)', label, face_no, retry_deg, linear_mm, deflection)
@@ -572,14 +572,16 @@ def export_lock(root: Path) -> Iterator[None]:
 
 
 _OLD_RE = re.compile(r'\.(.+)\.old-\d+')
+_TRASH_RE = re.compile(r'\.(.+)\.trash-\d+')
 
 
 def recover_leftovers(root: Path) -> List[Path]:
     """Clean up after a crashed export; call only while holding :func:`export_lock`.
 
-    No other export runs, so every staging folder is orphaned and removed. An ``.<name>.old-<pid>`` folder in
-    ``cell/`` or ``jobs/`` is removed when ``<name>`` exists, and renamed back when a crash between the two
-    renames of :func:`swap_dirs` left ``<name>`` missing. Returns the paths removed or restored.
+    No other export runs, so every staging folder and every ``.<name>.trash-<pid>`` folder (a placed folder being
+    undone) is orphaned and removed. An ``.<name>.old-<pid>`` folder in ``cell/`` or ``jobs/`` is removed when
+    ``<name>`` exists (a completed swap: undo never leaves a partial folder under ``<name>``), and renamed back when
+    a crash or a failed undo left ``<name>`` missing. Returns the paths removed or restored.
     """
     touched = []
     for path in root.glob(f'{STAGING_PREFIX}*'):
@@ -589,6 +591,11 @@ def recover_leftovers(root: Path) -> List[Path]:
     for parent in (root / 'cell', root / 'jobs'):
         if not parent.is_dir():
             continue
+        for trash in sorted(parent.iterdir()):
+            if _TRASH_RE.fullmatch(trash.name) and trash.is_dir():
+                shutil.rmtree(trash)
+                LOG.warning('removed leftover folder %s', trash)
+                touched.append(trash)
         for old in sorted(parent.iterdir()):
             match = _OLD_RE.fullmatch(old.name)
             if not match or not old.is_dir():
@@ -639,8 +646,10 @@ def swap_dirs(pairs: List[Tuple[Path, Path]]) -> None:
     except BaseException:
         for step in reversed(done):
             try:
-                if step['placed']:
-                    shutil.rmtree(step['final'])
+                if step['placed']:  # rename first: a half-deleted folder never sits under the final name
+                    trash = step['final'].with_name(f".{step['final'].name}.trash-{os.getpid()}")
+                    os.replace(step['final'], trash)
+                    shutil.rmtree(trash, ignore_errors=True)
                 if step['old'] is not None and step['old'].exists():
                     os.replace(step['old'], step['final'])
             except OSError as undo_error:  # keep the original error; the next export recovers (recover_leftovers)
@@ -671,8 +680,7 @@ def export_scene(step: Path, map_path: Path, repo_root: Path, job_name: str, cho
                  chord_far_mm: float, padding_mm: float, created_by: str) -> Dict[str, Any]:
     """Run :func:`_export_scene` under the repository export lock, after recovering leftovers of crashed runs."""
     root = Path(repo_root)
-    if not root.is_dir():
-        return _export_scene(step, map_path, root, job_name, chord_near_mm, chord_far_mm, padding_mm, created_by)
+    root.mkdir(parents=True, exist_ok=True)  # a new repository is locked too
     with export_lock(root):
         recover_leftovers(root)
         return _export_scene(step, map_path, root, job_name, chord_near_mm, chord_far_mm, padding_mm, created_by)
