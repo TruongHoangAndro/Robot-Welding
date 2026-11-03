@@ -12,6 +12,9 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 
+_BUDGET = 2_000_000  # point x face pairs per block when points are assigned to new faces
+
+
 class HullError(ValueError):
     """The points do not span a volume, or the hull failed its consistency check."""
 
@@ -74,9 +77,14 @@ def convex_hull(points: np.ndarray, eps: Optional[float] = None) -> Tuple[np.nda
             return
         normals = np.array([faces[f]['n'] for f in fids])
         offsets = np.array([faces[f]['d'] for f in fids])
-        dist = pts[candidates] @ normals.T - offsets
-        best = np.argmax(dist, axis=1)
-        outside = dist[np.arange(len(candidates)), best] > eps
+        best = np.empty(len(candidates), dtype=np.int64)
+        outside = np.empty(len(candidates), dtype=bool)
+        step = max(1, _BUDGET // len(fids))  # bounded point x face block (memory)
+        for s in range(0, len(candidates), step):
+            dist = pts[candidates[s:s + step]] @ normals.T - offsets
+            k = np.argmax(dist, axis=1)
+            best[s:s + step] = k
+            outside[s:s + step] = dist[np.arange(len(k)), k] > eps
         for k, fid in enumerate(fids):
             faces[fid]['out'] = candidates[outside & (best == k)]
 

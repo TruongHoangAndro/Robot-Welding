@@ -124,25 +124,33 @@ def penetration(verts: np.ndarray, tris: np.ndarray, points: np.ndarray) -> np.n
 
 
 def sample_surface(verts: np.ndarray, tris: np.ndarray, spacing: float) -> Tuple[np.ndarray, np.ndarray]:
-    """Points on every triangle on a barycentric grid whose step along each edge is <= ``spacing``.
+    """Points on every triangle with no gap wider than ``spacing`` along any edge of a refined triangle.
 
-    Returns ``(points, owner)`` with ``owner`` = triangle index of each point. The triangle vertices are samples.
+    Longest-edge bisection until every edge is <= ``spacing``; the samples are the corners of the refined
+    triangles (so the original vertices are samples), each point once. The count grows with area / spacing^2 + perimeter / spacing,
+    also for long thin triangles. Returns ``(points, owner)`` with ``owner`` = original triangle index.
     """
     verts = np.asarray(verts, float)
     tris = np.asarray(tris, dtype=np.int64)
-    a, b, c = (verts[tris[:, k]] for k in range(3))
-    longest = np.max([np.linalg.norm(b - a, axis=1), np.linalg.norm(c - b, axis=1),
-                      np.linalg.norm(a - c, axis=1)], axis=0)
-    steps = np.maximum(1, np.ceil(longest / spacing).astype(np.int64))
-    points, owners = [], []
-    for n in np.unique(steps):
-        idx = np.nonzero(steps == n)[0]
-        i, j = np.meshgrid(np.arange(n + 1), np.arange(n + 1), indexing='ij')
-        keep = (i + j) <= n
-        w1, w2 = i[keep] / n, j[keep] / n
-        w0 = 1.0 - w1 - w2
-        pts = (a[idx, None, :] * w0[None, :, None] + b[idx, None, :] * w1[None, :, None]
-               + c[idx, None, :] * w2[None, :, None])
-        points.append(pts.reshape(-1, 3))
-        owners.append(np.repeat(idx, len(w0)))
-    return np.vstack(points), np.concatenate(owners)
+    corners = np.stack([verts[tris[:, k]] for k in range(3)], axis=1)  # (T, 3, 3)
+    owner = np.arange(len(tris))
+    done_pts, done_owner = [], []
+    while len(corners):
+        edges = np.linalg.norm(corners[:, [1, 2, 0]] - corners, axis=2)  # edge k: corner k -> k+1
+        longest = edges.argmax(axis=1)
+        small = edges.max(axis=1) <= spacing
+        done_pts.append(corners[small].reshape(-1, 3))
+        done_owner.append(np.repeat(owner[small], 3))
+        big, k = corners[~small], longest[~small]
+        owner = owner[~small]
+        if not len(big):
+            break
+        rows = np.arange(len(big))
+        p0, p1, p2 = big[rows, k], big[rows, (k + 1) % 3], big[rows, (k + 2) % 3]
+        mid = 0.5 * (p0 + p1)
+        corners = np.concatenate([np.stack([p0, mid, p2], axis=1), np.stack([mid, p1, p2], axis=1)])
+        owner = np.concatenate([owner, owner])
+    pts, own = np.vstack(done_pts), np.concatenate(done_owner)
+    keys = np.round(pts / (1e-6 * max(spacing, 1e-12))).astype(np.int64)
+    _, first = np.unique(keys, axis=0, return_index=True)  # shared corners once (owner: one of the triangles)
+    return pts[first], own[first]
