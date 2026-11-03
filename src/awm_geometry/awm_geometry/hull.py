@@ -156,7 +156,12 @@ def contains(verts: np.ndarray, tris: np.ndarray, points: np.ndarray, tol: float
     n = np.cross(b - a, c - a)
     n /= np.linalg.norm(n, axis=1)[:, None]
     d = np.einsum('ij,ij->i', n, a)
-    return np.all(np.asarray(points, float) @ n.T - d <= tol, axis=1)
+    points = np.asarray(points, float).reshape(-1, 3)
+    out = np.empty(len(points), dtype=bool)
+    step = max(1, _BUDGET // max(1, len(tris)))  # bounded point x face block (memory)
+    for s in range(0, len(points), step):
+        out[s:s + step] = np.all(points[s:s + step] @ n.T - d <= tol, axis=1)
+    return out
 
 
 def write_stl(path, verts: np.ndarray, tris: np.ndarray) -> None:
