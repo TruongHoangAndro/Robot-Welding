@@ -15,7 +15,7 @@ spike record) and committed. Saving through `awm_api` (`/cell/model`, DES-001 §
 | File | Producer | Content |
 |---|---|---|
 | `cell_components.json` | `awm_geometry.cli inspect-assembly` (A1) | component tree: index, parent, path, instance / product name, placement (mm, file frame), bbox, solids |
-| `cell_view.glb` | `awm_geometry.cli export-cell-view` (new, `cad-geometry`) | display meshes, one node per **leaf** component: `name` = `C<index>` (index of `cell_components.json`), `extras` = `{"index": n, "instance_name": "...", "path": "..."}`; file frame, mm, `asset.extras` = `{"unit": "mm", "frame": "file", "schema": "cell_view", "schema_version": "0.1", "up_axis": "+Y"}`; coarse tessellation (linear ≤ 2.0 mm, angular ≤ 30°; target file size < 15 MB; changed 2026-11-03 after the first export was 40.8 MB) — display only |
+| `cell_view.glb` | `awm_geometry.cli export-cell-view` (new, `cad-geometry`) | display meshes, one node per **leaf** component: `name` = `C<index>` (index of `cell_components.json`), `extras` = `{"index": n, "instance_name": "...", "path": "..."}`; file frame, mm, `asset.extras` = `{"unit": "mm", "frame": "file", "schema": "cell_view", "schema_version": "0.1", "up_axis": "+Y"}`; coarse tessellation (linear ≤ 2.0 mm, angular ≤ 30°; changed 2026-11-03 after the first export was 40.8 MB; file size target < 25 MB, raised by the lead 2026-11-03 after the 2.0 mm / 30° export gave 23.0 MB, 36 % of it the LightWELD surface model twice — the nested duplicate is removed in the CAD by OI-23, not in software) — display only |
 | `cad_map.yaml` (optional) | previous save | starting point for editing |
 
 ## Output
