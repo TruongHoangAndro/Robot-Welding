@@ -1,0 +1,891 @@
+# TST-002 G2 pose set (WP-S S.4 C4) — generated once with the design oracle; edit only with a new log.
+schema: awm_g2_poses/0.1
+note: 'TST-002 Rev 0.3 G2 pose set for the spike scene (WP-S S.4 C4). Data, not source. Job 564082_A, cell scene of export-scene
+  (scene decisions D1-D10). World = cell CAD frame rotated Z up, origin at the UR base (Assumption, OI-23). Built with an
+  independent numpy design oracle (head H-BOX primitives at the xacro defaults vs the scene meshes: exact point-triangle distances
+  from 1-5 mm surface samples + winding-number inside test; arm = capsules r 80 mm on the UR DH polyline); its numbers are
+  stored per pose under `oracle`. Free poses: every head link >= 5 mm except the nozzle at the contact standoff, arm capsules
+  clear. Colliding poses: tcp or nozzle inside the named object. The oracle does not use MoveIt / FCL. Label rule (run 2):
+  among the IK solutions whose arm capsules are clear, the one with the largest approximate head-to-arm distance (head samples
+  vs shoulder / upper-arm / forearm axis lines; `label_rule_self_mm`); run 1 took the first label and F06 met a head-arm self-collision
+  the oracle does not model (g2_log_run1).'
+job: 564082_A
+seam_faces:
+  J2:
+    n1:
+    - F26
+    n2:
+    - F35
+    source: 'topology.json JE4: E71 (B2: F26 exterior, F30 end) / E80 (B3: F35 exterior, F31 end)'
+  J1:
+    n1:
+    - F13
+    n2:
+    - F28
+    source: 'topology.json JE2: E46 (B1: F13 exterior, F22 end) / E79 (B2: F28 exterior, F29 end)'
+poses:
+- id: F01
+  kind: free
+  description: SRDF group state home of laser_arm (beam down, high above the cell)
+  joints_deg:
+  - 0.0
+  - -90.0
+  - 57.29578
+  - -57.29578
+  - -90.0
+  - 0.0
+  checks:
+  - validity
+  expect:
+    valid: true
+  oracle:
+    head_min_distance_mm (capped 12): none within 12 mm
+    arm_capsule_clearance_mm (r 80): none within 85 mm
+- id: F02
+  kind: free
+  description: J2 contact pose phi 30
+  theta_deg: 0.0
+  tcp:
+    frame: part
+    position_mm:
+    - -113.576762
+    - 670.640729
+    - 322.805079
+    beam_dir:
+    - 0.866025
+    - -0.051063
+    - 0.497386
+    x_dir:
+    - -0.5
+    - -0.088444
+    - 0.861497
+  label: S-E+W-
+  checks:
+  - validity
+  - contact
+  expect:
+    valid: true
+  seam: J2
+  label_rule_self_mm: 192.0
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_tip/part:
+        min_mm: 0.3
+        centre_inside: false
+      nozzle_body/part:
+        min_mm: 5.0
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80): none within 85 mm
+- id: F03
+  kind: free
+  description: J2 contact pose phi 60
+  theta_deg: 0.0
+  tcp:
+    frame: part
+    position_mm:
+    - -108.695813
+    - 671.139202
+    - 317.94965
+    beam_dir:
+    - 0.5
+    - -0.088444
+    - 0.861497
+    x_dir:
+    - -0.866025
+    - -0.051063
+    - 0.497386
+  label: S+E-W+
+  checks:
+  - validity
+  - contact
+  expect:
+    valid: true
+  seam: J2
+  label_rule_self_mm: 85.3
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_tip/part:
+        min_mm: 0.3
+        centre_inside: false
+      nozzle_body/part:
+        min_mm: 5.0
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80): none within 85 mm
+- id: F04
+  kind: free
+  description: J2 contact pose phi 0
+  theta_deg: 0.0
+  tcp:
+    frame: part
+    position_mm:
+    - -115.363313
+    - 669.959802
+    - 329.437717
+    beam_dir:
+    - 1.0
+    - -0.0
+    - -0.0
+    x_dir:
+    - 0.0
+    - -0.102126
+    - 0.994771
+  label: S-E+W-
+  checks:
+  - validity
+  - contact
+  expect:
+    valid: true
+  seam: J2
+  label_rule_self_mm: 175.2
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_tip/part:
+        min_mm: 0.3
+        centre_inside: false
+      nozzle_body/part:
+        min_mm: 5.0
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80):
+      c_60cm30x_3d_1: 258.4
+      jig_1: 304.7
+      htpk20s5m150_a_c15_1: 317.0
+- id: F05
+  kind: free
+  description: J2 approach pose phi 30, tcp 40 mm out along seam Z
+  theta_deg: 0.0
+  tcp:
+    frame: part
+    position_mm:
+    - -148.217778
+    - 672.683255
+    - 302.90965
+    beam_dir:
+    - 0.866025
+    - -0.051063
+    - 0.497386
+    x_dir:
+    - -0.5
+    - -0.088444
+    - 0.861497
+  label: S-E+W-
+  checks:
+  - validity
+  expect:
+    valid: true
+  label_rule_self_mm: 187.2
+  oracle:
+    head_min_distance_mm (capped 12): none within 12 mm
+    arm_capsule_clearance_mm (r 80): none within 85 mm
+- id: F06
+  kind: free
+  description: J2 contact pose phi 45, psi 180 (conduit on the other side)
+  theta_deg: 0.0
+  tcp:
+    frame: part
+    position_mm:
+    - -111.457582
+    - 670.922778
+    - 320.05775
+    beam_dir:
+    - 0.707107
+    - -0.072214
+    - 0.70341
+    x_dir:
+    - 0.707107
+    - 0.072214
+    - -0.70341
+  label: S+E-W+
+  checks:
+  - validity
+  - contact
+  expect:
+    valid: true
+  seam: J2
+  label_rule_self_mm: 24.0
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_tip/part:
+        min_mm: 0.3
+        centre_inside: false
+      nozzle_body/part:
+        min_mm: 5.0
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80): none within 85 mm
+- id: F07
+  kind: free
+  description: J2 contact pose phi 15
+  theta_deg: 0.0
+  tcp:
+    frame: part
+    position_mm:
+    - -114.908934
+    - 670.312276
+    - 326.004411
+    beam_dir:
+    - 0.965926
+    - -0.026432
+    - 0.257466
+    x_dir:
+    - -0.258819
+    - -0.098646
+    - 0.960875
+  label: S-E+W-
+  checks:
+  - validity
+  - contact
+  expect:
+    valid: true
+  seam: J2
+  label_rule_self_mm: 211.0
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_tip/part:
+        min_mm: 0.3
+        centre_inside: false
+      nozzle_body/part:
+        min_mm: 5.0
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80):
+      jig_1: 326.4
+- id: F09
+  kind: free
+  description: J2 contact pose phi 30, positioner at 20 deg (part, holders and robot target follow the angle)
+  theta_deg: 20.0
+  tcp:
+    frame: part
+    position_mm:
+    - -113.576762
+    - 670.640729
+    - 322.805079
+    beam_dir:
+    - 0.866025
+    - -0.051063
+    - 0.497386
+    x_dir:
+    - -0.5
+    - -0.088444
+    - 0.861497
+  label: S-E+W-
+  checks:
+  - validity
+  - contact
+  expect:
+    valid: true
+  seam: J2
+  label_rule_self_mm: 223.7
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_tip/part:
+        min_mm: 0.3
+        centre_inside: false
+      nozzle_body/part:
+        min_mm: 5.0
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80): none within 85 mm
+- id: F08
+  kind: free
+  description: tcp 150 mm above the J2 centre, beam down
+  tcp:
+    frame: world
+    position_mm:
+    - -2.0
+    - -482.859846
+    - 301.559599
+    beam_dir:
+    - 0.0
+    - 0.0
+    - -1.0
+    x_dir:
+    - 1.0
+    - 0.0
+    - 0.0
+  label: S-E+W-
+  checks:
+  - validity
+  expect:
+    valid: true
+  label_rule_self_mm: 186.6
+  oracle:
+    head_min_distance_mm (capped 12): none within 12 mm
+    arm_capsule_clearance_mm (r 80):
+      jig_1: 326.4
+      part3_1: 365.1
+      part: 365.3
+- id: F10
+  kind: free
+  description: beam down in free space in front of the jig (y -601); twin of C09 at positioner 0 deg
+  tcp:
+    frame: world
+    position_mm:
+    - 33.1
+    - -601.4
+    - 63.2
+    beam_dir:
+    - 0.0
+    - 0.0
+    - -1.0
+    x_dir:
+    - 1.0
+    - 0.0
+    - 0.0
+  label: S+E-W+
+  checks:
+  - validity
+  expect:
+    valid: true
+  label_rule_self_mm: 196.7
+  oracle:
+    head_min_distance_mm (capped 12): none within 12 mm
+    arm_capsule_clearance_mm (r 80):
+      jig_1: 326.4
+      part3_1: 359.4
+      part2_1: 360.6
+- id: C01
+  kind: colliding
+  description: J2 contact pose phi 30 pushed 3 mm into the tube (nozzle_tip 2.7 mm into the part)
+  tcp:
+    frame: part
+    position_mm:
+    - -110.978686
+    - 670.48754
+    - 324.297236
+    beam_dir:
+    - 0.866025
+    - -0.051063
+    - 0.497386
+    x_dir:
+    - -0.5
+    - -0.088444
+    - 0.861497
+  label: S-E+W-
+  checks:
+  - validity
+  expect:
+    valid: false
+    objects:
+    - part
+  label_rule_self_mm: 192.3
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_tip/part:
+        min_mm: 0.0
+        centre_inside: true
+      nozzle_body/part:
+        min_mm: 2.0
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80): none within 85 mm
+- id: C02
+  kind: colliding
+  description: tcp 10 mm inside the jig (highest inside point of the jig mesh on a 10 mm grid, minus 10 mm), beam down
+  tcp:
+    frame: world
+    position_mm:
+    - -160.0
+    - -495.0
+    - 80.0
+    beam_dir:
+    - 0.0
+    - 0.0
+    - -1.0
+    x_dir:
+    - 1.0
+    - 0.0
+    - 0.0
+  label: S-E+W-
+  checks:
+  - validity
+  expect:
+    valid: false
+    objects:
+    - jig_1
+  label_rule_self_mm: 211.3
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_body/jig_1:
+        min_mm: 0.0
+        centre_inside: false
+      nozzle_tip/jig_1:
+        min_mm: 0.0
+        centre_inside: true
+      nozzle_tip/part1_1:
+        min_mm: 0.0
+        centre_inside: false
+      nozzle_tip/htpk20s5m150_a_c15_1:
+        min_mm: 0.06
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80):
+      jig_1: 326.4
+      part: 382.6
+      htpk20s5m150_a_c15_4: 384.7
+- id: C03
+  kind: colliding
+  description: tcp inside the rotating holder Part1 (on the positioner axis, x -156.7), beam down
+  tcp:
+    frame: world
+    position_mm:
+    - -156.7
+    - -475.0
+    - 75.0
+    beam_dir:
+    - 0.0
+    - 0.0
+    - -1.0
+    x_dir:
+    - 1.0
+    - 0.0
+    - 0.0
+  label: S-E+W-
+  checks:
+  - validity
+  expect:
+    valid: false
+    objects:
+    - part1_1
+  label_rule_self_mm: 211.9
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_tip/jig_1:
+        min_mm: 0.0
+        centre_inside: false
+      nozzle_body/jig_1:
+        min_mm: 0.02
+        centre_inside: false
+      nozzle_body/part1_1:
+        min_mm: 0.13
+        centre_inside: false
+      nozzle_body/htpk20s5m150_a_c15_1:
+        min_mm: 1.3
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80):
+      jig_1: 326.4
+      part: 382.6
+      htpk20s5m150_a_c15_4: 384.7
+- id: C04
+  kind: colliding
+  description: 'J2 +X side (preview frame 2) approach 40 mm out: nozzle inside the rotating holder plate Part2'
+  tcp:
+    frame: part
+    position_mm:
+    - -48.693313
+    - 669.959802
+    - 329.437717
+    beam_dir:
+    - -1.0
+    - 0.0
+    - 0.0
+    x_dir:
+    - -0.0
+    - 0.102126
+    - -0.994771
+  label: S+E+W-
+  checks:
+  - validity
+  expect:
+    valid: false
+    objects:
+    - part2_1
+  label_rule_self_mm: 144.9
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_body/part2_1:
+        min_mm: 0.17
+        centre_inside: false
+      nozzle_tip/part2_1:
+        min_mm: 0.36
+        centre_inside: true
+    arm_capsule_clearance_mm (r 80):
+      jig_1: 247.6
+      htpk20s5m150_a_c15_4: 278.0
+      timing_belts_2: 278.6
+- id: C05
+  kind: colliding
+  description: tcp inside the rotating holder Part3 (clamps the elbow end), beam down
+  tcp:
+    frame: world
+    position_mm:
+    - 42.2
+    - -486.8
+    - 189.4
+    beam_dir:
+    - 0.0
+    - 0.0
+    - -1.0
+    x_dir:
+    - 1.0
+    - 0.0
+    - 0.0
+  label: S+E-W+
+  checks:
+  - validity
+  expect:
+    valid: false
+    objects:
+    - part3_1
+  label_rule_self_mm: 201.5
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_tip/part2_1:
+        min_mm: 0.0
+        centre_inside: false
+      nozzle_body/part2_1:
+        min_mm: 0.01
+        centre_inside: false
+      nozzle_body/part3_1:
+        min_mm: 0.01
+        centre_inside: false
+      nozzle_body/part:
+        min_mm: 0.01
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80):
+      jig_1: 326.4
+      part: 382.6
+      htpk20s5m150_a_c15_4: 384.7
+- id: C06
+  kind: colliding
+  description: tcp 15 mm below the Pismo plate top (lower frame hull), beam down
+  tcp:
+    frame: world
+    position_mm:
+    - 10.8
+    - -249.6
+    - -104.0
+    beam_dir:
+    - 0.0
+    - 0.0
+    - -1.0
+    x_dir:
+    - 1.0
+    - 0.0
+    - 0.0
+  label: S-E+W+
+  checks:
+  - validity
+  expect:
+    valid: false
+    objects:
+    - c_2500001_1
+  label_rule_self_mm: 164.0
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_body/c_2500001_1:
+        min_mm: 0.28
+        centre_inside: false
+      nozzle_tip/c_2500001_1:
+        min_mm: 10.0
+        centre_inside: true
+    arm_capsule_clearance_mm (r 80):
+      jig_1: 326.4
+- id: C07
+  kind: colliding
+  description: tcp inside the positioner motor, beam down
+  tcp:
+    frame: world
+    position_mm:
+    - -263.8
+    - -475.0
+    - -54.9
+    beam_dir:
+    - 0.0
+    - 0.0
+    - -1.0
+    x_dir:
+    - 1.0
+    - 0.0
+    - 0.0
+  label: S-E+W-
+  checks:
+  - validity
+  expect:
+    valid: false
+    objects:
+    - c_60cm30x_3d_1
+  label_rule_self_mm: 216.6
+  oracle:
+    head_min_distance_mm (capped 12):
+      head_body/htpk20s5m150_a_c15_1:
+        min_mm: 0.02
+        centre_inside: false
+      head_body/jig_1:
+        min_mm: 0.2
+        centre_inside: false
+      head_body/timing_belts_1:
+        min_mm: 0.2
+        centre_inside: false
+      head_body/part1_1:
+        min_mm: 0.27
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80):
+      part: 317.4
+      jig_1: 326.4
+      part3_1: 327.3
+- id: C08
+  kind: colliding
+  description: tcp inside the rotating pulley :4 on the part axis (x 93), beam down
+  tcp:
+    frame: world
+    position_mm:
+    - 93.0
+    - -475.0
+    - 78.0
+    beam_dir:
+    - 0.0
+    - 0.0
+    - -1.0
+    x_dir:
+    - 1.0
+    - 0.0
+    - 0.0
+  label: S+E-W+
+  checks:
+  - validity
+  expect:
+    valid: false
+    objects:
+    - htpk20s5m150_a_c15_4
+  label_rule_self_mm: 207.1
+  oracle:
+    head_min_distance_mm (capped 12):
+      head_body/part2_1:
+        min_mm: 0.01
+        centre_inside: false
+      nozzle_body/htpk20s5m150_a_c15_4:
+        min_mm: 0.01
+        centre_inside: false
+      nozzle_body/timing_belts_2:
+        min_mm: 0.01
+        centre_inside: false
+      head_body/part:
+        min_mm: 0.01
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80):
+      jig_1: 326.4
+      part3_1: 376.1
+      part2_1: 379.2
+- id: C09
+  kind: colliding
+  description: 'same robot target as F10 with the positioner at 90 deg: the elbow end and holder Part3 have turned onto the
+    nozzle'
+  theta_deg: 90.0
+  tcp:
+    frame: world
+    position_mm:
+    - 33.1
+    - -601.4
+    - 63.2
+    beam_dir:
+    - 0.0
+    - 0.0
+    - -1.0
+    x_dir:
+    - 1.0
+    - 0.0
+    - 0.0
+  label: S+E-W+
+  checks:
+  - validity
+  expect:
+    valid: false
+    objects:
+    - part
+    - part3_1
+  label_rule_self_mm: 196.7
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_tip/part3_1:
+        min_mm: 0.0
+        centre_inside: false
+      nozzle_tip/part:
+        min_mm: 0.0
+        centre_inside: true
+      nozzle_body/part3_1:
+        min_mm: 0.01
+        centre_inside: false
+      nozzle_body/part:
+        min_mm: 0.03
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80):
+      jig_1: 326.4
+      part: 383.3
+      htpk20s5m150_a_c15_4: 384.7
+- id: C10
+  kind: colliding
+  description: 'arm pointing down (shoulder lift +90 deg): upper arm through the pedestal / Pismo plate (arm links, not the
+    head)'
+  joints_deg:
+  - 0.0
+  - 90.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 0.0
+  checks:
+  - validity
+  expect:
+    valid: false
+    objects:
+    - part5_1
+    - c_2500001_1
+  oracle:
+    head_min_distance_mm (capped 12): none within 12 mm
+    arm_capsule_clearance_mm (r 80):
+      c_2500001_1: -78.5
+- id: Z1
+  kind: contact_zone
+  description: 'tip 0.5 mm into a non-seam face: top of the solid tube F28, x -75 (J2 contact check), head across Y so only
+    the nozzle is near the part'
+  tcp:
+    frame: world
+    position_mm:
+    - -75.0
+    - -475.0
+    - 87.835
+    beam_dir:
+    - 0.0
+    - 0.0
+    - -1.0
+    x_dir:
+    - 0.0
+    - 1.0
+    - 0.0
+  label: S-E+W-
+  checks:
+  - validity
+  - contact
+  seam: J2
+  expect:
+    valid: false
+  label_rule_self_mm: 112.8
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_tip/part:
+        min_mm: 0.0
+        centre_inside: false
+      nozzle_body/part:
+        min_mm: 4.5
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80):
+      jig_1: 326.4
+      part: 382.6
+      htpk20s5m150_a_c15_4: 384.7
+- id: Z2
+  kind: contact_zone
+  description: 'rim into a corner wall: tcp on the elbow top (J2 n2 face F35, highest mesh vertex at x 31.5..32.5, beam =
+    -local normal) next to the wall of holder Part3; the rim (r 10) enters the wall'
+  tcp:
+    frame: world
+    position_mm:
+    - 31.622
+    - -486.931
+    - 202.599
+    beam_dir:
+    - 0.0868
+    - 0.0147
+    - -0.9961
+    x_dir:
+    - 0.0
+    - 1.0
+    - 0.0
+  label: S+E+W+
+  checks:
+  - validity
+  - contact
+  seam: J2
+  expect:
+    valid: false
+    objects:
+    - part3_1
+  label_rule_self_mm: 49.6
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_tip/part3_1:
+        min_mm: 0.02
+        centre_inside: false
+      nozzle_tip/part:
+        min_mm: 0.3
+        centre_inside: false
+      nozzle_body/part3_1:
+        min_mm: 4.02
+        centre_inside: false
+      nozzle_body/part:
+        min_mm: 5.0
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80):
+      part2_1: 148.8
+      part3_1: 148.9
+      part: 153.1
+- id: Z3
+  kind: contact_zone
+  description: 'flat tip tilted 8 deg on a flat face: Pismo plate top (z -89.0, bisection of the hull), beam tilted about
+    world X; no flat part face is reachable (end faces are inside holders)'
+  tcp:
+    frame: world
+    position_mm:
+    - 10.8
+    - -249.6
+    - -88.999995
+    beam_dir:
+    - 0.0
+    - 0.139173
+    - -0.990268
+    x_dir:
+    - 1.0
+    - 0.0
+    - 0.0
+  label: S+E-W+
+  checks:
+  - validity
+  expect:
+    valid: false
+    objects:
+    - c_2500001_1
+  label_rule_self_mm: 199.5
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_tip/c_2500001_1:
+        min_mm: 0.0
+        centre_inside: false
+      nozzle_body/c_2500001_1:
+        min_mm: 3.56
+        centre_inside: false
+      head_body/c_2500001_1:
+        min_mm: 12.0
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80):
+      jig_1: 326.4
+- id: Z4
+  kind: contact_zone
+  description: 'flat tip tilted 8 deg on the J2 seam (phi 30) about the seam tangent: the rim dips into the straight tube
+    direction (seam faces, contact check passes; F4 must catch it)'
+  tcp:
+    frame: part
+    position_mm:
+    - -113.576762
+    - 670.640729
+    - 322.805079
+    beam_dir:
+    - 0.857597
+    - 0.087879
+    - 0.506758
+    x_dir:
+    - -0.5
+    - -0.088444
+    - 0.861497
+  label: S-E+W-
+  checks:
+  - validity
+  - contact
+  seam: J2
+  expect:
+    valid: false
+    objects:
+    - part
+  label_rule_self_mm: 189.6
+  oracle:
+    head_min_distance_mm (capped 12):
+      nozzle_tip/part:
+        min_mm: 0.0
+        centre_inside: false
+      nozzle_body/part:
+        min_mm: 3.56
+        centre_inside: false
+    arm_capsule_clearance_mm (r 80): none within 85 mm

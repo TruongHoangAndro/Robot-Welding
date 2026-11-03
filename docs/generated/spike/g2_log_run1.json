@@ -1,0 +1,1620 @@
+{
+ "record": {
+  "created_by": "awm_path.gate_g2",
+  "created_at": "2026-11-03T16:49:22Z",
+  "commit": "4ef03307d6ae7ceeb30f2a7936b840241e38b47b",
+  "dirty": true,
+  "inputs": [
+   {
+    "name": "docs/generated/spike/g2_poses.yaml",
+    "sha256": "b4281e0342ff66fb842b0cabfa5140163a993882185289515267aa6b334253e9"
+   },
+   {
+    "name": "../spike_repo/cell/model/frames.yaml",
+    "sha256": "b09a3574096b5008f746462d1a8bd2d5d59e778a930580637b7006dcf17aace8"
+   },
+   {
+    "name": "../spike_repo/cell/model/scene_manifest.json",
+    "sha256": "41ec0399e82fdb65f571d2c58d6200252d43648f3a911020fcac9d2c9ecab7fe"
+   },
+   {
+    "name": "../spike_repo/jobs/564082_A/placement.json",
+    "sha256": "8cd8f2beec05a3baaed2ad2a34181cc2a620564c1eacd849931eeab52d6741a9"
+   },
+   {
+    "name": "../spike_repo/jobs/564082_A/cache/collision.stl",
+    "sha256": "3098efd6de4d4314b9bf4024cad9d27eadece49e60986b7c42c16e3c8efb21d6"
+   },
+   {
+    "name": "../spike_repo/jobs/564082_A/cache/collision_faces.json",
+    "sha256": "25b18e3ea6fdfe93fe62af01f1fc5cafbced3669018a2888510f5c8691de52a5"
+   }
+  ],
+  "scene_backend": {
+   "scene_hash": "5a849d2a5dc577d1893900699659ee309d42b0ef2c6071a62917ed3d9a15f7c9",
+   "content": {
+    "backend": "move_group/check_state_validity (cell scene v2)",
+    "group": "laser_arm",
+    "head_model": "H-BOX",
+    "robot_description_sha256": "79391356a49e203c4fec713bb8b6e75a9859577ad500cebcd34006c94ef03721",
+    "cell": {
+     "scene_sha256": "24e8f894577c1060101ffec94950ca9edf99c72b0b91bb446b9c840148cc23fc",
+     "object_ids": [
+      "c_2500001_1",
+      "jig_1",
+      "part1_1",
+      "htpk20s5m150_a_c15_1",
+      "htpk20s5m150_a_c15_2",
+      "timing_belts_1",
+      "rotary_shaft_1",
+      "c_60cm30x_3d_1",
+      "gsacl25_8_12_1",
+      "part2_1",
+      "part3_1",
+      "htpk20s5m150_a_c15_3",
+      "htpk20s5m150_a_c15_4",
+      "timing_belts_2",
+      "part5_1"
+     ]
+    },
+    "job": {
+     "scene_sha256": "2b0661aa6a2ee749759bd0d112f086f2c5be8ada577892ad5346149eb83a3f68",
+     "source": "fixture_cad",
+     "verified": false,
+     "objects": [
+      {
+       "object_id": "part",
+       "role": "part",
+       "parent_frame": "positioner_flange",
+       "mesh_sha256": "3098efd6de4d4314b9bf4024cad9d27eadece49e60986b7c42c16e3c8efb21d6",
+       "face_ids": true
+      }
+     ]
+    },
+    "f4_padding_mm": {
+     "base_link_inertia": 3.0,
+     "conduit": 3.0,
+     "forearm_link": 3.0,
+     "head_body": 3.0,
+     "head_mount": 3.0,
+     "nozzle_body": 3.0,
+     "nozzle_tip": 0.0,
+     "shoulder_link": 3.0,
+     "upper_arm_link": 3.0,
+     "wrist_1_link": 3.0,
+     "wrist_2_link": 3.0,
+     "wrist_3_link": 3.0
+    },
+    "unpadded_links": [
+     "nozzle_tip"
+    ],
+    "clearance_links": [
+     "head_body",
+     "head_mount",
+     "conduit"
+    ],
+    "clearance_method": "validity check (move_group check_state_validity) on unpadded geometry with the clearance links inflated by exactly the clearance (planning-scene padding diff); every other link padding 0; self-collision unpadded"
+   },
+   "files": {
+    "cell": {
+     "file": "../spike_repo/cell/model/scene_manifest.json",
+     "file_sha256": "41ec0399e82fdb65f571d2c58d6200252d43648f3a911020fcac9d2c9ecab7fe"
+    },
+    "placement": {
+     "file": "../spike_repo/jobs/564082_A/placement.json",
+     "file_sha256": "8cd8f2beec05a3baaed2ad2a34181cc2a620564c1eacd849931eeab52d6741a9"
+    }
+   }
+  },
+  "kinematics_backend": "ur_analytic_ik-0.1.0.post3/ur5e",
+  "head_model": "H-BOX",
+  "psi_case": "n/a (scene sanity)",
+  "contact_params": {
+   "nozzle_radius_mm": 10.0,
+   "standoff_mm": 0.3,
+   "point_tolerance_mm": 0.15,
+   "ring_spacing_mm": 2.0,
+   "ring_samples": 72,
+   "rim_samples": 360,
+   "tie_mm": 1e-06
+  },
+  "weld_clearance_mm": 5.0,
+  "launch_args": {
+   "base_xyz_mm": "0 0 0",
+   "base_quat_xyzw": "1.11022302463e-16 2.77555756156e-17 4.62223186653e-33 1",
+   "positioner_xyz_mm": "-2.00168654048 -475.002128052 74.9997976486",
+   "positioner_quat_xyzw": "0 0 0 1",
+   "positioner_axis_xyz": "1 0 0"
+  },
+  "wall_time_s": 17.92549315499491,
+  "assumptions": [
+   "part and base poses from CAD component placements, no REF_* markers (OI-23)",
+   "H-BOX head, nozzle \u00d820 x 40 mm, s_c 0.3 mm, TCP at the nozzle tip (TST-002 \u00a73.1)",
+   "contact point tolerance 0.15 mm (F9 gives no value)"
+  ]
+ },
+ "summary": {
+  "pass": false,
+  "counts": {
+   "colliding": [
+    10,
+    10
+   ],
+   "free": [
+    9,
+    10
+   ],
+   "contact_zone": [
+    4,
+    4
+   ]
+  },
+  "failing": [
+   "F06"
+  ],
+  "missing": [],
+  "required": {
+   "colliding": 10,
+   "free": 10,
+   "contact_zone": 3
+  },
+  "expected_objects_seen": [
+   13,
+   13
+  ]
+ },
+ "poses": [
+  {
+   "id": "F01",
+   "kind": "free",
+   "description": "SRDF group state home of laser_arm (beam down, high above the cell)",
+   "expect_valid": true,
+   "expect_objects": [],
+   "valid": true,
+   "passed": true,
+   "expected_object_seen": null,
+   "contacts": [],
+   "caught_by": "-",
+   "contact": null,
+   "theta_deg": 0.0,
+   "q_deg": [
+    0.0,
+    -90.0,
+    57.29578,
+    -57.29578,
+    -90.0,
+    0.0
+   ],
+   "ik": {
+    "source": "joints_deg",
+    "label": "S-E+W-"
+   },
+   "validity": true,
+   "clearance_5mm_valid": true,
+   "clearance_contacts": [],
+   "tcp_world_mm": [
+    429.724922042506,
+    133.29999999999998,
+    218.80656155682811
+   ],
+   "tcp_part_mm": [
+    329.696608582986,
+    737.2067639082281,
+    -286.7221280519999
+   ],
+   "nearest_part_face": null,
+   "time_s": {
+    "resolve": 0.000688209998770617,
+    "validity": 0.0013837779988534749,
+    "clearance": 0.15285798699915176,
+    "contact": 0.00048788099957164377
+   }
+  },
+  {
+   "id": "F02",
+   "kind": "free",
+   "description": "J2 contact pose phi 30",
+   "expect_valid": true,
+   "expect_objects": [],
+   "valid": true,
+   "passed": true,
+   "expected_object_seen": null,
+   "contacts": [],
+   "caught_by": "-",
+   "contact": {
+    "ok": true,
+    "reason": null,
+    "tcp_seam_distance_mm": 4.016901607231269e-06,
+    "tcp_nearest_other": [
+     "F30",
+     1.894035807771089e-05
+    ],
+    "offending": [],
+    "samples": 649,
+    "triangles": 1494
+   },
+   "theta_deg": 0.0,
+   "q_deg": [
+    33.994889404395025,
+    -120.67871343863874,
+    -98.37310846564243,
+    -134.32718023484102,
+    153.7130957078932,
+    -168.97777397133393
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E-W+",
+    "solutions": 8
+   },
+   "validity": true,
+   "clearance_5mm_valid": true,
+   "clearance_contacts": [],
+   "tcp_world_mm": [
+    -13.548448540480186,
+    -476.227207052,
+    152.24052664859985
+   ],
+   "tcp_part_mm": [
+    -113.57676200000019,
+    670.6407289999997,
+    322.8050790000001
+   ],
+   "nearest_part_face": {
+    "face_id": "F26",
+    "distance_mm": 4.016901607231269e-06
+   },
+   "time_s": {
+    "resolve": 0.001856846000009682,
+    "validity": 0.0012261840020073578,
+    "clearance": 0.04015404199890327,
+    "contact": 0.17309664400090696
+   }
+  },
+  {
+   "id": "F03",
+   "kind": "free",
+   "description": "J2 contact pose phi 60",
+   "expect_valid": true,
+   "expect_objects": [],
+   "valid": true,
+   "passed": true,
+   "expected_object_seen": null,
+   "contacts": [],
+   "caught_by": "-",
+   "contact": {
+    "ok": true,
+    "reason": null,
+    "tcp_seam_distance_mm": 6.657778959229771e-06,
+    "tcp_nearest_other": [
+     "F30",
+     1.86817360731034e-05
+    ],
+    "offending": [],
+    "samples": 649,
+    "triangles": 1562
+   },
+   "theta_deg": 0.0,
+   "q_deg": [
+    20.8423345588913,
+    -84.856900875393,
+    -143.77682456629452,
+    -102.54881338981524,
+    169.42712752051503,
+    -148.65648467827467
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E-W+",
+    "solutions": 8
+   },
+   "validity": true,
+   "clearance_5mm_valid": true,
+   "clearance_contacts": [],
+   "tcp_world_mm": [
+    -8.667499540480057,
+    -471.371778052,
+    152.73899964859996
+   ],
+   "tcp_part_mm": [
+    -108.69581300000006,
+    671.1392019999998,
+    317.94965000000013
+   ],
+   "nearest_part_face": {
+    "face_id": "F26",
+    "distance_mm": 6.657778959229771e-06
+   },
+   "time_s": {
+    "resolve": 0.0035689709984580986,
+    "validity": 0.001225945001351647,
+    "clearance": 0.047274183001718484,
+    "contact": 0.1954939579954953
+   }
+  },
+  {
+   "id": "F04",
+   "kind": "free",
+   "description": "J2 contact pose phi 0",
+   "expect_valid": true,
+   "expect_objects": [],
+   "valid": true,
+   "passed": true,
+   "expected_object_seen": null,
+   "contacts": [],
+   "caught_by": "-",
+   "contact": {
+    "ok": true,
+    "reason": null,
+    "tcp_seam_distance_mm": 1.782648449669406e-06,
+    "tcp_nearest_other": [
+     "F30",
+     2.4418567964191905e-05
+    ],
+    "offending": [],
+    "samples": 649,
+    "triangles": 1466
+   },
+   "theta_deg": 0.0,
+   "q_deg": [
+    49.024781569932415,
+    -152.72099081014372,
+    -42.96362130859794,
+    -164.31538788125835,
+    139.02478156993243,
+    -174.13838903605003
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E-W+",
+    "solutions": 8
+   },
+   "validity": true,
+   "clearance_5mm_valid": true,
+   "clearance_contacts": [],
+   "tcp_world_mm": [
+    -15.33499954047999,
+    -482.85984505199997,
+    151.55959964859994
+   ],
+   "tcp_part_mm": [
+    -115.36331299999999,
+    669.9598019999999,
+    329.4377170000001
+   ],
+   "nearest_part_face": {
+    "face_id": "F35",
+    "distance_mm": 1.782648449669406e-06
+   },
+   "time_s": {
+    "resolve": 0.0021963499966659583,
+    "validity": 0.001132328005041927,
+    "clearance": 0.05106904299464077,
+    "contact": 0.19449759700364666
+   }
+  },
+  {
+   "id": "F05",
+   "kind": "free",
+   "description": "J2 approach pose phi 30, tcp 40 mm out along seam Z",
+   "expect_valid": true,
+   "expect_objects": [],
+   "valid": true,
+   "passed": true,
+   "expected_object_seen": null,
+   "contacts": [],
+   "caught_by": "-",
+   "contact": null,
+   "theta_deg": 0.0,
+   "q_deg": [
+    30.296403097112805,
+    -123.56618747625255,
+    -92.97616203106512,
+    -137.5895495357,
+    150.03645926159138,
+    -169.83103369374066
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E-W+",
+    "solutions": 8
+   },
+   "validity": true,
+   "clearance_5mm_valid": true,
+   "clearance_contacts": [],
+   "tcp_world_mm": [
+    -48.18946454048022,
+    -456.33177805200006,
+    154.28305264859986
+   ],
+   "tcp_part_mm": [
+    -148.21777800000024,
+    672.6832549999998,
+    302.90965000000017
+   ],
+   "nearest_part_face": {
+    "face_id": "F26",
+    "distance_mm": 40.00000394681342
+   },
+   "time_s": {
+    "resolve": 0.002003759000217542,
+    "validity": 0.001218940997205209,
+    "clearance": 0.04327809200185584,
+    "contact": 0.0004608250019373372
+   }
+  },
+  {
+   "id": "F06",
+   "kind": "free",
+   "description": "J2 contact pose phi 45, psi 180 (conduit on the other side)",
+   "expect_valid": true,
+   "expect_objects": [],
+   "valid": false,
+   "passed": false,
+   "expected_object_seen": null,
+   "contacts": [
+    "shoulder_link<->conduit"
+   ],
+   "caught_by": "validity",
+   "contact": {
+    "ok": true,
+    "reason": null,
+    "tcp_seam_distance_mm": 7.2380947521937976e-06,
+    "tcp_nearest_other": [
+     "F30",
+     1.1364602479160033e-05
+    ],
+    "offending": [],
+    "samples": 649,
+    "triangles": 1521
+   },
+   "theta_deg": 0.0,
+   "q_deg": [
+    26.9596027643162,
+    -104.99488497385558,
+    -120.86462961813731,
+    -121.08284000003678,
+    161.3595664267836,
+    16.546425938215393
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E-W+",
+    "solutions": 8
+   },
+   "validity": false,
+   "clearance_5mm_valid": false,
+   "clearance_contacts": [
+    "shoulder_link<->conduit"
+   ],
+   "tcp_world_mm": [
+    -11.429268540479987,
+    -473.47987805199995,
+    152.5225756485999
+   ],
+   "tcp_part_mm": [
+    -111.45758199999999,
+    670.9227779999999,
+    320.05775000000006
+   ],
+   "nearest_part_face": {
+    "face_id": "F26",
+    "distance_mm": 7.2380947521937976e-06
+   },
+   "time_s": {
+    "resolve": 0.0021530200028792024,
+    "validity": 0.001519819998065941,
+    "clearance": 0.04455287400196539,
+    "contact": 0.19251329099643044
+   }
+  },
+  {
+   "id": "F07",
+   "kind": "free",
+   "description": "J2 contact pose phi 15",
+   "expect_valid": true,
+   "expect_objects": [],
+   "valid": true,
+   "passed": true,
+   "expected_object_seen": null,
+   "contacts": [],
+   "caught_by": "-",
+   "contact": {
+    "ok": true,
+    "reason": null,
+    "tcp_seam_distance_mm": 3.3898259798461178e-06,
+    "tcp_nearest_other": [
+     "F30",
+     1.884085446843332e-05
+    ],
+    "offending": [],
+    "samples": 649,
+    "triangles": 1473
+   },
+   "theta_deg": 0.0,
+   "q_deg": [
+    -161.7713353062189,
+    -44.18432916610321,
+    73.46208889437604,
+    -31.086714283446486,
+    -56.85932188064467,
+    -173.34762617047832
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S-E+W-",
+    "solutions": 8
+   },
+   "validity": true,
+   "clearance_5mm_valid": true,
+   "clearance_contacts": [],
+   "tcp_world_mm": [
+    -14.880620540479859,
+    -479.4265390519998,
+    151.9120736486004
+   ],
+   "tcp_part_mm": [
+    -114.90893399999986,
+    670.3122760000003,
+    326.0044109999999
+   ],
+   "nearest_part_face": {
+    "face_id": "F35",
+    "distance_mm": 3.3898259798461178e-06
+   },
+   "time_s": {
+    "resolve": 0.0029612250000354834,
+    "validity": 0.0009739619999891147,
+    "clearance": 0.04307183199853171,
+    "contact": 0.1727794129983522
+   }
+  },
+  {
+   "id": "F09",
+   "kind": "free",
+   "description": "J2 contact pose phi 30, positioner at 20 deg (part, holders and robot target follow the angle)",
+   "expect_valid": true,
+   "expect_objects": [],
+   "valid": true,
+   "passed": true,
+   "expected_object_seen": null,
+   "contacts": [],
+   "caught_by": "-",
+   "contact": {
+    "ok": true,
+    "reason": null,
+    "tcp_seam_distance_mm": 4.016901607231269e-06,
+    "tcp_nearest_other": [
+     "F30",
+     1.8940358184376746e-05
+    ],
+    "offending": [],
+    "samples": 649,
+    "triangles": 1494
+   },
+   "theta_deg": 20.0,
+   "q_deg": [
+    38.57596223721945,
+    -112.80976530541915,
+    -96.68810065245523,
+    -121.68807685460673,
+    153.09463392885235,
+    -131.0977973321204
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E-W+",
+    "solutions": 8
+   },
+   "validity": true,
+   "clearance_5mm_valid": true,
+   "clearance_contacts": [],
+   "tcp_world_mm": [
+    -13.548448540480242,
+    -502.5712109513389,
+    147.1633390188585
+   ],
+   "tcp_part_mm": [
+    -113.57676200000024,
+    670.6407289999996,
+    322.8050790000002
+   ],
+   "nearest_part_face": {
+    "face_id": "F26",
+    "distance_mm": 4.016901607231269e-06
+   },
+   "time_s": {
+    "resolve": 0.0035040770017076284,
+    "validity": 1.946443991997512,
+    "clearance": 0.04931017500348389,
+    "contact": 0.18429408699739724
+   }
+  },
+  {
+   "id": "F08",
+   "kind": "free",
+   "description": "tcp 150 mm above the J2 centre, beam down",
+   "expect_valid": true,
+   "expect_objects": [],
+   "valid": true,
+   "passed": true,
+   "expected_object_seen": null,
+   "contacts": [],
+   "caught_by": "-",
+   "contact": null,
+   "theta_deg": 0.0,
+   "q_deg": [
+    105.78794614474577,
+    -125.70258834865696,
+    18.44100616022453,
+    -162.73841781156753,
+    90.0,
+    -164.21205385525423
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E+W+",
+    "solutions": 4
+   },
+   "validity": true,
+   "clearance_5mm_valid": true,
+   "clearance_contacts": [],
+   "tcp_world_mm": [
+    -2.000000000000105,
+    -482.859846,
+    301.55959900000005
+   ],
+   "tcp_part_mm": [
+    -102.0283134595201,
+    819.9598013514,
+    329.4377179480001
+   ],
+   "nearest_part_face": null,
+   "time_s": {
+    "resolve": 0.00219493899930967,
+    "validity": 1.9462206039970624,
+    "clearance": 0.028490624004916754,
+    "contact": 0.00032485999690834433
+   }
+  },
+  {
+   "id": "F10",
+   "kind": "free",
+   "description": "beam down in free space in front of the jig (y -601); twin of C09 at positioner 0 deg",
+   "expect_valid": true,
+   "expect_objects": [],
+   "valid": true,
+   "passed": true,
+   "expected_object_seen": null,
+   "contacts": [],
+   "caught_by": "-",
+   "contact": null,
+   "theta_deg": 0.0,
+   "q_deg": [
+    105.93653434824836,
+    -166.93379361052718,
+    66.10599387754202,
+    -169.1722002670148,
+    90.0,
+    -164.06346565175164
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E+W+",
+    "solutions": 4
+   },
+   "validity": true,
+   "clearance_5mm_valid": true,
+   "clearance_contacts": [],
+   "tcp_world_mm": [
+    33.10000000000002,
+    -601.4000000000003,
+    63.200000000000024
+   ],
+   "tcp_part_mm": [
+    -66.92831345951998,
+    581.6002023514,
+    447.97787194800037
+   ],
+   "nearest_part_face": null,
+   "time_s": {
+    "resolve": 0.00209164999978384,
+    "validity": 0.0010224930010735989,
+    "clearance": 0.0413776709974627,
+    "contact": 0.0004395990035845898
+   }
+  },
+  {
+   "id": "C01",
+   "kind": "colliding",
+   "description": "J2 contact pose phi 30 pushed 3 mm into the tube (nozzle_tip 2.7 mm into the part)",
+   "expect_valid": false,
+   "expect_objects": [
+    "part"
+   ],
+   "valid": false,
+   "passed": true,
+   "expected_object_seen": true,
+   "contacts": [
+    "part<->nozzle_body",
+    "part<->nozzle_tip"
+   ],
+   "caught_by": "validity",
+   "contact": null,
+   "theta_deg": 0.0,
+   "q_deg": [
+    34.28497654632698,
+    -120.47037517743854,
+    -98.76096567760197,
+    -134.07916460366596,
+    154.00122815103688,
+    -168.9014716607688
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E-W+",
+    "solutions": 8
+   },
+   "validity": false,
+   "clearance_5mm_valid": false,
+   "clearance_contacts": [
+    "part<->nozzle_tip"
+   ],
+   "tcp_world_mm": [
+    -10.950372540479966,
+    -477.7193640519999,
+    152.08733764859986
+   ],
+   "tcp_part_mm": [
+    -110.97868599999997,
+    670.4875399999997,
+    324.297236
+   ],
+   "nearest_part_face": {
+    "face_id": "F33",
+    "distance_mm": 0.12994850072149677
+   },
+   "time_s": {
+    "resolve": 0.0022521569990203716,
+    "validity": 0.0017593270022189245,
+    "clearance": 0.026519368999288417,
+    "contact": 0.00030233299912652
+   }
+  },
+  {
+   "id": "C02",
+   "kind": "colliding",
+   "description": "tcp 10 mm inside the jig (highest inside point of the jig mesh on a 10 mm grid, minus 10 mm), beam down",
+   "expect_valid": false,
+   "expect_objects": [
+    "jig_1"
+   ],
+   "valid": false,
+   "passed": true,
+   "expected_object_seen": true,
+   "contacts": [
+    "htpk20s5m150_a_c15_1<->nozzle_body",
+    "htpk20s5m150_a_c15_1<->nozzle_tip",
+    "jig_1<->nozzle_body",
+    "jig_1<->nozzle_tip",
+    "part1_1<->nozzle_body",
+    "part1_1<->nozzle_tip",
+    "timing_belts_1<->nozzle_body"
+   ],
+   "caught_by": "validity",
+   "contact": null,
+   "theta_deg": 0.0,
+   "q_deg": [
+    86.9345383745349,
+    -165.55862098782075,
+    76.7892755050262,
+    178.76934548279468,
+    90.00000000000001,
+    176.93453837453492
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E+W+",
+    "solutions": 8
+   },
+   "validity": false,
+   "clearance_5mm_valid": false,
+   "clearance_contacts": [
+    "htpk20s5m150_a_c15_1<->nozzle_tip",
+    "jig_1<->nozzle_body",
+    "jig_1<->nozzle_tip",
+    "part1_1<->nozzle_tip"
+   ],
+   "tcp_world_mm": [
+    -160.0,
+    -495.0000000000006,
+    80.00000000000036
+   ],
+   "tcp_part_mm": [
+    -260.02831345952,
+    598.4002023514003,
+    341.5778719480007
+   ],
+   "nearest_part_face": {
+    "face_id": "F15",
+    "distance_mm": 26.270199993694412
+   },
+   "time_s": {
+    "resolve": 0.00246562399843242,
+    "validity": 0.0015736260029370897,
+    "clearance": 0.024931963998824358,
+    "contact": 0.0004270170029485598
+   }
+  },
+  {
+   "id": "C03",
+   "kind": "colliding",
+   "description": "tcp inside the rotating holder Part1 (on the positioner axis, x -156.7), beam down",
+   "expect_valid": false,
+   "expect_objects": [
+    "part1_1"
+   ],
+   "valid": false,
+   "passed": true,
+   "expected_object_seen": true,
+   "contacts": [
+    "forearm_link<->head_body",
+    "htpk20s5m150_a_c15_1<->nozzle_body",
+    "jig_1<->nozzle_body",
+    "jig_1<->nozzle_tip",
+    "part1_1<->nozzle_body",
+    "upper_arm_link<->head_body"
+   ],
+   "caught_by": "validity",
+   "contact": null,
+   "theta_deg": 0.0,
+   "q_deg": [
+    87.19889695450284,
+    -166.1048003217373,
+    80.5170515019807,
+    175.58774881975668,
+    90.00000000000001,
+    177.19889695450283
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E+W+",
+    "solutions": 8
+   },
+   "validity": false,
+   "clearance_5mm_valid": false,
+   "clearance_contacts": [
+    "forearm_link<->head_body",
+    "jig_1<->nozzle_body",
+    "jig_1<->nozzle_tip",
+    "part1_1<->nozzle_body",
+    "upper_arm_link<->head_body"
+   ],
+   "tcp_world_mm": [
+    -156.69999999999985,
+    -475.0000000000009,
+    74.9999999999999
+   ],
+   "tcp_part_mm": [
+    -256.7283134595199,
+    593.4002023513998,
+    321.57787194800096
+   ],
+   "nearest_part_face": {
+    "face_id": "F12",
+    "distance_mm": 23.64104665861187
+   },
+   "time_s": {
+    "resolve": 0.0029095089994370937,
+    "validity": 0.0018963249967782758,
+    "clearance": 0.02304516200092621,
+    "contact": 0.00029299900052137673
+   }
+  },
+  {
+   "id": "C04",
+   "kind": "colliding",
+   "description": "J2 +X side (preview frame 2) approach 40 mm out: nozzle inside the rotating holder plate Part2",
+   "expect_valid": false,
+   "expect_objects": [
+    "part2_1"
+   ],
+   "valid": false,
+   "passed": true,
+   "expected_object_seen": true,
+   "contacts": [
+    "forearm_link<->conduit",
+    "part2_1<->nozzle_body",
+    "part2_1<->nozzle_tip"
+   ],
+   "caught_by": "validity",
+   "contact": null,
+   "theta_deg": 0.0,
+   "q_deg": [
+    152.26557374269382,
+    171.98511975548155,
+    30.187793003684476,
+    157.82708724083395,
+    62.26557374269381,
+    174.13838903605003
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E+W+",
+    "solutions": 8
+   },
+   "validity": false,
+   "clearance_5mm_valid": false,
+   "clearance_contacts": [
+    "forearm_link<->conduit",
+    "part2_1<->nozzle_body",
+    "part2_1<->nozzle_tip"
+   ],
+   "tcp_world_mm": [
+    51.33500045951974,
+    -482.859845052,
+    151.55959964860043
+   ],
+   "tcp_part_mm": [
+    -48.693313000000266,
+    669.9598020000003,
+    329.43771700000013
+   ],
+   "nearest_part_face": {
+    "face_id": "F34",
+    "distance_mm": 29.075909760201622
+   },
+   "time_s": {
+    "resolve": 0.003744005000044126,
+    "validity": 0.001330578001216054,
+    "clearance": 0.02442823200544808,
+    "contact": 0.0002834569968399592
+   }
+  },
+  {
+   "id": "C05",
+   "kind": "colliding",
+   "description": "tcp inside the rotating holder Part3 (clamps the elbow end), beam down",
+   "expect_valid": false,
+   "expect_objects": [
+    "part3_1"
+   ],
+   "valid": false,
+   "passed": true,
+   "expected_object_seen": true,
+   "contacts": [
+    "part2_1<->nozzle_body",
+    "part2_1<->nozzle_tip",
+    "part3_1<->nozzle_body",
+    "part<->nozzle_body"
+   ],
+   "caught_by": "validity",
+   "contact": null,
+   "theta_deg": 0.0,
+   "q_deg": [
+    110.78580928138899,
+    -149.56001263298626,
+    58.979512861017604,
+    -179.4195002280313,
+    90.0,
+    -159.214190718611
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E+W+",
+    "solutions": 4
+   },
+   "validity": false,
+   "clearance_5mm_valid": false,
+   "clearance_contacts": [
+    "part2_1<->nozzle_body",
+    "part2_1<->nozzle_tip",
+    "part3_1<->nozzle_body",
+    "part<->nozzle_body"
+   ],
+   "tcp_world_mm": [
+    42.19999999999985,
+    -486.7999999999999,
+    189.40000000000038
+   ],
+   "tcp_part_mm": [
+    -57.82831345952016,
+    707.8002023514002,
+    333.377871948
+   ],
+   "nearest_part_face": {
+    "face_id": "F32",
+    "distance_mm": 12.026636455498755
+   },
+   "time_s": {
+    "resolve": 0.0024984320043586195,
+    "validity": 0.0014039099987712689,
+    "clearance": 0.04339617300138343,
+    "contact": 0.0004432659989106469
+   }
+  },
+  {
+   "id": "C06",
+   "kind": "colliding",
+   "description": "tcp 15 mm below the Pismo plate top (lower frame hull), beam down",
+   "expect_valid": false,
+   "expect_objects": [
+    "c_2500001_1"
+   ],
+   "valid": false,
+   "passed": true,
+   "expected_object_seen": true,
+   "contacts": [
+    "c_2500001_1<->nozzle_body",
+    "forearm_link<->conduit",
+    "forearm_link<->head_body",
+    "upper_arm_link<->head_body"
+   ],
+   "caught_by": "validity",
+   "contact": null,
+   "theta_deg": 0.0,
+   "q_deg": [
+    124.72358403031349,
+    -170.4322124038006,
+    132.06115072639278,
+    128.37106167740782,
+    90.0,
+    -145.27641596968652
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E+W+",
+    "solutions": 8
+   },
+   "validity": false,
+   "clearance_5mm_valid": false,
+   "clearance_contacts": [
+    "c_2500001_1<->nozzle_body",
+    "forearm_link<->conduit",
+    "forearm_link<->head_body",
+    "upper_arm_link<->head_body"
+   ],
+   "tcp_world_mm": [
+    10.799999999999864,
+    -249.59999999999985,
+    -104.00000000000006
+   ],
+   "tcp_part_mm": [
+    -89.22831345952014,
+    414.4002023513999,
+    96.17787194799988
+   ],
+   "nearest_part_face": null,
+   "time_s": {
+    "resolve": 0.004074360003869515,
+    "validity": 0.001996259998122696,
+    "clearance": 0.03936662300111493,
+    "contact": 0.0003088189987465739
+   }
+  },
+  {
+   "id": "C07",
+   "kind": "colliding",
+   "description": "tcp inside the positioner motor, beam down",
+   "expect_valid": false,
+   "expect_objects": [
+    "c_60cm30x_3d_1"
+   ],
+   "valid": false,
+   "passed": true,
+   "expected_object_seen": true,
+   "contacts": [
+    "c_60cm30x_3d_1<->nozzle_body",
+    "htpk20s5m150_a_c15_1<->head_body",
+    "jig_1<->head_body",
+    "part1_1<->head_body",
+    "timing_belts_1<->head_body"
+   ],
+   "caught_by": "validity",
+   "contact": null,
+   "theta_deg": 0.0,
+   "q_deg": [
+    75.15525874871607,
+    176.088938363457,
+    93.46961931397308,
+    -179.55855767743006,
+    90.00000000000001,
+    165.15525874871608
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E+W+",
+    "solutions": 8
+   },
+   "validity": false,
+   "clearance_5mm_valid": false,
+   "clearance_contacts": [
+    "c_60cm30x_3d_1<->nozzle_body",
+    "htpk20s5m150_a_c15_1<->head_body",
+    "jig_1<->head_body",
+    "part1_1<->head_body",
+    "timing_belts_1<->head_body"
+   ],
+   "tcp_world_mm": [
+    -263.8000000000002,
+    -475.00000000000034,
+    -54.90000000000007
+   ],
+   "tcp_part_mm": [
+    -363.8283134595202,
+    463.5002023513998,
+    321.5778719480004
+   ],
+   "nearest_part_face": null,
+   "time_s": {
+    "resolve": 0.0018159219980589114,
+    "validity": 0.0017858999999589287,
+    "clearance": 0.05153675700421445,
+    "contact": 0.000492330000270158
+   }
+  },
+  {
+   "id": "C08",
+   "kind": "colliding",
+   "description": "tcp inside the rotating pulley :4 on the part axis (x 93), beam down",
+   "expect_valid": false,
+   "expect_objects": [
+    "htpk20s5m150_a_c15_4"
+   ],
+   "valid": false,
+   "passed": true,
+   "expected_object_seen": true,
+   "contacts": [
+    "htpk20s5m150_a_c15_4<->nozzle_body",
+    "jig_1<->nozzle_body",
+    "part2_1<->head_body",
+    "part3_1<->head_body",
+    "part<->head_body",
+    "timing_belts_2<->nozzle_body",
+    "timing_belts_2<->nozzle_tip",
+    "upper_arm_link<->head_body"
+   ],
+   "caught_by": "validity",
+   "contact": null,
+   "theta_deg": 0.0,
+   "q_deg": [
+    117.06378950387894,
+    -165.47579253447591,
+    82.18438171044505,
+    173.29141082403086,
+    90.0,
+    -152.93621049612108
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E+W+",
+    "solutions": 8
+   },
+   "validity": false,
+   "clearance_5mm_valid": false,
+   "clearance_contacts": [
+    "htpk20s5m150_a_c15_4<->nozzle_body",
+    "part2_1<->head_body",
+    "part3_1<->head_body",
+    "part<->head_body",
+    "timing_belts_2<->nozzle_body",
+    "timing_belts_2<->nozzle_tip",
+    "upper_arm_link<->head_body"
+   ],
+   "tcp_world_mm": [
+    92.99999999999969,
+    -475.0,
+    78.0
+   ],
+   "tcp_part_mm": [
+    -7.028313459520319,
+    596.4002023513999,
+    321.57787194800005
+   ],
+   "nearest_part_face": null,
+   "time_s": {
+    "resolve": 0.0026687759964261204,
+    "validity": 0.0021488679994945414,
+    "clearance": 0.05082554100226844,
+    "contact": 0.0003074830019613728
+   }
+  },
+  {
+   "id": "C09",
+   "kind": "colliding",
+   "description": "same robot target as F10 with the positioner at 90 deg: the elbow end and holder Part3 have turned onto the nozzle",
+   "expect_valid": false,
+   "expect_objects": [
+    "part",
+    "part3_1"
+   ],
+   "valid": false,
+   "passed": true,
+   "expected_object_seen": true,
+   "contacts": [
+    "part3_1<->nozzle_body",
+    "part3_1<->nozzle_tip",
+    "part<->nozzle_body",
+    "part<->nozzle_tip"
+   ],
+   "caught_by": "validity",
+   "contact": null,
+   "theta_deg": 90.0,
+   "q_deg": [
+    105.93653434824836,
+    -166.93379361052718,
+    66.10599387754202,
+    -169.1722002670148,
+    90.0,
+    -164.06346565175164
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E+W+",
+    "solutions": 4
+   },
+   "validity": false,
+   "clearance_5mm_valid": false,
+   "clearance_contacts": [
+    "part3_1<->nozzle_body",
+    "part3_1<->nozzle_tip",
+    "part<->nozzle_body",
+    "part<->nozzle_tip"
+   ],
+   "tcp_world_mm": [
+    33.10000000000002,
+    -601.4000000000003,
+    63.200000000000024
+   ],
+   "tcp_part_mm": [
+    -66.92831345951998,
+    719.7978719480002,
+    333.3797976486001
+   ],
+   "nearest_part_face": {
+    "face_id": "F35",
+    "distance_mm": 1.2943495835745689
+   },
+   "time_s": {
+    "resolve": 0.0017253979967790656,
+    "validity": 5.646302505003405,
+    "clearance": 0.023067030997481197,
+    "contact": 0.00035127899900544435
+   }
+  },
+  {
+   "id": "C10",
+   "kind": "colliding",
+   "description": "arm pointing down (shoulder lift +90 deg): upper arm through the pedestal / Pismo plate (arm links, not the head)",
+   "expect_valid": false,
+   "expect_objects": [
+    "part5_1",
+    "c_2500001_1"
+   ],
+   "valid": false,
+   "passed": true,
+   "expected_object_seen": true,
+   "contacts": [
+    "c_2500001_1<->upper_arm_link",
+    "c_2500001_1<->wrist_3_link",
+    "part5_1<->upper_arm_link",
+    "upper_arm_link<->base_link_inertia"
+   ],
+   "caught_by": "validity",
+   "contact": null,
+   "theta_deg": 0.0,
+   "q_deg": [
+    0.0,
+    90.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "ik": {
+    "source": "joints_deg",
+    "label": "S+E+W+"
+   },
+   "validity": false,
+   "clearance_5mm_valid": false,
+   "clearance_contacts": [
+    "c_2500001_1<->upper_arm_link",
+    "c_2500001_1<->wrist_3_link",
+    "part5_1<->upper_arm_link",
+    "upper_arm_link<->base_link_inertia"
+   ],
+   "tcp_world_mm": [
+    -99.69999999999997,
+    713.9000000000003,
+    -654.6999999999998
+   ],
+   "tcp_part_mm": [
+    -199.72831345952,
+    -136.29979764859968,
+    -867.3221280520004
+   ],
+   "nearest_part_face": null,
+   "time_s": {
+    "resolve": 0.0014541299970005639,
+    "validity": 5.645824578998145,
+    "clearance": 0.022354451000865083,
+    "contact": 0.00029626500327140093
+   }
+  },
+  {
+   "id": "Z1",
+   "kind": "contact_zone",
+   "description": "tip 0.5 mm into a non-seam face: top of the solid tube F28, x -75 (J2 contact check), head across Y so only the nozzle is near the part",
+   "expect_valid": false,
+   "expect_objects": [],
+   "valid": false,
+   "passed": true,
+   "expected_object_seen": null,
+   "contacts": [
+    "part<->nozzle_tip",
+    "upper_arm_link<->head_body"
+   ],
+   "caught_by": "validity, contact:contact_off_seam",
+   "contact": {
+    "ok": false,
+    "reason": "contact_off_seam",
+    "tcp_seam_distance_mm": null,
+    "tcp_nearest_other": [
+     "F28",
+     0.49712226761022943
+    ],
+    "offending": [
+     [
+      "F28",
+      0.0025741211587772777
+     ]
+    ],
+    "samples": 649,
+    "triangles": 576
+   },
+   "theta_deg": 0.0,
+   "q_deg": [
+    97.12038594792593,
+    -164.09231089725066,
+    80.88440024619274,
+    173.20791065105792,
+    90.0,
+    97.12038594792593
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E+W+",
+    "solutions": 8
+   },
+   "validity": false,
+   "clearance_5mm_valid": false,
+   "clearance_contacts": [
+    "part<->nozzle_tip",
+    "upper_arm_link<->head_body"
+   ],
+   "tcp_world_mm": [
+    -75.00000000000004,
+    -474.9999999999997,
+    87.83500000000016
+   ],
+   "tcp_part_mm": [
+    -175.02831345952006,
+    606.2352023514001,
+    321.57787194799977
+   ],
+   "nearest_part_face": {
+    "face_id": "F28",
+    "distance_mm": 0.49712226761022943
+   },
+   "time_s": {
+    "resolve": 0.0017378280026605353,
+    "validity": 0.0012145439977757633,
+    "clearance": 0.04156277400034014,
+    "contact": 0.10747260700009065
+   }
+  },
+  {
+   "id": "Z2",
+   "kind": "contact_zone",
+   "description": "rim into a corner wall: tcp on the elbow top (J2 n2 face F35, highest mesh vertex at x 31.5..32.5, beam = -local normal) next to the wall of holder Part3; the rim (r 10) enters the wall",
+   "expect_valid": false,
+   "expect_objects": [
+    "part3_1"
+   ],
+   "valid": false,
+   "passed": true,
+   "expected_object_seen": true,
+   "contacts": [
+    "forearm_link<->head_body",
+    "part3_1<->nozzle_tip",
+    "upper_arm_link<->head_body"
+   ],
+   "caught_by": "validity",
+   "contact": {
+    "ok": true,
+    "reason": null,
+    "tcp_seam_distance_mm": 0.00039488855200437215,
+    "tcp_nearest_other": [
+     "F33",
+     2.8695602027881923
+    ],
+    "offending": [],
+    "samples": 649,
+    "triangles": 1205
+   },
+   "theta_deg": 0.0,
+   "q_deg": [
+    103.4255510304647,
+    -147.86390800901654,
+    55.235717731757774,
+    -177.03502843014778,
+    95.03950275912895,
+    103.40374169452016
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E+W+",
+    "solutions": 4
+   },
+   "validity": false,
+   "clearance_5mm_valid": false,
+   "clearance_contacts": [
+    "forearm_link<->head_body",
+    "part3_1<->nozzle_tip",
+    "upper_arm_link<->head_body"
+   ],
+   "tcp_world_mm": [
+    31.62199999999999,
+    -486.9309999999998,
+    202.59900000000027
+   ],
+   "tcp_part_mm": [
+    -68.40631345952002,
+    720.9992023514002,
+    333.5088719479999
+   ],
+   "nearest_part_face": {
+    "face_id": "F35",
+    "distance_mm": 0.00039488855200437215
+   },
+   "time_s": {
+    "resolve": 0.0019087550026597455,
+    "validity": 0.0010827160003827885,
+    "clearance": 0.02095509899663739,
+    "contact": 0.13409083500300767
+   }
+  },
+  {
+   "id": "Z3",
+   "kind": "contact_zone",
+   "description": "flat tip tilted 8 deg on a flat face: Pismo plate top (z -89.0, bisection of the hull), beam tilted about world X; no flat part face is reachable (end faces are inside holders)",
+   "expect_valid": false,
+   "expect_objects": [
+    "c_2500001_1"
+   ],
+   "valid": false,
+   "passed": true,
+   "expected_object_seen": true,
+   "contacts": [
+    "c_2500001_1<->nozzle_tip",
+    "forearm_link<->conduit",
+    "forearm_link<->head_body",
+    "forearm_link<->head_mount",
+    "part2_1<->upper_arm_link",
+    "part<->upper_arm_link",
+    "upper_arm_link<->head_body"
+   ],
+   "caught_by": "validity",
+   "contact": null,
+   "theta_deg": 0.0,
+   "q_deg": [
+    115.65245223660865,
+    -178.36495975347563,
+    122.70173255242455,
+    138.4429713629646,
+    93.45413685736808,
+    -154.56554239497072
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E+W+",
+    "solutions": 8
+   },
+   "validity": false,
+   "clearance_5mm_valid": false,
+   "clearance_contacts": [
+    "c_2500001_1<->nozzle_tip",
+    "forearm_link<->conduit",
+    "forearm_link<->head_body",
+    "forearm_link<->head_mount",
+    "part2_1<->upper_arm_link",
+    "part<->upper_arm_link",
+    "upper_arm_link<->head_body"
+   ],
+   "tcp_world_mm": [
+    10.800000000000106,
+    -249.60000000000022,
+    -88.99999500000001
+   ],
+   "tcp_part_mm": [
+    -89.2283134595199,
+    429.40020735139996,
+    96.17787194800025
+   ],
+   "nearest_part_face": null,
+   "time_s": {
+    "resolve": 0.0019273439975222573,
+    "validity": 0.0031698910024715587,
+    "clearance": 0.04356705000100192,
+    "contact": 0.0004010859993286431
+   }
+  },
+  {
+   "id": "Z4",
+   "kind": "contact_zone",
+   "description": "flat tip tilted 8 deg on the J2 seam (phi 30) about the seam tangent: the rim dips into the straight tube direction (seam faces, contact check passes; F4 must catch it)",
+   "expect_valid": false,
+   "expect_objects": [
+    "part"
+   ],
+   "valid": false,
+   "passed": true,
+   "expected_object_seen": true,
+   "contacts": [
+    "part<->nozzle_tip"
+   ],
+   "caught_by": "validity",
+   "contact": {
+    "ok": true,
+    "reason": null,
+    "tcp_seam_distance_mm": 4.016901450280538e-06,
+    "tcp_nearest_other": [
+     "F30",
+     1.894035780709458e-05
+    ],
+    "offending": [],
+    "samples": 649,
+    "triangles": 1494
+   },
+   "theta_deg": 0.0,
+   "q_deg": [
+    33.80149390192653,
+    -130.74374328399202,
+    -95.98981697803315,
+    -144.7981409952473,
+    153.92209419728053,
+    174.70918191710737
+   ],
+   "ik": {
+    "source": "tcp",
+    "label": "S+E-W+",
+    "solutions": 8
+   },
+   "validity": false,
+   "clearance_5mm_valid": false,
+   "clearance_contacts": [
+    "part<->nozzle_tip"
+   ],
+   "tcp_world_mm": [
+    -13.548448540479844,
+    -476.2272070519998,
+    152.24052664860005
+   ],
+   "tcp_part_mm": [
+    -113.57676199999985,
+    670.640729,
+    322.8050789999999
+   ],
+   "nearest_part_face": {
+    "face_id": "F26",
+    "distance_mm": 4.016901450280538e-06
+   },
+   "time_s": {
+    "resolve": 0.0021134880007593893,
+    "validity": 0.0012370359982014634,
+    "clearance": 0.022382337003364228,
+    "contact": 0.18067549699480878
+   }
+  }
+ ]
+}
