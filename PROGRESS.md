@@ -19,7 +19,9 @@ Read this first after a restart. Continue from the first open task. Plan: `PLAN.
 | S2-lite read-only D20 viewer `awm_web` (web, wp3-s2-lite-viewer) | done — merged ed8fa57 on Truong's choice; review fixes R1–R5 done, rules audit PASS | 2026-11-02, `src/awm_web/README.md`; visual check by Truong pending |
 | D20 follow-ups: N1 **major** record `component` in part.json v2, export-view reads / checks it (before T2.2 uses D20 ids); edge in two joints → contract change to a list (three-plate corners); N2 test of name mapping through ShapeFix history; N3 whole-file export loses solid names; N4 private `topology._*_NAMES` used in view.py; old `occ_io.MM_TO_M` / `math.radians` → `awm_core.units` (T0.1) | open — N1 lead in T0.5 | 2026-11-02 |
 | Docker Desktop host networking enabled, awm_dev restarted: servers in awm_dev are reachable from WSL and Windows (viewer on port 5174) | done | 2026-11-02 |
-| WP-S S.3 … S.7 (state space, clearance / contact, sweep, Mode C check, records) | next | decision Fri 2026-11-06 |
+| T0.5 contract freeze (lead): v2 schemas D03 (+component, closes N1), D04, D07, D09, D10, active, D19 + J1 Mode C examples; Sim-1 OpenAPI | draft done — d718396, 50f5d75; waiting for Truong's one-hour review (Wed 2026-11-04); `awm_interfaces` v1 still to draft (needed by WP4) | `docs/generated/contracts/T0.5_contract_freeze_v2.md` |
+| WP-S S.3 (planner, `.worktrees/planner`, ws-s3-state-space) | in progress — Tasks 1–2 committed (a8f0be7, e3c1c45); resumed after the API rate limit of 2026-11-02 | plan `docs/superpowers/plans/2026-11-02-ws-s3-state-space.md` |
+| WP-S S.4 … S.7 (clearance / contact, sweep, Mode C check, records) | next | decision Fri 2026-11-06 |
 | WP0 … WP4 | not started | — |
 
 ## Rev 0.2 offline chain (2026-10-19, superseded by the table above)
