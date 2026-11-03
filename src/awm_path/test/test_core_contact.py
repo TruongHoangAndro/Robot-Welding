@@ -157,8 +157,9 @@ def test_internal_face_marginally_closer_at_the_seam_edge_is_not_off_seam() -> N
 def test_tcp_inside_a_non_seam_face_fails_off_seam() -> None:
     """TST-002 G2 contact-zone pose 1 (synthetic): tip 0.5 mm into a non-seam face."""
     mesh = _mesh([('A', _rect([-30, -30, 0], [30, 0, 0], [0, 60, 0], 30, 30)),
-                  ('N', _rect([0, -30, 0], [30, 0, 0], [0, 60, 0], 30, 30))])
-    res = contact_check(mesh, _tcp(x=15.0, z=-0.5), (('A',), ('A',)), ContactParams())
+                  ('N', _rect([0, -30, 0], [30, 0, 0], [0, 60, 0], 30, 30)),
+                  ('B', _rect([-40, -10, 50], [10, 0, 0], [0, 10, 0], 2, 2))])   # far n2 face
+    res = contact_check(mesh, _tcp(x=15.0, z=-0.5), (('A',), ('B',)), ContactParams())
     assert not res.ok and res.reason == 'contact_off_seam'
     assert res.tcp_nearest_other[0] == 'N'
     assert res.tcp_nearest_other[1] == pytest.approx(0.5, abs=1e-9)
@@ -222,6 +223,11 @@ def test_flat_tip_tilted_on_a_seam_face_is_left_to_the_validity_check() -> None:
 def test_unknown_seam_face_is_an_error() -> None:
     with pytest.raises(ValueError, match='Z9'):
         contact_check(_plate(), _tcp(), (('A',), ('Z9',)), ContactParams())
+
+
+def test_overlapping_n1_n2_is_an_error() -> None:
+    with pytest.raises(ValueError, match='n1 and n2'):
+        contact_check(_plate(), _tcp(), (('A',), ('A', 'B')), ContactParams())
 
 
 def test_non_rigid_pose_is_an_error() -> None:

@@ -52,14 +52,14 @@ def _plate():
             x, y = -20 + i, -20 + j
             tris += [[[x, y, 0], [x + 1, y, 0], [x + 1, y + 1, 0]], [[x, y, 0], [x + 1, y + 1, 0], [x, y + 1, 0]]]
     tris = np.asarray(tris, float)
-    index = (tris[:, :, 0].mean(axis=1) > 0).astype(int)
-    return PartMesh(tris, index, ('A', 'B'))
+    cx = tris[:, :, 0].mean(axis=1)
+    return PartMesh(tris, np.where(cx < 0, 0, np.where(cx < 10, 1, 2)), ('A', 'B', 'C'))
 
 
 def _doc():
     tcp = lambda x, z=0.0: {'frame': 'part', 'position_mm': [x, 0.0, z], 'beam_dir': [0, 0, -1],  # noqa: E731
                             'x_dir': [1, 0, 0]}
-    return {'schema': 'awm_g2_poses/0.1', 'seam_faces': {'S': {'n1': ['A'], 'n2': ['A']}}, 'poses': [
+    return {'schema': 'awm_g2_poses/0.1', 'seam_faces': {'S': {'n1': ['A'], 'n2': ['B']}}, 'poses': [
         {'id': 'C1', 'kind': 'colliding', 'tcp': tcp(-35.0), 'checks': ['validity'],
          'expect': {'valid': False, 'objects': ['part']}},
         {'id': 'F1', 'kind': 'free', 'tcp': tcp(15.0, 30.0), 'checks': ['validity'], 'expect': {'valid': True}},

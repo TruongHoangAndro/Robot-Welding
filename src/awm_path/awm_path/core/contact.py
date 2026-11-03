@@ -245,6 +245,9 @@ def contact_check(part: PartMesh, part_T_tcp: np.ndarray,
     n1, n2 = (tuple(x) for x in seam_faces)
     if not n1 or not n2:
         raise ValueError('seam faces need at least one n1 and one n2 face id')
+    overlap = sorted(set(n1) & set(n2))
+    if overlap:
+        raise ValueError(f'n1 and n2 share face id(s) {overlap}: the faces of the two sides must be distinct')
     unknown = sorted((set(n1) | set(n2)) - set(part.face_ids))
     if unknown:
         raise ValueError(f'unknown seam face id(s): {unknown}')

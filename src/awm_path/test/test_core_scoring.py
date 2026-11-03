@@ -37,7 +37,8 @@ def _plate():
             x, y = -30 + i, -30 + j
             tris += [[[x, y, 0], [x + 1, y, 0], [x + 1, y + 1, 0]], [[x, y, 0], [x + 1, y + 1, 0], [x, y + 1, 0]]]
     tris = np.asarray(tris, float)
-    return PartMesh(tris, (tris[:, :, 0].mean(axis=1) > 0).astype(int), ('A', 'B'))
+    cx = tris[:, :, 0].mean(axis=1)
+    return PartMesh(tris, np.where(cx < 0, 0, np.where(cx < 10, 1, 2)), ('A', 'B', 'C'))
 
 
 def _frame(x):
@@ -57,14 +58,14 @@ def _layers():
     return [
         [_cand(0, 0, [1, 12, 0, 0, 0, 0]), _cand(0, 1, [1, 7, 0, 0, 0, 0]), _cand(0, 2, [-1, 20, 0, 0, 0, 0]),
          _cand(0, 3, [1, 3, 0, 0, 0, 0]), _cand(0, 4, None, 'no_ik_unreachable')],
-        [_cand(1, 0, [1, 12, 0, 0, 0, 0])],          # point 1 is on face B only -> contact off seam (seam = A, A)
+        [_cand(1, 0, [1, 12, 0, 0, 0, 0])],          # point 1 is on face C (not a seam face) -> contact off seam
     ]
 
 
 def test_scores_combine_validity_clearance_and_contact() -> None:
     scene = FakeScene()
-    frames = [_frame(-10.0), _frame(15.0)]
-    res = score_candidates(_layers(), frames, np.eye(4), 0.0, scene, _plate(), (('A',), ('A',)), ContactParams(),
+    frames = [_frame(-10.0), _frame(25.0)]
+    res = score_candidates(_layers(), frames, np.eye(4), 0.0, scene, _plate(), (('A',), ('B',)), ContactParams(),
                            SceneScoreParams(weld_clearance_mm=5.0, clearance_levels_mm=(5.0, 10.0)))
     s0 = res.scores[0]
     assert s0[0] == NodeScore(True, 10.0)            # F4 ok, >= 10 mm
@@ -98,8 +99,8 @@ def test_weld_clearance_must_be_a_level() -> None:
 
 def test_columns_fit_candidates_csv(tmp_path) -> None:
     layers = _layers()
-    res = score_candidates(layers, [_frame(-10.0), _frame(15.0)], np.eye(4), 0.0, FakeScene(), _plate(),
-                           (('A',), ('A',)), ContactParams(), SceneScoreParams())
+    res = score_candidates(layers, [_frame(-10.0), _frame(25.0)], np.eye(4), 0.0, FakeScene(), _plate(),
+                           (('A',), ('B',)), ContactParams(), SceneScoreParams())
     path = tmp_path / 'candidates.csv'
     write_candidates_csv(str(path), layers, res.columns)
     rows = list(csv.DictReader(path.open()))
