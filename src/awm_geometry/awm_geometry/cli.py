@@ -13,6 +13,9 @@ Commands (lengths in metres, except export-view: mm per the D20 contract):
   export-scene --step FILE --map MAP.yaml --repo DIR --job JOB [--chord-near-mm 0.1]
                                              A15 / A18 spike scene (mm): cell/model hulls + frames.yaml +
                                              scene_manifest.json; job import, D20, collision mesh, placement
+  export-cell-view --step FILE --components FILE.json --out DIR [--up-axis +Y]
+                                             S10-lite display model DIR/cell_view.glb (one node per leaf
+                                             component, file frame, mm; contract S10_lite_cell_model.md)
   inspect-assembly --step FILE --out FILE.json [--no-cylinders]
                                              A18 input: component tree of a STEP assembly (paths,
                                              names, placements 4x4 and bboxes in mm, file frame)
@@ -200,6 +203,13 @@ def cmd_export_scene(args) -> dict:
                               padding_mm=args.padding_mm, created_by=_created_by())
 
 
+def cmd_export_cell_view(args) -> dict:
+    from awm_geometry import cell_view
+
+    return cell_view.export(Path(args.step), Path(args.components), Path(args.out), args.up_axis,
+                            _created_by())
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='awm_geometry', description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -247,12 +257,19 @@ def build_parser() -> argparse.ArgumentParser:
                    help='part collision mesh chord elsewhere')
     p.add_argument('--padding-mm', type=float, default=3.0,
                    help='padding of the cell objects (D16 padding_mm)')
+    p = sub.add_parser('export-cell-view')
+    p.add_argument('--step', required=True, help='cell CAD STEP assembly')
+    p.add_argument('--components', required=True, help='cell_components.json of inspect-assembly')
+    p.add_argument('--out', required=True, help='folder for cell_view.glb')
+    p.add_argument('--up-axis', default='+Y', choices=['+X', '-X', '+Y', '-Y', '+Z', '-Z'],
+                   help='up axis of the file (recorded only; no rotation is applied)')
     return parser
 
 
 COMMANDS = {'info': cmd_info, 'import': cmd_import, 'sample': cmd_sample,
             'make-test-part': cmd_make_test_part, 'export-view': cmd_export_view,
-            'inspect-assembly': cmd_inspect_assembly, 'export-scene': cmd_export_scene}
+            'inspect-assembly': cmd_inspect_assembly, 'export-scene': cmd_export_scene,
+            'export-cell-view': cmd_export_cell_view}
 
 
 def main(argv: Optional[List[str]] = None) -> int:
