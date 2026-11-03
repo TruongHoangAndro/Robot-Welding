@@ -64,7 +64,8 @@ def circle_frames(preview: Sequence[Mapping], phi_start_deg: float, phi_end_deg:
 
 def main(argv: Optional[List[str]] = None) -> int:
     """CLI (mock hardware only): sweep + scene scores on one arc, timing record."""
-    ap = argparse.ArgumentParser(prog='scene_timing', description=__doc__,
+    ap = argparse.ArgumentParser(prog='scene_timing', description='Spike / simulation tool: starts its own sim_mock launch '
+                                 '(mock hardware only).\n\n' + __doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--repo', required=True)
     ap.add_argument('--job', required=True)

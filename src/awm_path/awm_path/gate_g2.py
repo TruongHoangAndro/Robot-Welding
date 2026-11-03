@@ -170,7 +170,8 @@ def _rel(path: Path) -> str:
 
 def main(argv: Optional[List[str]] = None) -> int:
     """CLI: launch the mock-hardware scene, run G2, write the log. Exit 0 = G2 pass."""
-    ap = argparse.ArgumentParser(prog='g2_gate', description=__doc__,
+    ap = argparse.ArgumentParser(prog='g2_gate', description='Spike / simulation tool: starts its own sim_mock launch '
+                                 '(mock hardware only).\n\n' + __doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--poses', required=True, help='G2 pose file (data, docs/generated/spike/)')
     ap.add_argument('--repo', required=True, help='repository root with cell/model and jobs/<job>')
