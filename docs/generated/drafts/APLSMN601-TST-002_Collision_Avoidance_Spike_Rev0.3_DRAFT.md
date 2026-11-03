@@ -109,7 +109,7 @@ The software agent runs the spike; Truong Hoang runs the checks.
 ### 5.1 Definitions (frozen 2026-11-02; values in D16 `cell.yaml` where marked)
 | ID | Definition | Value |
 |---|---|---|
-| F1 | Pitch | Δs ≤ min(3 mm, Δq_max / seam-frame rotation rate); ≈ 1.16 mm at r = 13.3 mm |
+| F1 | Pitch | Δs ≤ min(3 mm, Δq_max / seam-frame rotation rate); ≈ 1.16 mm at r = 13.3 mm. This is a ceiling: the planner refines the pitch until consecutive IK solutions of one label move ≤ Δq_max (S.3 measured up to 13° joint steps at 1.16 mm on r 13.3 mm, ≤ 3.3° at 0.29 mm); the pitch used is recorded per seam (CP-53) |
 | F2 | Graph node | (point, ψ, configuration label from the joint values, **unwrapped** joint vector); 2π offsets enumerated at the first layer within the joint limits |
 | F3 | Edge | same configuration label and max \|Δq\| ≤ 5° (Δq_max) on unwrapped values; closed seams: the overlap reconnects to the first-layer state |
 | F4 | Validity | Collision check with 3 mm padding on every link except `nozzle_tip` |
@@ -132,11 +132,11 @@ The software agent runs the spike; Truong Hoang runs the checks.
 |---|---|---|---|
 | C1 | Scene detects collisions correctly | G2 | Yes (entry) |
 | C2 | Seam coverage | ≥ 1 valid candidate at **100 %** of the J2 points; head body / mount / conduit clearance ≥ 5 mm (F5); contact check F9 passed | Yes |
-| C3 | Path continuity | One configuration label for the whole seam; max \|Δq\| ≤ 5° per step (F3); wrist 3 per F11 | Yes |
+| C3 | Path continuity | One configuration label for the whole seam (for J2: per arc, CP-53); max \|Δq\| ≤ 5° per step (F3); wrist 3 per F11 | Yes |
 | C4 | Approach, retract, air move | Collision-free, clearance ≥ 10 mm unpadded to part / fixture / holders | Reported |
 | C5 | Planning time | ≤ 30 s per seam on the dev PC, with the backend named | Yes (a fail → backend change, B-06, not Pivot) |
 | C6 | Robustness to placement error | C2–C4 with the part shifted ±2 mm and ±1° per axis (6 runs) | After the decision |
-| C8 | 360° coverage robot-only | % of J2 covered by one continuous path, and with 2 segments; per ψ case and head model | Reported (OI-27 input) |
+| C8 | 360° coverage robot-only | J2 is evaluated as **2 arcs** (each ≤ 180° + overlap, emission stops between them; decision 2026-11-03, CP-53): C2 / C3 per arc; % covered with 2 segments per ψ case and head model. One closed robot-only path is impossible under F3 + F11 (CP-53) and is reported as such | Yes for the 2-arc case; OI-27 input |
 | C9 | J1 Mode C | Head clearance ≥ 5 mm over 360° + overlap at one robot pose; contact check F9 | Reported |
 
 ## 6. Decision rules
