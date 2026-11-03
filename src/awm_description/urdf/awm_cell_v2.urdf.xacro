@@ -1,0 +1,109 @@
+<?xml version="1.0"?>
+<!-- APLSMN601 cell model v2 (D14, PLAN T0.3 subset for WP-S S.4): UR5e from ur_description + H-BOX LightWELD head
+     (nozzle_body / nozzle_tip, tcp_laser) + 1-axis positioner (positioner_joint). Mock hardware only.
+     The static cell (Pismo frame, table, housings) and the rotating set are NOT links: they are planning-scene
+     world objects loaded from the cell scene manifest by awm_bringup sim_mock.launch.py (see positioner.xacro).
+
+     All args are mm / degrees / unit quaternions (ADR-14) and are converted only through units.xacro.
+     Defaults are Assumptions (no REF_* markers yet, OI-23); the real values come from the A3 frames.yaml through
+     the launch arguments of the same names. The old MIG model (awm_cell.urdf.xacro) is unchanged. -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="awm_cell_v2">
+  <xacro:arg name="ur_type" default="ur5e"/>
+  <xacro:arg name="initial_positions_file" default="$(find awm_description)/config/initial_positions_v2.yaml"/>
+
+  <!-- world_T_base_link (Assumption: identity until A3 frames.yaml). -->
+  <xacro:arg name="base_xyz_mm" default="0 0 0"/>
+  <xacro:arg name="base_quat_xyzw" default="0 0 0 1"/>
+  <!-- world_T_positioner_axis and the axis in that frame (Assumption: identity pose, axis +X = CAD X axis of the
+       positioner, CP-20). Limits ±400 deg and 30 deg/s: Assumption (OI-14, OI-27). -->
+  <xacro:arg name="positioner_xyz_mm" default="0 0 0"/>
+  <xacro:arg name="positioner_quat_xyzw" default="0 0 0 1"/>
+  <xacro:arg name="positioner_axis_xyz" default="1 0 0"/>
+  <xacro:arg name="positioner_lower_deg" default="-400"/>
+  <xacro:arg name="positioner_upper_deg" default="400"/>
+  <xacro:arg name="positioner_velocity_deg_s" default="30"/>
+
+  <!-- H-BOX head (TST-002 Rev 0.3 draft §3.1). Every value: Assumption, except head_w/d/h (data-sheet envelope). -->
+  <xacro:arg name="mount_w_mm" default="100"/>          <!-- Assumption: no mount drawing -->
+  <xacro:arg name="mount_d_mm" default="100"/>          <!-- Assumption -->
+  <xacro:arg name="mount_h_mm" default="60"/>           <!-- Assumption -->
+  <xacro:arg name="head_w_mm" default="194"/>           <!-- Fact (data sheet), orientation Assumption -->
+  <xacro:arg name="head_d_mm" default="35"/>            <!-- Fact (data sheet), orientation Assumption -->
+  <xacro:arg name="head_h_mm" default="381"/>           <!-- Fact (data sheet), along the beam: Assumption -->
+  <xacro:arg name="head_axis_x_mm" default="0"/>        <!-- Assumption: beam axis at the box centre -->
+  <xacro:arg name="head_axis_y_mm" default="0"/>        <!-- Assumption -->
+  <xacro:arg name="nozzle_dia_mm" default="20"/>        <!-- Assumption until IPG data (I2) -->
+  <xacro:arg name="nozzle_len_mm" default="40"/>        <!-- Assumption until IPG data (I2) -->
+  <xacro:arg name="nozzle_tip_len_mm" default="5"/>     <!-- Assumption (TST-002 §3.1: last 5 mm) -->
+  <xacro:arg name="contact_standoff_mm" default="0.3"/> <!-- Assumption s_c (F9, D16 contact_standoff_mm) -->
+  <xacro:arg name="conduit_dia_mm" default="30"/>       <!-- Assumption -->
+  <xacro:arg name="conduit_len_mm" default="300"/>      <!-- Assumption -->
+  <xacro:arg name="conduit_x_mm" default="97"/>         <!-- Assumption: head body side face (W / 2) -->
+  <xacro:arg name="conduit_y_mm" default="0"/>          <!-- Assumption -->
+  <xacro:arg name="conduit_z_mm" default="110"/>        <!-- Assumption: 50 mm into the head body -->
+  <xacro:arg name="conduit_r_deg" default="0"/>         <!-- Assumption -->
+  <xacro:arg name="conduit_p_deg" default="90"/>        <!-- Assumption: conduit along tool0 +X -->
+  <xacro:arg name="conduit_y_deg" default="0"/>         <!-- Assumption -->
+
+  <xacro:include filename="$(find awm_description)/urdf/units.xacro"/>
+  <xacro:include filename="$(find ur_description)/urdf/ur_macro.xacro"/>
+  <xacro:include filename="$(find ur_description)/urdf/ros2_control_mock_hardware.xacro"/>
+  <xacro:include filename="$(find awm_description)/urdf/lightweld_hbox.xacro"/>
+  <xacro:include filename="$(find awm_description)/urdf/positioner.xacro"/>
+
+  <!-- "x y z" strings -> float lists; quaternion (x, y, z, w) -> URDF roll / pitch / yaw (rad). -->
+  <xacro:property name="base_xyz" value="${[float(v) for v in '$(arg base_xyz_mm)'.split()]}"/>
+  <xacro:property name="base_q" value="${[float(v) for v in '$(arg base_quat_xyzw)'.split()]}"/>
+  <xacro:property name="pos_xyz" value="${[float(v) for v in '$(arg positioner_xyz_mm)'.split()]}"/>
+  <xacro:property name="pos_q" value="${[float(v) for v in '$(arg positioner_quat_xyzw)'.split()]}"/>
+  <xacro:property name="pos_axis" value="${[float(v) for v in '$(arg positioner_axis_xyz)'.split()]}"/>
+  <xacro:macro name="awm_quat_rpy" params="q name">
+    <xacro:property name="n" value="${sqrt(q[0]**2 + q[1]**2 + q[2]**2 + q[3]**2)}"/>
+    <xacro:property name="x" value="${q[0] / n}"/>
+    <xacro:property name="y" value="${q[1] / n}"/>
+    <xacro:property name="z" value="${q[2] / n}"/>
+    <xacro:property name="w" value="${q[3] / n}"/>
+    <xacro:property name="sp" value="${max(-1.0, min(1.0, 2.0 * (w * y - z * x)))}"/>
+    <xacro:property name="${name}" scope="parent"
+                    value="${[atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y)), asin(sp),
+                              atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))]}"/>
+  </xacro:macro>
+  <xacro:awm_quat_rpy q="${base_q}" name="base_rpy"/>
+  <xacro:awm_quat_rpy q="${pos_q}" name="pos_rpy"/>
+  <xacro:property name="initial_positions_file" value="$(arg initial_positions_file)"/>
+  <xacro:property name="initial_positions" value="${xacro.load_yaml(initial_positions_file)}"/>
+
+  <link name="world"/>
+
+  <xacro:ur_robot
+    name="awm_ur"
+    tf_prefix=""
+    parent="world"
+    joint_limits_parameters_file="$(find ur_description)/config/$(arg ur_type)/joint_limits.yaml"
+    kinematics_parameters_file="$(find ur_description)/config/$(arg ur_type)/default_kinematics.yaml"
+    physical_parameters_file="$(find ur_description)/config/$(arg ur_type)/physical_parameters.yaml"
+    visual_parameters_file="$(find ur_description)/config/$(arg ur_type)/visual_parameters.yaml">
+    <origin xyz="${base_xyz[0] * m_per_mm} ${base_xyz[1] * m_per_mm} ${base_xyz[2] * m_per_mm}"
+            rpy="${base_rpy[0]} ${base_rpy[1]} ${base_rpy[2]}"/>
+  </xacro:ur_robot>
+
+  <xacro:ur_ros2_control
+    name="awm_ur"
+    tf_prefix=""
+    initial_positions="${dict((k, v) for k, v in initial_positions.items() if k != 'positioner_joint')}"/>
+
+  <xacro:awm_lightweld_hbox parent="tool0"
+    mount_w_mm="$(arg mount_w_mm)" mount_d_mm="$(arg mount_d_mm)" mount_h_mm="$(arg mount_h_mm)"
+    head_w_mm="$(arg head_w_mm)" head_d_mm="$(arg head_d_mm)" head_h_mm="$(arg head_h_mm)"
+    head_axis_x_mm="$(arg head_axis_x_mm)" head_axis_y_mm="$(arg head_axis_y_mm)"
+    nozzle_dia_mm="$(arg nozzle_dia_mm)" nozzle_len_mm="$(arg nozzle_len_mm)"
+    nozzle_tip_len_mm="$(arg nozzle_tip_len_mm)" contact_standoff_mm="$(arg contact_standoff_mm)"
+    conduit_dia_mm="$(arg conduit_dia_mm)" conduit_len_mm="$(arg conduit_len_mm)"
+    conduit_x_mm="$(arg conduit_x_mm)" conduit_y_mm="$(arg conduit_y_mm)" conduit_z_mm="$(arg conduit_z_mm)"
+    conduit_r_deg="$(arg conduit_r_deg)" conduit_p_deg="$(arg conduit_p_deg)" conduit_y_deg="$(arg conduit_y_deg)"/>
+
+  <xacro:awm_positioner parent="world" xyz_mm="${pos_xyz}" rpy_rad="${pos_rpy}" axis="${pos_axis}"
+    lower_deg="$(arg positioner_lower_deg)" upper_deg="$(arg positioner_upper_deg)"
+    velocity_deg_s="$(arg positioner_velocity_deg_s)" effort="100.0"/>
+  <xacro:awm_positioner_ros2_control initial_rad="${initial_positions['positioner_joint']}"/>
+</robot>

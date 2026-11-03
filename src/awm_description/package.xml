@@ -3,7 +3,7 @@
 <package format="3">
   <name>awm_description</name>
   <version>0.1.0</version>
-  <description>APLSMN601 D14 cell model: UR5e + MIG torch + Pismo frame + fixture (URDF/xacro, SRDF, MoveIt config).</description>
+  <description>APLSMN601 D14 cell model (URDF/xacro, SRDF, MoveIt config): v2 = UR5e + H-BOX LightWELD head + positioner joint; v1 (MIG torch + Pismo frame + fixture) kept until T0.3.</description>
   <maintainer email="truongxhoang@apillis.com">Truong Hoang</maintainer>
   <license>Proprietary</license>
 
@@ -19,6 +19,7 @@
   <test_depend>python3-pytest</test_depend>
   <test_depend>python3-yaml</test_depend>
   <test_depend>urdfdom_py</test_depend>
+  <test_depend>awm_core</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

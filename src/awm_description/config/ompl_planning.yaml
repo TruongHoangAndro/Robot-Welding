@@ -18,3 +18,13 @@ weld_arm:
   planner_configs:
     - RRTConnectkConfigDefault
   longest_valid_segment_fraction: 0.0005
+# Cell v2 groups (awm_cell_v2.srdf.xacro); ignored by the MIG model.
+laser_arm:
+  default_planner_config: RRTConnectkConfigDefault
+  planner_configs:
+    - RRTConnectkConfigDefault
+  longest_valid_segment_fraction: 0.0005
+positioner:
+  default_planner_config: RRTConnectkConfigDefault
+  planner_configs:
+    - RRTConnectkConfigDefault

@@ -1,0 +1,136 @@
+<?xml version="1.0"?>
+<!-- H-BOX model of the IPG LightWELD 1000 head on tool0 (TST-002 Rev 0.3 draft §3.1; DES-001 Rev 0.6 draft §5.3,
+     §5.4). Conservative envelope until IPG CAD / the H-CAD hulls are used (OI-15).
+
+     Layout (Assumption): everything is stacked on the beam axis = tool0 Z, beam direction +Z (out of the flange):
+       tool0 z = 0 .. mount_h          head_mount  (box)
+       .. + head_h                     head_body   (box W x D x H, beam axis at (axis_x, axis_y) in the box)
+       .. + nozzle_len - tip_len       nozzle_body (cylinder)
+       .. + tip_len - s_c              nozzle_tip  (cylinder, collision stops s_c before tcp_laser, F9)
+       tcp_laser at tool0 z = mount_h + head_h + nozzle_len, same orientation as tool0 (tool Z = beam direction).
+     The conduit (fiber + wire feed) is a capsule (cylinder + 2 spheres) leaving the head body.
+
+     Every value is a macro parameter in mm / deg with the TST-002 §3.1 value as default; the top-level xacro exposes
+     each one as an xacro arg. All are Assumptions except the head body box (data-sheet envelope, Fact). -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:include filename="$(find awm_description)/urdf/units.xacro"/>
+
+  <xacro:macro name="awm_lightweld_hbox" params="
+      parent
+      mount_w_mm:=100 mount_d_mm:=100 mount_h_mm:=60
+      head_w_mm:=194 head_d_mm:=35 head_h_mm:=381
+      head_axis_x_mm:=0 head_axis_y_mm:=0
+      nozzle_dia_mm:=20 nozzle_len_mm:=40 nozzle_tip_len_mm:=5 contact_standoff_mm:=0.3
+      conduit_dia_mm:=30 conduit_len_mm:=300
+      conduit_x_mm:=97 conduit_y_mm:=0 conduit_z_mm:=110
+      conduit_r_deg:=0 conduit_p_deg:=90 conduit_y_deg:=0">
+    <xacro:property name="mm" value="${m_per_mm}"/>
+    <!-- z positions along the beam axis (mm) -->
+    <xacro:property name="z_head" value="${float(mount_h_mm)}"/>
+    <xacro:property name="z_nozzle" value="${z_head + float(head_h_mm)}"/>
+    <xacro:property name="z_tcp" value="${z_nozzle + float(nozzle_len_mm)}"/>
+    <xacro:property name="z_tip" value="${z_tcp - float(nozzle_tip_len_mm)}"/>
+    <xacro:property name="body_len" value="${float(nozzle_len_mm) - float(nozzle_tip_len_mm)}"/>
+    <xacro:property name="tip_len" value="${float(nozzle_tip_len_mm) - float(contact_standoff_mm)}"/>
+    <xacro:property name="c_r" value="${float(conduit_dia_mm) / 2.0}"/>
+    <xacro:property name="c_cyl" value="${float(conduit_len_mm) - float(conduit_dia_mm)}"/>
+
+    <xacro:macro name="awm_box_link" params="name sx sy sz cx cy cz rgba">
+      <link name="${name}">
+        <visual>
+          <origin xyz="${cx * mm} ${cy * mm} ${cz * mm}"/>
+          <geometry><box size="${sx * mm} ${sy * mm} ${sz * mm}"/></geometry>
+          <material name="${name}_color"><color rgba="${rgba}"/></material>
+        </visual>
+        <collision>
+          <origin xyz="${cx * mm} ${cy * mm} ${cz * mm}"/>
+          <geometry><box size="${sx * mm} ${sy * mm} ${sz * mm}"/></geometry>
+        </collision>
+      </link>
+    </xacro:macro>
+
+    <xacro:macro name="awm_cyl_link" params="name radius length cz rgba">
+      <link name="${name}">
+        <visual>
+          <origin xyz="0 0 ${cz * mm}"/>
+          <geometry><cylinder radius="${radius * mm}" length="${length * mm}"/></geometry>
+          <material name="${name}_color"><color rgba="${rgba}"/></material>
+        </visual>
+        <collision>
+          <origin xyz="0 0 ${cz * mm}"/>
+          <geometry><cylinder radius="${radius * mm}" length="${length * mm}"/></geometry>
+        </collision>
+      </link>
+    </xacro:macro>
+
+    <!-- Every head link hangs on tool0 with identity orientation: link frame = tool0 frame, so all geometry
+         offsets below are in tool0 coordinates. -->
+    <xacro:macro name="awm_on_tool0" params="child">
+      <joint name="tool0_to_${child}" type="fixed">
+        <parent link="${parent}"/>
+        <child link="${child}"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </joint>
+    </xacro:macro>
+
+    <!-- Mount box (Assumption: TST-002 §3.1 gives no dimensions, "sized from the mount concept"). -->
+    <xacro:awm_box_link name="head_mount" sx="${float(mount_w_mm)}" sy="${float(mount_d_mm)}"
+                        sz="${float(mount_h_mm)}" cx="0" cy="0" cz="${float(mount_h_mm) / 2.0}"
+                        rgba="0.45 0.45 0.48 1"/>
+    <xacro:awm_on_tool0 child="head_mount"/>
+
+    <!-- Head body: data-sheet envelope 194 x 35 x 381 mm (W x D x H), H along the beam axis (orientation and beam
+         position in the box: Assumption). -->
+    <xacro:awm_box_link name="head_body" sx="${float(head_w_mm)}" sy="${float(head_d_mm)}"
+                        sz="${float(head_h_mm)}" cx="${-float(head_axis_x_mm)}" cy="${-float(head_axis_y_mm)}"
+                        cz="${z_head + float(head_h_mm) / 2.0}" rgba="0.85 0.85 0.85 1"/>
+    <xacro:awm_on_tool0 child="head_body"/>
+
+    <!-- Nozzle Ø nozzle_dia x nozzle_len at the beam exit (Assumption until IPG data, I2), split into
+         nozzle_body (padded) and nozzle_tip (last nozzle_tip_len, unpadded; contact link, F4 / F9). -->
+    <xacro:awm_cyl_link name="nozzle_body" radius="${float(nozzle_dia_mm) / 2.0}" length="${body_len}"
+                        cz="${z_nozzle + body_len / 2.0}" rgba="0.72 0.45 0.20 1"/>
+    <xacro:awm_on_tool0 child="nozzle_body"/>
+    <xacro:awm_cyl_link name="nozzle_tip" radius="${float(nozzle_dia_mm) / 2.0}" length="${tip_len}"
+                        cz="${z_tip + tip_len / 2.0}" rgba="0.80 0.20 0.20 1"/>
+    <xacro:awm_on_tool0 child="nozzle_tip"/>
+
+    <!-- Conduit capsule (fiber + wire feed), Assumption: starts at (conduit_x, conduit_y, conduit_z) in tool0 and
+         runs along the local +Z of the rotation (conduit_r, conduit_p, conduit_y); default = along tool0 +X, out of
+         the head body side face. -->
+    <link name="conduit">
+      <visual>
+        <origin xyz="0 0 ${(c_r + c_cyl / 2.0) * mm}"/>
+        <geometry><cylinder radius="${c_r * mm}" length="${c_cyl * mm}"/></geometry>
+        <material name="conduit_color"><color rgba="0.10 0.10 0.10 1"/></material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${(c_r + c_cyl / 2.0) * mm}"/>
+        <geometry><cylinder radius="${c_r * mm}" length="${c_cyl * mm}"/></geometry>
+      </collision>
+      <collision>
+        <origin xyz="0 0 ${c_r * mm}"/>
+        <geometry><sphere radius="${c_r * mm}"/></geometry>
+      </collision>
+      <collision>
+        <origin xyz="0 0 ${(c_r + c_cyl) * mm}"/>
+        <geometry><sphere radius="${c_r * mm}"/></geometry>
+      </collision>
+    </link>
+    <joint name="tool0_to_conduit" type="fixed">
+      <parent link="${parent}"/>
+      <child link="conduit"/>
+      <origin xyz="${float(conduit_x_mm) * mm} ${float(conduit_y_mm) * mm} ${float(conduit_z_mm) * mm}"
+              rpy="${float(conduit_r_deg) * rad_per_deg} ${float(conduit_p_deg) * rad_per_deg} ${float(conduit_y_deg) * rad_per_deg}"/>
+    </joint>
+
+    <!-- tcp_laser: on the beam axis at the nozzle end = contact point on the seam (DES-001 §5.3, Assumption until
+         IPG data, OI-2). Tool Z = beam direction. -->
+    <link name="tcp_laser"/>
+    <joint name="tool0_to_tcp_laser" type="fixed">
+      <parent link="${parent}"/>
+      <child link="tcp_laser"/>
+      <origin xyz="0 0 ${z_tcp * mm}" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+</robot>
