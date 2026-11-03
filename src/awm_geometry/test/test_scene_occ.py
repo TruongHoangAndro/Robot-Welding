@@ -217,7 +217,7 @@ def test_ambiguous_and_stale_map_entries_fail(tmp_path, occ, caplog):
     assert code == 1 and 'SHA-256' in caplog.text
 
 
-def test_object_ids_are_sanitised():
+def test_object_ids_are_sanitised(occ):
     from awm_geometry.scene import object_id
 
     assert object_id('HTPK20S5M150-A-C15:1') == 'htpk20s5m150_a_c15_1'
