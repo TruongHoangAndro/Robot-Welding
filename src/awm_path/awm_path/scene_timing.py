@@ -1,8 +1,7 @@
 """C5 timing of the scene checks per candidate state (WP-S S.4 C5; TST-002 Rev 0.3 draft §5.3 C5).
 
-    ros2 run awm_path scene_timing --repo <spike_repo> --job <job> --joint JE4 --n1 F26 --n2 F35 \
-        --arc-start-deg -90 --arc-end-deg 90 --out-json docs/generated/spike/s4_c5_timing.json \
-        --out-csv <spike_repo>/jobs/<job>/s4_candidates_sample.csv
+    ros2 run awm_path scene_timing --repo <repo> --job <job> --joint <joint_edge_id> --n1 <faces> --n2 <faces> \
+        --arc-start-deg <deg> --arc-end-deg <deg> --out-json <timing.json> --out-csv <candidates.csv>
 
 Starts ``sim_mock.launch.py`` headless (mock hardware only) with the export-scene frames and cell manifest, builds
 seam frames on the circle through the D20 preview frames of one joint edge (``topology.json``; an approximation of
@@ -164,7 +163,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     }
     Path(args.out_json).write_text(json.dumps(record, indent=1, allow_nan=False) + '\n')
     print(f'{n} points, {t["states_checked"]} states: validity {t["validity_s"]:.2f} s, clearance '
-          f'{t["clearance_s"]:.2f} s, contact {t["contact_s"]:.2f} s, per state {1000 * t["per_state_s"]:.2f} ms, '
+          f'{t["clearance_s"]:.2f} s, contact {t["contact_s"]:.2f} s, per state {t["per_state_s"]:.5f} s, '
           f'sweep {t_sweep:.2f} s; points with >= 1 valid node: {sum(v > 0 for v in per_point_valid)}/{n}')
     return 0
 
