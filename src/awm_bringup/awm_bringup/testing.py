@@ -1,4 +1,4 @@
-"""Test helper: run ``sim.launch.py headless:=true`` in its own ROS domain.
+"""Test helper: run a headless simulation launch (default ``sim.launch.py``) in its own ROS domain.
 
 Each SimLaunch picks a private ROS_DOMAIN_ID (and sets it in this process before rclpy.init), so
 packages tested in parallel by ``colcon test`` never see each other's move_group.
@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Dict, Iterable, Optional
 
 DOMAIN_RANGE = (100, 199)
 
@@ -21,7 +21,10 @@ DOMAIN_RANGE = (100, 199)
 class SimLaunch:
     """Context manager around the headless simulation launch (mock hardware only)."""
 
-    def __init__(self, log_dir: Optional[Path] = None, domain_id: Optional[int] = None) -> None:
+    def __init__(self, log_dir: Optional[Path] = None, domain_id: Optional[int] = None,
+                 launch_file: str = 'sim.launch.py', launch_args: Optional[Dict[str, str]] = None) -> None:
+        self.launch_file = launch_file
+        self.launch_args = dict(launch_args or {})
         self.domain_id = domain_id if domain_id is not None else random.randint(*DOMAIN_RANGE)
         self.log_dir = Path(log_dir) if log_dir else Path(tempfile.mkdtemp(prefix='awm_sim_'))
         self.log_path = self.log_dir / f'sim_domain{self.domain_id}.log'
@@ -34,7 +37,8 @@ class SimLaunch:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         log = open(self.log_path, 'w')
         self.proc = subprocess.Popen(
-            ['ros2', 'launch', 'awm_bringup', 'sim.launch.py', 'headless:=true'],
+            ['ros2', 'launch', 'awm_bringup', self.launch_file, 'headless:=true']
+            + [f'{k}:={v}' for k, v in self.launch_args.items()],
             stdout=log, stderr=subprocess.STDOUT, env=dict(os.environ), start_new_session=True)
         return self
 

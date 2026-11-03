@@ -1,0 +1,10 @@
+# Default cell scene manifest of sim_mock.launch.py (format: awm_bringup/cell_scene.py), mm / unit quaternion.
+# Assumption: placeholder until the A3 export-scene manifest (cell/model/, OI-23) is passed as cell_manifest:=<file>.
+# Only the Pismo frame as a box (values of the v1 nominal model, cell_nominal.yaml: 1200 x 800 x 800 mm, top
+# surface = base_link plane, top centre 250 mm in front of the base). No rotating set.
+objects:
+  - object_id: pismo_frame
+    role: cell_static
+    parent_frame: world
+    pose_mm: {position_mm: [250.0, 0.0, -400.0], quat_xyzw: [0.0, 0.0, 0.0, 1.0]}
+    box_mm: [1200.0, 800.0, 800.0]
