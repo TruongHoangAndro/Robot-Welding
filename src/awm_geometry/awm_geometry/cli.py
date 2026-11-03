@@ -10,6 +10,9 @@ Commands (lengths in metres, except export-view: mm per the D20 contract):
   export-view --step FILE [--job DIR] [--component NAME] [--up-axis +Y] --out DIR
                                              A13 D20 view model in mm: DIR/view.glb + DIR/topology.json
                                              (contract docs/generated/contracts/D20_view_model.md)
+  inspect-assembly --step FILE --out FILE.json [--no-cylinders]
+                                             A18 input: component tree of a STEP assembly (paths,
+                                             names, placements 4x4 and bboxes in mm, file frame)
 
 Logs go to stderr; a one-line JSON summary goes to stdout.
 """
@@ -25,6 +28,8 @@ import shutil
 import sys
 from pathlib import Path
 from typing import List, Optional
+
+import numpy as np
 
 import awm_geometry
 from awm_core import jsonio
@@ -148,6 +153,28 @@ def cmd_export_view(args) -> dict:
                        _created_by(), job)
 
 
+def cmd_inspect_assembly(args) -> dict:
+    from awm_geometry import assembly
+
+    step = Path(args.step)
+    LOG.info('A18 reading assembly %s', step)
+    components, unit = assembly.component_tree(step, cylinders=not args.no_cylinders)
+    scaled = [c['index'] for c in components
+              if abs(abs(np.linalg.det(np.asarray(c['local_placement_mm'])[:3, :3])) - 1.0) > 1e-9]
+    if scaled:
+        LOG.warning('%d placement(s) are not rigid (scale != 1): %s', len(scaled), scaled[:10])
+    doc = {'created_by': _created_by(), 'created_at': jsonio.utc_now_iso(),
+           'source': {'file': step.name, 'sha256': sha256_file(step)},
+           'unit_source': unit, 'units': {'length': 'mm'}, 'frame': 'file',
+           'components': components}
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(doc, indent=1) + '\n')
+    roots = [c for c in components if c['parent'] is None]
+    return {'out': str(out), 'components': len(components),
+            'solids': sum(c['solids'] for c in roots), 'unit_source': unit}
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='awm_geometry', description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -179,11 +206,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--up-axis', default='+Z', choices=['+X', '-X', '+Y', '-Y', '+Z', '-Z'],
                    help='up axis of the source file (recorded only; no rotation is applied)')
     p.add_argument('--out', required=True)
+    p = sub.add_parser('inspect-assembly')
+    p.add_argument('--step', required=True)
+    p.add_argument('--out', required=True)
+    p.add_argument('--no-cylinders', action='store_true',
+                   help='skip the largest-cylinder axis of each leaf part')
     return parser
 
 
 COMMANDS = {'info': cmd_info, 'import': cmd_import, 'sample': cmd_sample,
-            'make-test-part': cmd_make_test_part, 'export-view': cmd_export_view}
+            'make-test-part': cmd_make_test_part, 'export-view': cmd_export_view,
+            'inspect-assembly': cmd_inspect_assembly}
 
 
 def main(argv: Optional[List[str]] = None) -> int:
