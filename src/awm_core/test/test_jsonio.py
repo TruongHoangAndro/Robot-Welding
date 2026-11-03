@@ -113,3 +113,36 @@ def test_contract_examples_validate():
     for path in examples:
         doc = json.loads(path.read_text())
         jsonio.validate(doc, path.name[:-len('.example.json')])
+
+
+def test_v2_contract_schemas_and_examples():
+    """Contract freeze T0.5: every v2 schema loads, carries the header and has a valid example."""
+    v2 = jsonio.SCHEMA_DIR / 'v2'
+    names = sorted(p.name[:-len('.schema.json')] for p in v2.glob('*.schema.json')
+                   if p.name != 'common.schema.json')
+    assert names == ['active', 'part', 'path', 'placement', 'program', 'release', 'seams']
+    for name in names:
+        schema = jsonio.load_schema(f'v2/{name}')
+        assert 'common.schema.json' not in json.dumps(schema), name
+        for key in ('schema_version', 'created_by', 'created_at', 'inputs'):
+            assert key in schema['required'], (name, key)
+        example = json.loads((v2 / 'examples' / f'{name}.example.json').read_text())
+        jsonio.validate(example, f'v2/{name}')
+        assert example['schema_version'].startswith('2.')
+
+
+def test_v2_refuses_v1_and_partial_records():
+    import pytest
+    v2 = jsonio.SCHEMA_DIR / 'v2' / 'examples'
+    part = json.loads((v2 / 'part.example.json').read_text())
+    part['schema_version'] = '1.0'
+    with pytest.raises(jsonio.SchemaValidationError):
+        jsonio.validate(part, 'v2/part')
+    part = json.loads((v2 / 'part.example.json').read_text())
+    del part['source']['component']
+    with pytest.raises(jsonio.SchemaValidationError):
+        jsonio.validate(part, 'v2/part')
+    path = json.loads((v2 / 'path.example.json').read_text())
+    del path['context']['git']
+    with pytest.raises(jsonio.SchemaValidationError):
+        jsonio.validate(path, 'v2/path')

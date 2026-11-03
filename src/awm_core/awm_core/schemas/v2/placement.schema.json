@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v2/placement.schema.json",
+  "title": "placement",
+  "description": "D19 placement + scene manifest v2 (A15, A17, B-07, B-12): job-owned scene objects attached to positioner_flange (or world). The planner and the browser read the same manifest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "source",
+    "verified",
+    "flange_T_part",
+    "objects",
+    "scene_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "study",
+        "fixture_cad"
+      ]
+    },
+    "verified": {
+      "type": "boolean",
+      "description": "false until REF_* markers (OI-23) and A52 / A53 exist; only simulation scope accepts false"
+    },
+    "flange_T_part": {
+      "$ref": "common.schema.json#/$defs/pose_mm"
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "object_id",
+          "role",
+          "parent_frame",
+          "pose_mm",
+          "mesh",
+          "padding_mm"
+        ],
+        "properties": {
+          "object_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "part",
+              "fixture",
+              "clamp",
+              "holder"
+            ]
+          },
+          "parent_frame": {
+            "type": "string",
+            "enum": [
+              "positioner_flange",
+              "world"
+            ]
+          },
+          "pose_mm": {
+            "$ref": "common.schema.json#/$defs/pose_mm"
+          },
+          "mesh": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "file",
+              "sha256",
+              "face_ids"
+            ],
+            "properties": {
+              "file": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha256": {
+                "$ref": "common.schema.json#/$defs/sha256"
+              },
+              "face_ids": {
+                "type": "boolean",
+                "description": "true: per-triangle face_id kept (part collision mesh)"
+              }
+            }
+          },
+          "padding_mm": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "scene_sha256": {
+      "$ref": "common.schema.json#/$defs/sha256",
+      "description": "SHA-256 of the canonical JSON of `objects` + mesh hashes"
+    }
+  }
+}

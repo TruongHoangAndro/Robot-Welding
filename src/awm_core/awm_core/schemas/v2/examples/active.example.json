@@ -1,0 +1,14 @@
+{
+  "schema_version": "2.0",
+  "created_by": "lead (hand-made contract example T0.5; format only, values not kinematically checked)",
+  "created_at": "2026-11-03T09:00:00+07:00",
+  "inputs": [
+    {
+      "name": "programs/P001/release.json",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  ],
+  "scope": "simulation",
+  "program_rev": "P001",
+  "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+}

@@ -1,0 +1,330 @@
+{
+  "schema_version": "2.0",
+  "created_by": "lead (hand-made contract example T0.5; format only, values not kinematically checked)",
+  "created_at": "2026-11-03T09:00:00+07:00",
+  "inputs": [
+    {
+      "name": "path.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "process.json",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  ],
+  "program_rev": "P001",
+  "part_no": "EXAMPLE-2TUBE",
+  "part_rev": "A",
+  "run_id": "R20261103T020000Z-a1b2c3",
+  "context": {
+    "cell_id": "APLSMN601-CELL",
+    "cell_rev": "A",
+    "d14_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "cell_config_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "calibration": {
+      "calibration_id": "CAL-NOMINAL",
+      "status": "NOMINAL",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "components": {
+        "kinematics": "1111111111111111111111111111111111111111111111111111111111111111",
+        "positioner_axis": "2222222222222222222222222222222222222222222222222222222222222222",
+        "fixture": "3333333333333333333333333333333333333333333333333333333333333333",
+        "tcp/round": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "robot_serial": "SIM",
+    "kinematics_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "controller_calibration_sha256": null,
+    "ur_safety_checksum": null,
+    "ur_installation": null,
+    "git": {
+      "commit": "68fa836",
+      "dirty": false
+    },
+    "image_digest": null
+  },
+  "joint_names": {
+    "robot": [
+      "shoulder_pan_joint",
+      "shoulder_lift_joint",
+      "elbow_joint",
+      "wrist_1_joint",
+      "wrist_2_joint",
+      "wrist_3_joint"
+    ],
+    "positioner": [
+      "positioner_joint"
+    ]
+  },
+  "home": {
+    "robot_deg": [
+      0.0,
+      -90.0,
+      90.0,
+      -90.0,
+      -90.0,
+      0.0
+    ],
+    "positioner_deg": 0.0
+  },
+  "segments": [
+    {
+      "segment_id": "G001",
+      "controller": "robot",
+      "kind": "air",
+      "seam_id": null,
+      "hold_deg": [
+        0.0
+      ],
+      "tcp_speed_mm_s": null,
+      "points": [
+        {
+          "time_from_start_s": 0.0,
+          "positions_deg": [
+            0.0,
+            -90.0,
+            90.0,
+            -90.0,
+            -90.0,
+            0.0
+          ],
+          "velocities_deg_s": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "accelerations_deg_s2": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "time_from_start_s": 4.0,
+          "positions_deg": [
+            -90.0,
+            -98.0,
+            -108.0,
+            -64.0,
+            90.0,
+            0.0
+          ],
+          "velocities_deg_s": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "accelerations_deg_s2": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "segment_id": "G002",
+      "controller": "robot",
+      "kind": "approach",
+      "seam_id": "S01",
+      "hold_deg": [
+        0.0
+      ],
+      "tcp_speed_mm_s": null,
+      "points": [
+        {
+          "time_from_start_s": 0.0,
+          "positions_deg": [
+            -90.0,
+            -98.0,
+            -108.0,
+            -64.0,
+            90.0,
+            0.0
+          ],
+          "velocities_deg_s": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "accelerations_deg_s2": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "time_from_start_s": 2.0,
+          "positions_deg": [
+            -90.0,
+            -100.0,
+            -110.0,
+            -60.0,
+            90.0,
+            0.0
+          ],
+          "velocities_deg_s": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "accelerations_deg_s2": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "segment_id": "G003",
+      "controller": "positioner",
+      "kind": "positioner_weld",
+      "seam_id": "S01",
+      "hold_deg": [
+        -90.0,
+        -100.0,
+        -110.0,
+        -60.0,
+        90.0,
+        0.0
+      ],
+      "tcp_speed_mm_s": 8.0,
+      "points": [
+        {
+          "time_from_start_s": 0.0,
+          "positions_deg": [
+            0.0
+          ],
+          "velocities_deg_s": [
+            0.0
+          ],
+          "accelerations_deg_s2": [
+            0.0
+          ]
+        },
+        {
+          "time_from_start_s": 10.764209,
+          "positions_deg": [
+            370.0
+          ],
+          "velocities_deg_s": [
+            0.0
+          ],
+          "accelerations_deg_s2": [
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "segment_id": "G004",
+      "controller": "robot",
+      "kind": "retract",
+      "seam_id": "S01",
+      "hold_deg": [
+        370.0
+      ],
+      "tcp_speed_mm_s": null,
+      "points": [
+        {
+          "time_from_start_s": 0.0,
+          "positions_deg": [
+            -90.0,
+            -100.0,
+            -110.0,
+            -60.0,
+            90.0,
+            0.0
+          ],
+          "velocities_deg_s": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "accelerations_deg_s2": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "time_from_start_s": 2.0,
+          "positions_deg": [
+            -90.0,
+            -98.0,
+            -108.0,
+            -64.0,
+            90.0,
+            0.0
+          ],
+          "velocities_deg_s": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "accelerations_deg_s2": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "event_id": "V001",
+      "type": "WeldStart",
+      "seam_id": "S01",
+      "after_segment": "G002",
+      "wps_id": "WPS-EXAMPLE",
+      "preset": 1
+    },
+    {
+      "event_id": "V002",
+      "type": "WeldEnd",
+      "seam_id": "S01",
+      "after_segment": "G003",
+      "wps_id": "WPS-EXAMPLE",
+      "preset": 1
+    }
+  ],
+  "cycle_time_s": 18.764209
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v2/active.schema.json",
+  "title": "active",
+  "description": "Active release pointer per scope (job/active_<scope>.json, B-09). A simulation release never displaces a production one.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "scope",
+    "program_rev",
+    "release_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "scope": {
+      "$ref": "common.schema.json#/$defs/scope"
+    },
+    "program_rev": {
+      "$ref": "common.schema.json#/$defs/program_rev"
+    },
+    "release_sha256": {
+      "$ref": "common.schema.json#/$defs/sha256"
+    }
+  }
+}

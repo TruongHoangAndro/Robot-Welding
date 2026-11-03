@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v2/program.schema.json",
+  "title": "program",
+  "description": "D09 program v2 (A61\u2013A64, B-15): one segment per controller with the trajectory exactly as commanded (awm_motion converts deg \u2192 rad for the controllers), hold values of the other axes, weld events only at rest of robot and positioner, context record. Self-contained (B-09).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "program_rev",
+    "part_no",
+    "part_rev",
+    "run_id",
+    "context",
+    "joint_names",
+    "home",
+    "segments",
+    "events",
+    "cycle_time_s"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "program_rev": {
+      "$ref": "common.schema.json#/$defs/program_rev"
+    },
+    "part_no": {
+      "type": "string",
+      "minLength": 1
+    },
+    "part_rev": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run_id": {
+      "$ref": "common.schema.json#/$defs/run_id"
+    },
+    "context": {
+      "$ref": "common.schema.json#/$defs/context_record"
+    },
+    "joint_names": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "robot",
+        "positioner"
+      ],
+      "properties": {
+        "robot": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 6
+        },
+        "positioner": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "home": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "robot_deg",
+        "positioner_deg"
+      ],
+      "properties": {
+        "robot_deg": {
+          "$ref": "common.schema.json#/$defs/joints6_deg"
+        },
+        "positioner_deg": {
+          "type": "number"
+        }
+      }
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "segment_id",
+          "controller",
+          "kind",
+          "seam_id",
+          "hold_deg",
+          "tcp_speed_mm_s",
+          "points"
+        ],
+        "properties": {
+          "segment_id": {
+            "type": "string",
+            "pattern": "^G[0-9]{3}$"
+          },
+          "controller": {
+            "type": "string",
+            "enum": [
+              "robot",
+              "positioner"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "air",
+              "approach",
+              "weld",
+              "retract",
+              "index",
+              "positioner_weld",
+              "touch"
+            ]
+          },
+          "seam_id": {
+            "oneOf": [
+              {
+                "$ref": "common.schema.json#/$defs/seam_id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hold_deg": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "values of the axes of the other controller, constant during this segment"
+          },
+          "tcp_speed_mm_s": {
+            "oneOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "time_from_start_s",
+                "positions_deg",
+                "velocities_deg_s",
+                "accelerations_deg_s2"
+              ],
+              "properties": {
+                "time_from_start_s": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "positions_deg": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 1
+                },
+                "velocities_deg_s": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 1
+                },
+                "accelerations_deg_s2": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 1
+                }
+              }
+            },
+            "minItems": 2
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "event_id",
+          "type",
+          "seam_id",
+          "after_segment",
+          "wps_id",
+          "preset"
+        ],
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "pattern": "^V[0-9]{3}$"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "WeldStart",
+              "WeldEnd"
+            ]
+          },
+          "seam_id": {
+            "$ref": "common.schema.json#/$defs/seam_id"
+          },
+          "after_segment": {
+            "type": "string",
+            "pattern": "^G[0-9]{3}$"
+          },
+          "wps_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "preset": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "LightWELD preset number (PLC selects it)"
+          }
+        }
+      }
+    },
+    "cycle_time_s": {
+      "type": "number",
+      "minimum": 0
+    }
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v2/release.schema.json",
+  "title": "release",
+  "description": "D10 release v2 (A74, ADR-17, ADR-20, B-09): frozen bundle manifest of one program revision. Stored at programs/<rev>/release.json; never edited after locking.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "program_rev",
+    "scope",
+    "program_sha256",
+    "manifest",
+    "context",
+    "approved_by",
+    "approved_at",
+    "locked"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "program_rev": {
+      "$ref": "common.schema.json#/$defs/program_rev"
+    },
+    "scope": {
+      "$ref": "common.schema.json#/$defs/scope"
+    },
+    "program_sha256": {
+      "$ref": "common.schema.json#/$defs/sha256"
+    },
+    "manifest": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "file",
+          "sha256"
+        ],
+        "properties": {
+          "file": {
+            "type": "string",
+            "pattern": "^bundle/",
+            "description": "relative to programs/<rev>/"
+          },
+          "sha256": {
+            "$ref": "common.schema.json#/$defs/sha256"
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "context": {
+      "$ref": "common.schema.json#/$defs/context_record"
+    },
+    "approved_by": {
+      "type": "string",
+      "minLength": 1
+    },
+    "approved_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "locked": {
+      "const": true
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}
