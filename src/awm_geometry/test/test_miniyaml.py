@@ -92,6 +92,7 @@ def test_round_trip():
 @pytest.mark.parametrize('text', [
     'a: &x 1', 'a: {b: 1}', 'a: |\n  x', 'a:\n  - [1, [2]]', 'a: 1\n   b: 2', 'a: 1\na: 2', 'a: \'x',
     'a: [1, ]', 'a: [1,,2]', 'a: [, 1]',                       # empty flow items
+    'a: [1,2]]', 'a: [1, 2}]', 'a: x]', 'a: x}',               # stray closing brackets
     'a: - b', 'a: ? b', 'a: , b', 'a: ] b', 'a: } b', 'a: ?',  # plain scalars starting with an indicator
     '---\na: 1\n---\nb: 2', 'a: 1\n---',                     # a second document
     "a: 'x' 'y'", 'a: "x" "y"', "a: 'x'y",                    # text after a closing quote

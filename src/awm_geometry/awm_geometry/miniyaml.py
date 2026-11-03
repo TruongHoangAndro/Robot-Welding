@@ -129,6 +129,8 @@ def _scalar(text: str, lineno: int) -> Any:
         return [_scalar(item, lineno) for item in items]
     if text[0] in _UNSUPPORTED or text[0] in ',]}?' or text == '-' or text.startswith('- '):
         raise YamlSubsetError(f'line {lineno}: unsupported YAML syntax: {text!r}')
+    if any(ch in text for ch in '[]{}'):
+        raise YamlSubsetError(f'line {lineno}: bracket in a plain scalar (stray or nested flow syntax): {text!r}')
     if text in ('null', '~', 'Null', 'NULL'):
         return None
     if text in ('true', 'True', 'TRUE'):
