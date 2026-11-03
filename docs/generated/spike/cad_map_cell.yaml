@@ -1,0 +1,50 @@
+# Role map of the cell CAD for the TST-002 spike (WP-S S.4 A2). Data, not source (ADR-16, CP-23).
+# Answers by Truong Hoang, 2026-11-03 (positioner axis, rotating set = OI-27, jig static); everything else is the
+# lead's reading of docs/generated/spike/cell_components.md (cad-geometry A1). No REF_* markers yet (OI-23):
+# every frame below is an Assumption from component placements, recorded with each spike result.
+schema: cad_map/0.1
+source:
+  file: docs/3D/APLSMN601_Automated Weldment System.step
+  sha256: bc66c09ef1878d0e7389cf852b695d8b59917994a98d5739e67ba627bab7e824
+  unit: mm
+  up_axis: +Y            # file frame; world = file rotated so that +Y -> +Z (right-handed: +Z -> -Y, +X stays +X)
+match: instance_name     # names are matched against the instance name of each node; never split paths on '/'
+default: deny            # any component not covered (by itself or by an ancestor) is an error
+
+frames:
+  world:
+    origin_from: ur_base           # world origin = UR mounting point (Assumption until REF_WORLD)
+  ur_base:
+    component: 'UR5E/UR7E:1'
+    use: placement                 # robot geometry from ur_description, never from this file
+    note: origin on top of pedestal Part5 (file Y 518.40); identity rotation; = ur_description base_link (Assumption)
+  positioner_axis:
+    point_file_mm: [-102.03, 593.40, 321.58]   # on the part axis (belt-driven second axis), Truong 2026-11-03
+    direction_file: [1.0, 0.0, 0.0]
+    note: axis of pulleys :1 / :4, holders Part1 / Part2, nipple and solid; 145.0 mm above the motor shaft
+
+roles:
+  part:
+    - '564082-Assembly-3 parts:2'           # golden part, parent positioner_flange
+  positioner_rotating:                      # rotate with the part about positioner_axis (OI-27, Truong 2026-11-03)
+    - 'Part1:1'
+    - 'Part2:1'
+    - 'Part3:1'
+    - 'HTPK20S5M150-A-C15:1'
+    - 'HTPK20S5M150-A-C15:4'
+  cell_static:
+    - '2500001:1'                           # lower enclosure frame, Pismo plate, feet, fasteners
+    - 'Part5:1'                             # UR pedestal
+    - 'Jig:1'                               # static (Truong 2026-11-03)
+    - '60CM30X_3D:1'                        # motor
+    - 'GSACL25-8-12:1'                      # coupling
+    - 'Rotary Shaft:1'                      # turns about its own axis; rotationally symmetric -> static envelope
+    - 'HTPK20S5M150-A-C15:2'                # pulleys on the motor shaft (symmetric)
+    - 'HTPK20S5M150-A-C15:3'
+    - 'Timing Belts:1'                      # belt envelopes (static for collision)
+    - 'Timing Belts:2'
+  head_cad:                                 # H-CAD source for later; not used with H-BOX
+    - path: 'ASSY, Welding tool:1'
+      depth: 1                              # the top-level instance only
+  ignore:
+    - 'UR5E/UR7E:1'                         # all its solids (arm links, base, nested duplicate welding tool)
