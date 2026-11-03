@@ -564,6 +564,10 @@ with WP-S S.4 part C (one agent slot).
 **Phase 1 limits:** no server write path; the page validates and downloads `cad_map.yaml`; saving through `awm_api`
 `/cell/model` with role checks comes with T3.1. Contract: `docs/generated/contracts/S10_lite_cell_model.md`,
 schema `v2/cad_map.schema.json`.
-**Open:** who may edit (DES-001 §7.3 says Admin for the cell model; Engineer for the fixture part per job?);
-re-matching map entries after a new STEP export (component path + geometric fingerprint, A18 follow-up).
-**DES-001 impact:** §4.5 screens table S10 (Phase 1 lite), build steps UI-1; §11 A18 UI; PLAN WP3.
+**Who edits (decided by Truong, 2026-11-03):** Admin edits the cell part of the map (`cell/cad/cad_map.yaml`: robot
+base, cell static, positioner axis and permanent rotating set); **Engineer edits the fixture part of the map per job**
+(job `fixture.step` / job-level map: fixture, clamps, holders specific to the part, the part itself). The Engineer
+cannot change the cell part. Enforced by `awm_api` when saving moves there (T3.1); S10-lite shows which part is being edited.
+**Open:** re-matching map entries after a new STEP export (component path + geometric fingerprint, A18 follow-up).
+**DES-001 impact:** §4.5 screens table S10 (Phase 1 lite; roles Admin = cell part, Engineer = job fixture part), build
+steps UI-1; §7.3 roles table (Engineer: "edit the job fixture role map"); §11 A18 UI; PLAN WP3.

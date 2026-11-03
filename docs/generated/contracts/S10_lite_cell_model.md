@@ -39,5 +39,8 @@ spike record) and committed. Saving through `awm_api` (`/cell/model`, DES-001 §
 
 ## Who edits
 
-DES-001 §7.3: cell model import = **Admin**. Whether an Engineer may edit the fixture part of the map per job is open
-(CP-54). S10-lite has no login yet (no `awm_api`); the role is enforced when saving moves to `awm_api`.
+Decided by Truong, 2026-11-03 (CP-54): **Admin** edits the cell part of the map (robot base, cell static, positioner
+axis, permanent rotating set); **Engineer** edits the fixture part per job (fixture, clamps, part-specific holders, the
+part). S10-lite has no login yet (no `awm_api`): the page shows which part (cell / job fixture) a role belongs to; the
+role check is enforced when saving moves to `awm_api` (T3.1). Splitting the map into a cell file and a job file is a
+schema MINOR change made with T3.1; the spike keeps one combined file.
