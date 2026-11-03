@@ -93,8 +93,11 @@ class MoveGroupCellScene:
         self._apply = node.create_client(ApplyPlanningScene, '/apply_planning_scene')
         self._fk = node.create_client(GetPositionFK, '/compute_fk')
         self._robot_description = None
+        self._robot_description_semantic = None
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         node.create_subscription(String, '/robot_description', self._on_description, latched)
+        node.create_subscription(String, '/robot_description_semantic', self._on_semantic, latched)
+        self.padding_dirty = False
         self.job = None
         self.record = None
         self.scene_hash = None
@@ -104,6 +107,9 @@ class MoveGroupCellScene:
     # -- plumbing ------------------------------------------------------------------------------------------------
     def _on_description(self, msg) -> None:
         self._robot_description = msg.data
+
+    def _on_semantic(self, msg) -> None:
+        self._robot_description_semantic = msg.data
 
     def _call(self, client, request):
         import rclpy
@@ -161,9 +167,8 @@ class MoveGroupCellScene:
         """
         import rclpy
         import time
-        from awm_core.hashing import sha256_text
-        from awm_path.core.scene_files import (CLEARANCE_METHOD, SceneFileError, load_cell_manifest,
-                                               load_job_scene, scene_hash)
+        from awm_path.core.scene_files import (SceneFileError, load_cell_manifest, load_job_scene, scene_content,
+                                               scene_hash)
         cell = load_cell_manifest(self.cell_manifest)
         job = load_job_scene(self.placement, self.job_dir)
         status = self.sync.wait_loaded(timeout_s)
@@ -171,9 +176,9 @@ class MoveGroupCellScene:
             raise SceneFileError(f'cell scene loaded from manifest {status.get("manifest")} '
                                  f'(sha256 {status.get("manifest_sha256")}), expected {cell.path} ({cell.file_sha256})')
         deadline = time.monotonic() + timeout_s
-        while self._robot_description is None:
+        while self._robot_description is None or self._robot_description_semantic is None:
             if time.monotonic() > deadline:
-                raise MoveItServiceError('/robot_description not received')
+                raise MoveItServiceError('/robot_description or /robot_description_semantic not received')
             rclpy.spin_once(self.node, timeout_sec=0.05)
         for c in (self._valid, self._apply, self._fk):
             if not c.wait_for_service(timeout_sec=timeout_s):
@@ -182,20 +187,10 @@ class MoveGroupCellScene:
         self._f4 = {k: float(v) for k, v in sorted(status['link_padding_mm'].items())}
         self._theta = float(status['theta_deg'])
         self._place_job_objects(self._theta, add=True)
-        content = {
-            'backend': self.name,
-            'group': self.group,
-            'head_model': self.head_model,
-            'robot_description_sha256': sha256_text(self._robot_description),
-            'cell': {'scene_sha256': cell.scene_sha256, 'object_ids': list(cell.object_ids)},
-            'job': {'scene_sha256': job.scene_sha256, 'source': job.source, 'verified': job.verified,
-                    'objects': [{'object_id': o.object_id, 'role': o.role, 'parent_frame': o.parent_frame,
-                                 'mesh_sha256': o.mesh_sha256, 'face_ids': o.face_ids} for o in job.objects]},
-            'f4_padding_mm': self._f4,
-            'unpadded_links': sorted(k for k, v in self._f4.items() if v == 0.0),
-            'clearance_links': list(self.clearance_links),
-            'clearance_method': CLEARANCE_METHOD,
-        }
+        content = scene_content(backend=self.name, group=self.group, head_model=self.head_model,
+                                robot_description=self._robot_description,
+                                robot_description_semantic=self._robot_description_semantic, cell=cell, job=job,
+                                f4_padding_mm=self._f4, clearance_links=self.clearance_links)
         self.scene_hash = scene_hash(content)
         self.record = {
             'scene_hash': self.scene_hash,
@@ -262,9 +257,18 @@ class MoveGroupCellScene:
             out.append(StateCheck(valid=bool(res.valid), contacts=tuple(contacts)))
         return out
 
+    def _ensure_f4_padding(self) -> None:
+        """Re-apply the F4 padding if an earlier restore failed; raise (refuse the check) if that fails too."""
+        if self.padding_dirty:
+            self._set_padding(self._f4)
+            self.padding_dirty = False
+
     def check(self, states_deg: Sequence[Sequence[float]], theta_deg: float) -> List[StateCheck]:
-        """F4 validity of robot states (6 joints, deg) at the positioner angle ``theta_deg``."""
+        """F4 validity of robot states (6 joints, deg) at the positioner angle ``theta_deg``.
+
+        Refused (raises) while the F4 padding is not known to be in place (failed restore, see check_clearance)."""
         self._require_loaded()
+        self._ensure_f4_padding()
         states = validate_states(states_deg, n_joints=6)
         self._ensure_theta(theta_deg)
         return self._check(states, theta_deg)
@@ -293,15 +297,19 @@ class MoveGroupCellScene:
                         clearance_mm: float) -> List[StateCheck]:
         """F5: valid = no clearance link within ``clearance_mm`` of any world object (unpadded geometry otherwise).
 
-        The F4 padding is restored afterwards, also on error.
+        The F4 padding is restored afterwards, also on error. If the restore fails, ``padding_dirty`` stays set and
+        every later check first re-applies the F4 padding (or raises).
         """
         from awm_path.core.scene_files import clearance_padding_mm
         self._require_loaded()
+        self._ensure_f4_padding()
         states = validate_states(states_deg, n_joints=6)
         self._ensure_theta(theta_deg)
         pad = clearance_padding_mm(self._f4, self.clearance_links, clearance_mm)
+        self.padding_dirty = True
         try:
             self._set_padding(pad)
             return self._check(states, theta_deg)
         finally:
             self._set_padding(self._f4)
+            self.padding_dirty = False

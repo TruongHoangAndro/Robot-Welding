@@ -18,6 +18,7 @@ from awm_core.hashing import sha256_file  # noqa: E402
 from awm_path.backends.move_group import MoveGroupCellScene  # noqa: E402
 from awm_path.core.kinematics import UrAnalyticKinematics, ik_tcp  # noqa: E402
 from awm_path.core.scene_files import SceneFileError  # noqa: E402
+from awm_path.moveit_client import MoveItServiceError  # noqa: E402
 from awm_path.core.states import config_label  # noqa: E402
 
 POSITIONER_MM = np.array([430.0, 400.0, 450.0])
@@ -111,6 +112,7 @@ def test_record_and_scene_hash(backend) -> None:
     assert rec['content']['clearance_links'] == ['head_body', 'head_mount', 'conduit']
     assert rec['content']['head_model'] == 'H-BOX (test)'
     assert len(rec['content']['robot_description_sha256']) == 64
+    assert len(rec['content']['robot_description_semantic_sha256']) == 64
     assert len(b.scene_hash) == 64 and rec['scene_hash'] == b.scene_hash
     assert b.theta_deg == pytest.approx(0.0, abs=1e-9)
 
@@ -136,6 +138,31 @@ def test_clearance_by_inflated_links_and_padding_restored(backend) -> None:
     (c3,) = b.check_clearance([q], 0.0, 3.5)
     assert c3.valid, c3.contacts
     assert b.check([q], 0.0)[0].valid                                    # F4 padding restored after the check
+    assert b.f4_padding_mm() == b.record['content']['f4_padding_mm']
+
+
+def test_failed_padding_restore_blocks_checks_until_restored(backend, monkeypatch) -> None:
+    """m1: if restoring the F4 padding fails, no F4 check runs until the padding is re-applied."""
+    b, *_ = backend
+    q = _q_beside_cube(b)
+    real = b._set_padding
+    calls = []
+
+    def fail_on_restore(padding_mm):
+        calls.append(padding_mm)
+        if padding_mm == b._f4:
+            raise MoveItServiceError('simulated restore failure')
+        real(padding_mm)
+
+    monkeypatch.setattr(b, '_set_padding', fail_on_restore)
+    with pytest.raises(MoveItServiceError, match='simulated'):
+        b.check_clearance([q], 0.0, 5.0)
+    assert b.padding_dirty
+    with pytest.raises(MoveItServiceError):           # re-apply still fails -> refused, never a stale answer
+        b.check([q], 0.0)
+    monkeypatch.setattr(b, '_set_padding', real)
+    (r,) = b.check([q], 0.0)                           # re-applies the F4 padding first
+    assert not b.padding_dirty and r.valid
     assert b.f4_padding_mm() == b.record['content']['f4_padding_mm']
 
 

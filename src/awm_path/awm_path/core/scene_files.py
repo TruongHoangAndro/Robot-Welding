@@ -135,6 +135,29 @@ def world_T_object(obj: JobObject, world_T_flange_mm: np.ndarray) -> np.ndarray:
     return obj.parent_T_obj_mm if obj.parent_frame == 'world' else world_T_flange_mm @ obj.parent_T_obj_mm
 
 
+def scene_content(*, backend: str, group: str, head_model: str, robot_description: str,
+                  robot_description_semantic: str, cell: CellManifest, job: JobScene,
+                  f4_padding_mm: Mapping[str, float], clearance_links: Iterable[str]) -> Dict:
+    """Content part of the scene record (hashed by :func:`scene_hash`): URDF and SRDF (incl. its disabled-collision
+    pairs, i.e. the ACM) by SHA-256, cell and job by content id, padding and clearance method. No file timestamps."""
+    pad = {k: float(v) for k, v in sorted(f4_padding_mm.items())}
+    return {
+        'backend': backend,
+        'group': group,
+        'head_model': head_model,
+        'robot_description_sha256': sha256_text(robot_description),
+        'robot_description_semantic_sha256': sha256_text(robot_description_semantic),
+        'cell': {'scene_sha256': cell.scene_sha256, 'object_ids': list(cell.object_ids)},
+        'job': {'scene_sha256': job.scene_sha256, 'source': job.source, 'verified': job.verified,
+                'objects': [{'object_id': o.object_id, 'role': o.role, 'parent_frame': o.parent_frame,
+                             'mesh_sha256': o.mesh_sha256, 'face_ids': o.face_ids} for o in job.objects]},
+        'f4_padding_mm': pad,
+        'unpadded_links': sorted(k for k, v in pad.items() if v == 0.0),
+        'clearance_links': list(clearance_links),
+        'clearance_method': CLEARANCE_METHOD,
+    }
+
+
 def scene_hash(record: Mapping) -> str:
     """SHA-256 of the canonical JSON (sorted keys, no spaces) of a scene record."""
     return sha256_text(json.dumps(record, sort_keys=True, separators=(',', ':'), allow_nan=False))
@@ -153,4 +176,4 @@ def clearance_padding_mm(f4_padding_mm: Mapping[str, float], links: Iterable[str
 
 
 __all__ = ['COLLISION_FACES_FILE', 'part_object_files', 'DEFAULT_CLEARANCE_LINKS', 'CLEARANCE_METHOD', 'SceneFileError', 'JobObject', 'JobScene', 'CellManifest',
-           'load_job_scene', 'load_cell_manifest', 'world_T_object', 'scene_hash', 'clearance_padding_mm']
+           'load_job_scene', 'load_cell_manifest', 'world_T_object', 'scene_content', 'scene_hash', 'clearance_padding_mm']

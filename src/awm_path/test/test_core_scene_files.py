@@ -10,7 +10,7 @@ import pytest
 from awm_core.hashing import sha256_file
 from awm_path.core.scene_files import (CLEARANCE_METHOD, DEFAULT_CLEARANCE_LINKS, SceneFileError,
                                        clearance_padding_mm, load_cell_manifest, load_job_scene, part_object_files,
-                                       scene_hash, world_T_object)
+                                       scene_content, scene_hash, world_T_object)
 
 HEX = 'ab' * 32
 
@@ -134,3 +134,22 @@ def test_default_clearance_links_follow_tst002_f5() -> None:
     """F5 / DES-001 Rev 0.6 §5.4: head body, mount and conduit (not the nozzle, which is at the contact point)."""
     assert DEFAULT_CLEARANCE_LINKS == ('head_body', 'head_mount', 'conduit')
     assert 'unpadded' in CLEARANCE_METHOD and 'validity' in CLEARANCE_METHOD
+
+
+def test_scene_content_covers_urdf_and_srdf(tmp_path) -> None:
+    job = _job(tmp_path)
+    scene = load_job_scene(job / 'placement.json', job)
+    cell_file = tmp_path / 'cell.json'
+    cell_file.write_text(json.dumps({'scene_sha256': HEX, 'objects': [{'object_id': 'a'}]}))
+    cell = load_cell_manifest(cell_file)
+    kw = dict(backend='b', group='laser_arm', head_model='H-BOX', robot_description='<robot/>',
+              robot_description_semantic='<robot><disable_collisions link1="a" link2="b"/></robot>', cell=cell,
+              job=scene, f4_padding_mm={'head_body': 3.0, 'nozzle_tip': 0.0}, clearance_links=('head_body',))
+    c = scene_content(**kw)
+    assert len(c['robot_description_semantic_sha256']) == 64 and len(c['robot_description_sha256']) == 64
+    assert c['unpadded_links'] == ['nozzle_tip'] and c['clearance_method'] == CLEARANCE_METHOD
+    base = scene_hash(c)
+    assert scene_hash(scene_content(**kw)) == base
+    changed_srdf = dict(kw, robot_description_semantic='<robot><disable_collisions link1="a" link2="c"/></robot>')
+    assert scene_hash(scene_content(**changed_srdf)) != base
+    assert scene_hash(scene_content(**dict(kw, robot_description='<robot name="x"/>'))) != base
