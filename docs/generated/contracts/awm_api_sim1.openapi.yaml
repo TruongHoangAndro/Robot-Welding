@@ -1,0 +1,346 @@
+openapi: 3.1.0
+info:
+  title: APLSMN601 awm_api — Sim-1 subset
+  version: 1.0.0-draft
+  description: >
+    Contract freeze T0.5 (draft for Truong's review, 2026-11-04). Sim-1 endpoints only (PLAN.md T3.1); DES-001 Rev 0.6
+    §7.3 / §7.4. All lengths mm, angles degrees (ADR-14). Job documents follow the v2 JSON schemas in
+    src/awm_core/awm_core/schemas/v2 (named "v2/<name>" below); the D20 files follow
+    docs/generated/contracts/D20_view_model.md. Errors are RFC 9457 problem details. The browser never reaches ROS;
+    awm_api runs the engineering CLIs as subprocesses (B-11), one planning run per cell at a time.
+    Progress is polled through /runs/{run_id} in Sim-1; the status WebSocket comes with S6 (WP4).
+servers:
+  - url: /api/v1
+security:
+  - bearer: []
+tags:
+  - name: auth
+  - name: jobs
+  - name: runs
+paths:
+  /auth/login:
+    post:
+      tags: [auth]
+      security: []
+      summary: Log in; returns a bearer token with the user's role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [username, password]
+              properties:
+                username: {type: string, minLength: 1}
+                password: {type: string, minLength: 1}
+      responses:
+        '200':
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, role, expires_at]
+                properties:
+                  token: {type: string}
+                  role: {$ref: '#/components/schemas/Role'}
+                  expires_at: {type: string, format: date-time}
+        '401': {$ref: '#/components/responses/Problem'}
+  /jobs:
+    get:
+      tags: [jobs]
+      summary: List jobs (all roles; Operator read-only)
+      responses:
+        '200':
+          description: Job list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/JobSummary'}
+        '401': {$ref: '#/components/responses/Problem'}
+    post:
+      tags: [jobs]
+      summary: Create a job from a STEP upload (Engineer). Runs import + D20 export (A11–A14) as one run.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [step, part_no, part_rev]
+              properties:
+                step: {type: string, format: binary, description: STEP AP203 / 214 / 242; stored as model.step}
+                part_no: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'}
+                part_rev: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'}
+                component: {type: string, description: assembly component; omitted = whole file (part.json source.component)}
+                up_axis: {type: string, enum: ['+X', '-X', '+Y', '-Y', '+Z', '-Z'], default: '+Z'}
+      responses:
+        '202': {$ref: '#/components/responses/RunStarted'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /jobs/{job_id}:
+    parameters: [{$ref: '#/components/parameters/JobId'}]
+    get:
+      tags: [jobs]
+      summary: Job detail (status, documents present with their SHA-256, program revisions, active pointers)
+      responses:
+        '200':
+          description: Job detail
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/JobDetail'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /jobs/{job_id}/view/{file}:
+    parameters:
+      - {$ref: '#/components/parameters/JobId'}
+      - name: file
+        in: path
+        required: true
+        schema: {type: string, enum: [view.glb, topology.json]}
+    get:
+      tags: [jobs]
+      summary: D20 view model files (all roles)
+      responses:
+        '200':
+          description: File content
+          content:
+            model/gltf-binary: {}
+            application/json: {}
+        '404': {$ref: '#/components/responses/Problem'}
+  /jobs/{job_id}/seams:
+    parameters: [{$ref: '#/components/parameters/JobId'}]
+    get:
+      tags: [jobs]
+      summary: Seam list D04 (document v2/seams)
+      responses:
+        '200': {description: v2/seams document, content: {application/json: {}}}
+        '404': {$ref: '#/components/responses/Problem'}
+    put:
+      tags: [jobs]
+      summary: Replace the seam list from picked ids + attributes (Engineer). M2 resolves the ids against the B-Rep and returns the full v2/seams document.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [seams]
+              properties:
+                seams:
+                  type: array
+                  items: {$ref: '#/components/schemas/SeamPick'}
+      responses:
+        '200': {description: v2/seams document as stored, content: {application/json: {}}}
+        '400': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+  /jobs/{job_id}/placement:
+    parameters: [{$ref: '#/components/parameters/JobId'}]
+    get:
+      tags: [jobs]
+      summary: Placement + scene manifest D19 (document v2/placement); mesh files under /jobs/{job_id}/files/{path}
+      responses:
+        '200': {description: v2/placement document, content: {application/json: {}}}
+        '404': {$ref: '#/components/responses/Problem'}
+  /jobs/{job_id}/files/{path}:
+    parameters:
+      - {$ref: '#/components/parameters/JobId'}
+      - name: path
+        in: path
+        required: true
+        description: job-relative path of a file referenced by a job document (meshes); no traversal outside the job
+        schema: {type: string}
+    get:
+      tags: [jobs]
+      summary: Read-only job file referenced by a document (e.g. cache/collision.stl)
+      responses:
+        '200': {description: File content}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /jobs/{job_id}/plan:
+    parameters: [{$ref: '#/components/parameters/JobId'}]
+    post:
+      tags: [jobs, runs]
+      summary: Start a planning run (M4; Engineer). One run per cell; the run is the job lock (B-11).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                seams: {type: array, items: {type: string, pattern: '^S[0-9]{2,3}$'}, description: subset; default all}
+      responses:
+        '202': {$ref: '#/components/responses/RunStarted'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /runs/{run_id}:
+    parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema: {type: string, pattern: '^R[0-9]{8}T[0-9]{6}Z-[0-9a-f]{6}$'}
+    get:
+      tags: [runs]
+      summary: Run status and progress (poll ≤ 1 Hz)
+      responses:
+        '200':
+          description: Run status
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Run'}
+        '404': {$ref: '#/components/responses/Problem'}
+    delete:
+      tags: [runs]
+      summary: Cancel a run (SIGTERM to the subprocess; outputs of a cancelled run are never promoted)
+      responses:
+        '202': {description: Cancel requested}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /jobs/{job_id}/simulation:
+    parameters: [{$ref: '#/components/parameters/JobId'}]
+    get:
+      tags: [jobs]
+      summary: Playback data for S4 — the latest D07 (v2/path, accepted seams with timed joint paths, rejected seams with failing points) and D19 (v2/placement)
+      responses:
+        '200':
+          description: Playback data
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [path, placement]
+                properties:
+                  path: {description: v2/path document}
+                  placement: {description: v2/placement document}
+        '404': {$ref: '#/components/responses/Problem'}
+  /jobs/{job_id}/release:
+    parameters: [{$ref: '#/components/parameters/JobId'}]
+    post:
+      tags: [jobs]
+      summary: Simulation-scope release of a verified program revision (Engineer; ADR-17). Production scope is not available in Sim-1.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [program_rev, scope]
+              properties:
+                program_rev: {type: string, pattern: '^P[0-9]{3}$'}
+                scope: {type: string, const: simulation}
+                note: {type: string}
+      responses:
+        '201': {description: v2/release document as locked, content: {application/json: {}}}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+components:
+  securitySchemes:
+    bearer: {type: http, scheme: bearer}
+  parameters:
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      description: <PartNo>_<PartRev>
+      schema: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*_[A-Za-z0-9][A-Za-z0-9._-]*$'}
+  responses:
+    Problem:
+      description: RFC 9457 problem details
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    RunStarted:
+      description: Run accepted
+      headers:
+        Location: {schema: {type: string}, description: '/api/v1/runs/{run_id}'}
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [run_id]
+            properties:
+              run_id: {type: string}
+  schemas:
+    Role: {type: string, enum: [Operator, Engineer, Admin]}
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: {type: string, description: 'URI reference, e.g. /problems/run-busy'}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        instance: {type: string}
+        errors:
+          type: array
+          description: field-level errors (schema validation, unknown edge ids)
+          items:
+            type: object
+            properties:
+              pointer: {type: string}
+              message: {type: string}
+    JobSummary:
+      type: object
+      required: [job_id, part_no, part_rev, status, updated_at]
+      properties:
+        job_id: {type: string}
+        part_no: {type: string}
+        part_rev: {type: string}
+        status: {type: string, enum: [importing, draft, planned, simulated, released_simulation, released_production, error]}
+        updated_at: {type: string, format: date-time}
+    JobDetail:
+      allOf:
+        - {$ref: '#/components/schemas/JobSummary'}
+        - type: object
+          required: [documents, programs, active]
+          properties:
+            documents:
+              type: object
+              description: name → SHA-256 of part.json, seams.json, process.json, placement.json, path.json, cache/view/*
+              additionalProperties: {type: string, pattern: '^[0-9a-f]{64}$'}
+            programs: {type: array, items: {type: string, pattern: '^P[0-9]{3}$'}}
+            active:
+              type: object
+              properties:
+                simulation: {type: [string, 'null']}
+                production: {type: [string, 'null']}
+            active_run: {type: [string, 'null']}
+    SeamPick:
+      type: object
+      additionalProperties: false
+      required: [seam_id, edges, reversed, joint_type, sequence]
+      properties:
+        seam_id: {type: string, pattern: '^S[0-9]{2,3}$'}
+        edges: {type: array, minItems: 1, items: {type: string, pattern: '^E[0-9]+$'}, description: picked edges; M2 chains tangent edges and maps a joint edge of either solid to its joint}
+        reversed: {type: boolean}
+        range_mm: {type: [array, 'null'], items: {type: number}, minItems: 2, maxItems: 2}
+        joint_type: {type: string, enum: [butt, fillet, lap, groove]}
+        sequence: {type: integer, minimum: 1}
+        leg_mm: {type: [number, 'null'], minimum: 0}
+        note: {type: string}
+    Run:
+      type: object
+      required: [run_id, job_id, kind, state, progress, started_at]
+      properties:
+        run_id: {type: string}
+        job_id: {type: string}
+        kind: {type: string, enum: [import, plan, program, verify]}
+        state: {type: string, enum: [queued, running, succeeded, failed, cancelled]}
+        progress: {type: number, minimum: 0, maximum: 1}
+        step: {type: string, description: human-readable current step}
+        started_at: {type: string, format: date-time}
+        finished_at: {type: [string, 'null'], format: date-time}
+        log_tail: {type: array, items: {type: string}, maxItems: 50}
+        outputs:
+          type: object
+          description: job-relative output files of a succeeded run with SHA-256
+          additionalProperties: {type: string, pattern: '^[0-9a-f]{64}$'}
+        problem: {oneOf: [{$ref: '#/components/schemas/Problem'}, {type: 'null'}]}
