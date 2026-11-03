@@ -1,0 +1,100 @@
+{
+  "schema_version": "2.0",
+  "created_by": "lead (hand-made contract example; format only)",
+  "created_at": "2026-11-03T12:00:00Z",
+  "inputs": [
+    {
+      "name": "../cad/cell.step",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "../cad/cad_map.yaml",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  ],
+  "unit": "mm",
+  "frames_file": "frames.yaml",
+  "hull_tessellation": {
+    "linear_deflection_mm": 0.2,
+    "angular_deflection_deg": 15.0
+  },
+  "mesh_tessellation": {
+    "linear_deflection_mm": 0.5,
+    "angular_deflection_deg": 15.0,
+    "weld_mm": 0.0001
+  },
+  "export_guard": {
+    "contact_tolerance_mm": 1.0,
+    "theta_deg": 0.0,
+    "sample_spacing_mm": 1.0,
+    "part_chord_near_mm": 0.1,
+    "part_chord_far_mm": 0.5,
+    "object_chord_hull_mm": 0.2,
+    "object_chord_mesh_mm": 0.5,
+    "method": "part surface samples inside the object collision mesh (winding number); depth = distance to the mesh",
+    "note": "the true overlap can exceed contact_tolerance_mm by up to about the sample spacing plus the chords"
+  },
+  "note": "Assumption: frames from component placements (OI-23)",
+  "objects": [
+    {
+      "object_id": "jig_1",
+      "role": "cell_static",
+      "component": "Jig:1",
+      "parent_frame": "world",
+      "pose_mm": {
+        "position_mm": [
+          -43.5,
+          -75.0,
+          -272.0
+        ],
+        "quat_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "collision": "mesh",
+      "mesh": {
+        "file": "jig_1.stl",
+        "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "face_ids": false,
+        "vertices": 432,
+        "triangles": 876
+      },
+      "padding_mm": 3.0,
+      "part_max_depth_mm": 0.0
+    },
+    {
+      "object_id": "part3_1",
+      "role": "positioner_rotating",
+      "component": "Part3:1",
+      "parent_frame": "positioner_flange",
+      "pose_mm": {
+        "position_mm": [
+          63.99,
+          11.75,
+          114.46
+        ],
+        "quat_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "collision": "hull",
+      "mesh": {
+        "file": "part3_1.stl",
+        "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "face_ids": false,
+        "vertices": 253,
+        "triangles": 502
+      },
+      "padding_mm": 3.0,
+      "hull_volume_ratio": 1.21,
+      "part_max_depth_mm": 0.923
+    }
+  ],
+  "scene_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+}

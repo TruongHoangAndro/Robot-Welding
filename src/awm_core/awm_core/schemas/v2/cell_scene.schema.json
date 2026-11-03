@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v2/cell_scene.schema.json",
+  "title": "cell_scene",
+  "description": "Cell scene manifest written by awm_geometry export-scene (WP-S S.4 A3, A18, ADR-16, CP-55): cell static and positioner-rotating collision objects with pose, mesh hash, collision mode and the export-guard record. Read by the cell-sim scene loader and the planner. Lengths mm.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "unit",
+    "frames_file",
+    "hull_tessellation",
+    "mesh_tessellation",
+    "export_guard",
+    "note",
+    "objects",
+    "scene_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "unit": {
+      "const": "mm"
+    },
+    "frames_file": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hull_tessellation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "linear_deflection_mm",
+        "angular_deflection_deg"
+      ],
+      "properties": {
+        "linear_deflection_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "angular_deflection_deg": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "weld_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "mesh_tessellation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "linear_deflection_mm",
+        "angular_deflection_deg"
+      ],
+      "properties": {
+        "linear_deflection_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "angular_deflection_deg": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "weld_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "export_guard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contact_tolerance_mm",
+        "theta_deg",
+        "sample_spacing_mm",
+        "part_chord_near_mm",
+        "part_chord_far_mm",
+        "object_chord_hull_mm",
+        "object_chord_mesh_mm",
+        "method",
+        "note"
+      ],
+      "properties": {
+        "contact_tolerance_mm": {
+          "type": "number",
+          "minimum": 0
+        },
+        "theta_deg": {
+          "type": "number"
+        },
+        "sample_spacing_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "part_chord_near_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "part_chord_far_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "object_chord_hull_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "object_chord_mesh_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "note": {
+      "type": "string"
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "object_id",
+          "role",
+          "component",
+          "parent_frame",
+          "pose_mm",
+          "collision",
+          "mesh",
+          "padding_mm",
+          "part_max_depth_mm"
+        ],
+        "properties": {
+          "object_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "cell_static",
+              "positioner_rotating"
+            ]
+          },
+          "component": {
+            "type": "string",
+            "minLength": 1,
+            "description": "path of the mapped component below the assembly root (instance names)"
+          },
+          "parent_frame": {
+            "type": "string",
+            "enum": [
+              "world",
+              "positioner_flange"
+            ],
+            "description": "positioner_flange objects are given at theta = 0"
+          },
+          "pose_mm": {
+            "$ref": "common.schema.json#/$defs/pose_mm",
+            "description": "parent_T_component; the mesh is in the component frame"
+          },
+          "collision": {
+            "type": "string",
+            "enum": [
+              "hull",
+              "mesh"
+            ]
+          },
+          "mesh": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "file",
+              "sha256",
+              "face_ids",
+              "vertices",
+              "triangles"
+            ],
+            "properties": {
+              "file": {
+                "type": "string",
+                "minLength": 1,
+                "description": "binary STL in mm, relative to the manifest"
+              },
+              "sha256": {
+                "$ref": "common.schema.json#/$defs/sha256"
+              },
+              "face_ids": {
+                "const": false
+              },
+              "vertices": {
+                "type": "integer",
+                "minimum": 3
+              },
+              "triangles": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          },
+          "padding_mm": {
+            "type": "number",
+            "minimum": 0
+          },
+          "hull_volume_ratio": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "collision hull only: hull volume / solid volume; null if the component has no solid"
+          },
+          "part_max_depth_mm": {
+            "type": "number",
+            "minimum": 0,
+            "description": "deepest part surface sample inside this object at theta = 0"
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "scene_sha256": {
+      "$ref": "common.schema.json#/$defs/sha256",
+      "description": "SHA-256 of the canonical JSON (sorted keys, no spaces) of `objects`"
+    }
+  }
+}
