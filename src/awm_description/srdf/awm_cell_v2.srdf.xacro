@@ -35,13 +35,15 @@
     <joint name="positioner_joint" value="0.0"/>
   </group_state>
 
-  <!-- Rigid body: wrist_3_link and the head links never move relative to each other. -->
+  <!-- Rigid body: wrist_3_link and the head links never move relative to each other. wrist_3_link <-> head link =
+       "Adjacent" (parent / child through the geometry-less flange / tool0); head <-> head = "Rigid". -->
   <xacro:property name="rigid_tool" value="${['wrist_3_link', 'head_mount', 'head_body', 'nozzle_body', 'nozzle_tip', 'conduit']}"/>
   <xacro:macro name="awm_disable_rigid" params="links">
     <xacro:if value="${len(links) > 1}">
       <xacro:macro name="awm_disable_first" params="first others">
         <xacro:if value="${len(others) > 0}">
-          <disable_collisions link1="${first}" link2="${others[0]}" reason="Adjacent"/>
+          <disable_collisions link1="${first}" link2="${others[0]}"
+                              reason="${'Adjacent' if first == 'wrist_3_link' else 'Rigid'}"/>
           <xacro:awm_disable_first first="${first}" others="${others[1:]}"/>
         </xacro:if>
       </xacro:macro>

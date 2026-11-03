@@ -9,7 +9,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import yaml
 from urdf_parser_py.urdf import URDF
+
+from awm_core import units
+from awm_core.frames import quat_to_matrix, matrix_to_quat
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from urdf_fk import axis_angle, fk, origin_matrix  # noqa: E402
@@ -22,7 +26,12 @@ ARM_JOINTS = ('shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist
               'wrist_2_joint', 'wrist_3_joint')
 # Documented H-BOX offset tool0 -> tcp_laser (mm): mount 60 + head body 381 + nozzle 40 on tool0 +Z.
 TOOL0_TCP_MM = (0.0, 0.0, 481.0)
-MM = 1e-3  # test-side expectation only (the xacro factor itself is checked against awm_core.units)
+POSITIONER_LIMITS = yaml.safe_load((PKG / 'config' / 'positioner_limits.yaml').read_text())['positioner_joint']
+
+
+def mm(*v):
+    """mm -> m through the project adapter (ADR-14); scalar or array."""
+    return units.mm_to_m(v[0] if len(v) == 1 else list(v))
 
 
 def _xacro(path: Path, **args) -> str:
@@ -41,16 +50,25 @@ def robot():
     return _urdf()
 
 
+SCALE_LITERAL = re.compile(r'(?<![\w.])(0?\.001|1e-?3|1\.0e-?3|1000(\.0*)?|1e\+?3|/\s*1000\.?|57\.29\d*|0\.01745\d*)(?![\w.])')
+
+
+def test_scale_literal_regex_catches_variants():
+    for bad in ('x * 0.001', 'x*1e-3', 'x * .001', 'x / 1000.', 'x*1000', '1e3*x', '57.2958', '0.0174533'):
+        assert SCALE_LITERAL.search(bad), bad
+    for ok in ('100', '0.0010', '10001', 'm_per_mm', '381'):
+        assert not SCALE_LITERAL.search(ok), ok
+
+
 def test_units_match_awm_core():
     """units.xacro holds the only scale factors and they equal the single Python adapter (ADR-14)."""
-    units = pytest.importorskip('awm_core.units')
     text = (PKG / 'urdf' / 'units.xacro').read_text()
     m_per_mm = float(re.search(r'name="m_per_mm" value="([^"]+)"', text).group(1))
     assert m_per_mm == pytest.approx(1.0 / units.MM_PER_M, rel=1e-15)
     assert 'pi / 180.0' in text and units.DEG_PER_RAD == pytest.approx(180.0 / math.pi)
-    for f in ('awm_cell_v2.urdf.xacro', 'lightweld_hbox.xacro', 'positioner.xacro'):
+    for f in ('awm_cell_v2.urdf.xacro', 'lightweld_hbox.xacro', 'positioner.xacro', '../srdf/awm_cell_v2.srdf.xacro'):
         body = re.sub(r'<!--.*?-->', '', (PKG / 'urdf' / f).read_text(), flags=re.S)
-        assert not re.search(r'\b(0\.001|1000(\.0)?|57\.29|0\.01745)\b', body), f
+        assert not SCALE_LITERAL.search(body), (f, SCALE_LITERAL.search(body).group(0))
 
 
 def test_parses_with_links_and_root(robot):
@@ -67,20 +85,29 @@ def test_seven_actuated_joints(robot):
     pj = robot.joint_map['positioner_joint']
     assert pj.type == 'revolute' and pj.parent == 'positioner_axis' and pj.child == 'positioner_flange'
     assert np.allclose(pj.axis, [1, 0, 0])
-    assert pj.limit.lower == pytest.approx(-math.radians(400)) and pj.limit.upper == pytest.approx(math.radians(400))
-    assert pj.limit.velocity == pytest.approx(math.radians(30))
+    lim = POSITIONER_LIMITS
+    assert pj.limit.lower == pytest.approx(units.deg_to_rad(lim['lower_deg']))
+    assert pj.limit.upper == pytest.approx(units.deg_to_rad(lim['upper_deg']))
+    assert pj.limit.velocity == pytest.approx(units.deg_to_rad(lim['max_velocity_deg_s']))
+    assert (lim['lower_deg'], lim['upper_deg'], lim['max_velocity_deg_s']) == (-400, 400, 30)
+
+
+def test_moveit_joint_limits_have_no_positioner_copy():
+    """positioner limits live only in positioner_limits.yaml (launch injects them into MoveIt)."""
+    jl = yaml.safe_load((PKG / 'config' / 'joint_limits_v2.yaml').read_text())
+    assert 'positioner_joint' not in jl['joint_limits']
 
 
 def test_tcp_laser_offset(robot):
     """FK tool0 -> tcp_laser = documented offset (0, 0, 481) mm, tool Z = beam direction = tool0 Z."""
     t = fk(robot, 'tcp_laser', root='tool0')
-    assert np.allclose(t[:3, 3], np.array(TOOL0_TCP_MM) * MM, atol=1e-12)
+    assert np.allclose(t[:3, 3], mm(*TOOL0_TCP_MM), atol=1e-12)
     assert np.allclose(t[:3, :3], np.eye(3), atol=1e-12)
 
 
 def test_tcp_follows_head_args():
     r = _urdf(mount_h_mm=50, head_h_mm=300, nozzle_len_mm=30)
-    assert np.allclose(fk(r, 'tcp_laser', root='tool0')[:3, 3], [0, 0, 0.380], atol=1e-12)
+    assert np.allclose(fk(r, 'tcp_laser', root='tool0')[:3, 3], mm(0, 0, 380), atol=1e-12)
 
 
 def _cyl(robot, link):
@@ -97,49 +124,49 @@ def test_nozzle_split_and_contact_standoff(robot):
     body, cb = _cyl(robot, 'nozzle_body')
     tip, ct = _cyl(robot, 'nozzle_tip')
     for g, c in ((body, cb), (tip, ct)):
-        assert g.radius == pytest.approx(10 * MM)
+        assert g.radius == pytest.approx(mm(10))
         assert np.allclose(c[:2], 0.0, atol=1e-12)
     tip_end = ct[2] + tip.length / 2
     tip_start = ct[2] - tip.length / 2
     body_end = cb[2] + body.length / 2
-    assert tcp_z - tip_end == pytest.approx(0.3 * MM, abs=1e-12)
-    assert tcp_z - tip_start == pytest.approx(5.0 * MM, abs=1e-12)
+    assert tcp_z - tip_end == pytest.approx(mm(0.3), abs=1e-12)
+    assert tcp_z - tip_start == pytest.approx(mm(5.0), abs=1e-12)
     assert body_end == pytest.approx(tip_start, abs=1e-12)
-    assert body.length == pytest.approx(35 * MM)
-    assert tcp_z - (cb[2] - body.length / 2) == pytest.approx(40 * MM, abs=1e-12)
+    assert body.length == pytest.approx(mm(35))
+    assert tcp_z - (cb[2] - body.length / 2) == pytest.approx(mm(40), abs=1e-12)
 
 
 def test_hbox_defaults(robot):
     head = robot.link_map['head_body'].collisions[0]
-    assert np.allclose(head.geometry.size, np.array([194, 35, 381]) * MM)
+    assert np.allclose(head.geometry.size, mm(194, 35, 381))
     mount = robot.link_map['head_mount'].collisions[0]
-    assert np.allclose(mount.geometry.size, np.array([100, 100, 60]) * MM)
+    assert np.allclose(mount.geometry.size, mm(100, 100, 60))
     conduit = robot.link_map['conduit'].collisions
     assert [type(c.geometry).__name__ for c in conduit] == ['Cylinder', 'Sphere', 'Sphere']
-    assert conduit[0].geometry.radius == pytest.approx(15 * MM)
-    assert conduit[0].geometry.length + 2 * conduit[1].geometry.radius == pytest.approx(300 * MM)
+    assert conduit[0].geometry.radius == pytest.approx(mm(15))
+    assert conduit[0].geometry.length + 2 * conduit[1].geometry.radius == pytest.approx(mm(300))
     # Capsule axis along tool0 +X (default), starting at the head body side face.
     t = fk(robot, 'conduit', root='tool0')
     assert np.allclose(t[:3, 2], [1, 0, 0], atol=1e-9)
-    assert np.allclose(t[:3, 3], np.array([97, 0, 110]) * MM, atol=1e-12)
+    assert np.allclose(t[:3, 3], mm(97, 0, 110), atol=1e-12)
 
 
 def test_head_box_args():
     r = _urdf(head_w_mm=150, head_d_mm=40, head_h_mm=300, nozzle_dia_mm=16)
-    assert np.allclose(r.link_map['head_body'].collisions[0].geometry.size, np.array([150, 40, 300]) * MM)
-    assert r.link_map['nozzle_tip'].collisions[0].geometry.radius == pytest.approx(8 * MM)
+    assert np.allclose(r.link_map['head_body'].collisions[0].geometry.size, mm(150, 40, 300))
+    assert r.link_map['nozzle_tip'].collisions[0].geometry.radius == pytest.approx(mm(8))
 
 
 def test_base_and_positioner_pose_args():
-    q = (0.0, 0.0, math.sin(math.radians(45)), math.cos(math.radians(45)))  # Rz(90 deg)
+    q = matrix_to_quat(axis_angle([0, 0, 1], units.deg_to_rad(90.0)))  # Rz(90 deg)
     r = _urdf(base_xyz_mm='100 -20 50', base_quat_xyzw=' '.join(map(str, q)),
               positioner_xyz_mm='700 0 300', positioner_quat_xyzw='0 0 0 1', positioner_axis_xyz='0 1 0')
     base = fk(r, 'base_link')
-    assert np.allclose(base[:3, 3], [0.1, -0.02, 0.05])
-    assert np.allclose(base[:3, :3], axis_angle([0, 0, 1], math.pi / 2), atol=1e-12)
-    flange = fk(r, 'positioner_flange', {'positioner_joint': math.pi / 2})
-    assert np.allclose(flange[:3, 3], [0.7, 0.0, 0.3])
-    assert np.allclose(flange[:3, :3], axis_angle([0, 1, 0], math.pi / 2), atol=1e-12)
+    assert np.allclose(base[:3, 3], mm(100, -20, 50))
+    assert np.allclose(base[:3, :3], axis_angle([0, 0, 1], units.deg_to_rad(90.0)), atol=1e-12)
+    flange = fk(r, 'positioner_flange', {'positioner_joint': units.deg_to_rad(90.0)})
+    assert np.allclose(flange[:3, 3], mm(700, 0, 300))
+    assert np.allclose(flange[:3, :3], axis_angle([0, 1, 0], units.deg_to_rad(90.0)), atol=1e-12)
 
 
 def test_default_poses_identity(robot):
@@ -184,3 +211,26 @@ def test_srdf_no_head_allowance_outside_rigid_tool():
             assert a in rigid and b in rigid, (a, b)
     # And none for the positioner frames (the rotating set lives in the planning scene).
     assert not [p for p in pairs if {'positioner_axis', 'positioner_flange'} & set(p)]
+
+
+@pytest.mark.parametrize('rot', [
+    axis_angle([0, 0, 1], 0.3) @ axis_angle([0, 1, 0], units.deg_to_rad(90.0)),    # gimbal lock, pitch +90
+    axis_angle([0, 0, 1], -1.1) @ axis_angle([0, 1, 0], units.deg_to_rad(-90.0)),  # gimbal lock, pitch -90
+    axis_angle([1, 2, 3], 2.0),
+])
+def test_pose_quaternion_round_trip(rot):
+    """Quaternion args give exactly that rotation, also at pitch = +-90 deg (gimbal-safe conversion)."""
+    q = ' '.join(f'{v:.17g}' for v in matrix_to_quat(rot))
+    r = _urdf(base_quat_xyzw=q, positioner_quat_xyzw=q)
+    assert np.allclose(fk(r, 'base_link')[:3, :3], rot, atol=1e-12)
+    assert np.allclose(fk(r, 'positioner_axis')[:3, :3], rot, atol=1e-12)
+    assert np.allclose(quat_to_matrix(matrix_to_quat(rot)), rot, atol=1e-12)
+
+
+def test_srdf_reasons():
+    """Adjacent = parent / child through geometry-less frames (wrist_3_link -> head link); head <-> head = Rigid."""
+    for d in _srdf().iter('disable_collisions'):
+        pair = {d.get('link1'), d.get('link2')}
+        if pair & set(HEAD_LINKS):
+            expected = 'Adjacent' if 'wrist_3_link' in pair else 'Rigid'
+            assert d.get('reason') == expected, (pair, d.get('reason'))

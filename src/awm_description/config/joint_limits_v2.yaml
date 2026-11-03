@@ -1,6 +1,5 @@
 # Cell v2 MoveIt joint limits (rad, REP 103). UR joints as in joint_limits.yaml (do not raise).
-# positioner_joint: 30 deg/s = 0.5236 rad/s and 1.0 rad/s^2 -- Assumption until the drive is chosen (OI-14);
-# equals the URDF limit (positioner_velocity_deg_s).
+# positioner_joint is NOT here: its limits come only from positioner_limits.yaml (the launch adds them).
 default_velocity_scaling_factor: 0.1
 default_acceleration_scaling_factor: 0.1
 joint_limits:
@@ -10,4 +9,3 @@ joint_limits:
   wrist_1_joint: {has_velocity_limits: true, max_velocity: 3.14159, has_acceleration_limits: true, max_acceleration: 5.0}
   wrist_2_joint: {has_velocity_limits: true, max_velocity: 3.14159, has_acceleration_limits: true, max_acceleration: 5.0}
   wrist_3_joint: {has_velocity_limits: true, max_velocity: 3.14159, has_acceleration_limits: true, max_acceleration: 5.0}
-  positioner_joint: {has_velocity_limits: true, max_velocity: 0.5236, has_acceleration_limits: true, max_acceleration: 1.0}

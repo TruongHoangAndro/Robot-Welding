@@ -96,8 +96,8 @@
     <xacro:awm_on_tool0 child="nozzle_tip"/>
 
     <!-- Conduit capsule (fiber + wire feed), Assumption: starts at (conduit_x, conduit_y, conduit_z) in tool0 and
-         runs along the local +Z of the rotation (conduit_r, conduit_p, conduit_y); default = along tool0 +X, out of
-         the head body side face. -->
+         runs along the local +Z of the rotation (conduit_r, conduit_p, conduit_y). Deviation from TST-002 §3.1
+         ("leaving the head rear"): modelled leaving the head side at x 97, z 110 along tool0 +X; to be confirmed. -->
     <link name="conduit">
       <visual>
         <origin xyz="0 0 ${(c_r + c_cyl / 2.0) * mm}"/>

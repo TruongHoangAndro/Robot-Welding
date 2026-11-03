@@ -15,13 +15,11 @@
   <xacro:arg name="base_xyz_mm" default="0 0 0"/>
   <xacro:arg name="base_quat_xyzw" default="0 0 0 1"/>
   <!-- world_T_positioner_axis and the axis in that frame (Assumption: identity pose, axis +X = CAD X axis of the
-       positioner, CP-20). Limits ±400 deg and 30 deg/s: Assumption (OI-14, OI-27). -->
+       positioner, CP-20). Limits: only in positioner_limits.yaml (Assumption, OI-14, OI-27). -->
   <xacro:arg name="positioner_xyz_mm" default="0 0 0"/>
   <xacro:arg name="positioner_quat_xyzw" default="0 0 0 1"/>
   <xacro:arg name="positioner_axis_xyz" default="1 0 0"/>
-  <xacro:arg name="positioner_lower_deg" default="-400"/>
-  <xacro:arg name="positioner_upper_deg" default="400"/>
-  <xacro:arg name="positioner_velocity_deg_s" default="30"/>
+  <xacro:arg name="positioner_limits_file" default="$(find awm_description)/config/positioner_limits.yaml"/>
 
   <!-- H-BOX head (TST-002 Rev 0.3 draft §3.1). Every value: Assumption, except head_w/d/h (data-sheet envelope). -->
   <xacro:arg name="mount_w_mm" default="100"/>          <!-- Assumption: no mount drawing -->
@@ -38,6 +36,8 @@
   <xacro:arg name="contact_standoff_mm" default="0.3"/> <!-- Assumption s_c (F9, D16 contact_standoff_mm) -->
   <xacro:arg name="conduit_dia_mm" default="30"/>       <!-- Assumption -->
   <xacro:arg name="conduit_len_mm" default="300"/>      <!-- Assumption -->
+  <!-- Conduit: deviation from TST-002 §3.1 ("leaving the head rear"): modelled leaving the head side at x 97,
+       z 110 along tool0 +X. Assumption, to be confirmed by Truong. -->
   <xacro:arg name="conduit_x_mm" default="97"/>         <!-- Assumption: head body side face (W / 2) -->
   <xacro:arg name="conduit_y_mm" default="0"/>          <!-- Assumption -->
   <xacro:arg name="conduit_z_mm" default="110"/>        <!-- Assumption: 50 mm into the head body -->
@@ -57,20 +57,30 @@
   <xacro:property name="pos_xyz" value="${[float(v) for v in '$(arg positioner_xyz_mm)'.split()]}"/>
   <xacro:property name="pos_q" value="${[float(v) for v in '$(arg positioner_quat_xyzw)'.split()]}"/>
   <xacro:property name="pos_axis" value="${[float(v) for v in '$(arg positioner_axis_xyz)'.split()]}"/>
+  <!-- Gimbal-safe conversion via the rotation matrix R = Rz(yaw) Ry(pitch) Rx(roll): at |pitch| = 90 deg roll is
+       set to 0 and yaw = atan2(-R01, R11), so the URDF origin reproduces R exactly. -->
   <xacro:macro name="awm_quat_rpy" params="q name">
     <xacro:property name="n" value="${sqrt(q[0]**2 + q[1]**2 + q[2]**2 + q[3]**2)}"/>
     <xacro:property name="x" value="${q[0] / n}"/>
     <xacro:property name="y" value="${q[1] / n}"/>
     <xacro:property name="z" value="${q[2] / n}"/>
     <xacro:property name="w" value="${q[3] / n}"/>
-    <xacro:property name="sp" value="${max(-1.0, min(1.0, 2.0 * (w * y - z * x)))}"/>
+    <xacro:property name="r00" value="${1.0 - 2.0 * (y * y + z * z)}"/>
+    <xacro:property name="r01" value="${2.0 * (x * y - w * z)}"/>
+    <xacro:property name="r10" value="${2.0 * (x * y + w * z)}"/>
+    <xacro:property name="r11" value="${1.0 - 2.0 * (x * x + z * z)}"/>
+    <xacro:property name="r20" value="${2.0 * (x * z - w * y)}"/>
+    <xacro:property name="r21" value="${2.0 * (y * z + w * x)}"/>
+    <xacro:property name="r22" value="${1.0 - 2.0 * (x * x + y * y)}"/>
+    <xacro:property name="cp" value="${sqrt(r00 * r00 + r10 * r10)}"/>
     <xacro:property name="${name}" scope="parent"
-                    value="${[atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y)), asin(sp),
-                              atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))]}"/>
+                    value="${[atan2(r21, r22), atan2(-r20, cp), atan2(r10, r00)] if cp > 1e-9
+                             else [0.0, atan2(-r20, cp), atan2(-r01, r11)]}"/>
   </xacro:macro>
   <xacro:awm_quat_rpy q="${base_q}" name="base_rpy"/>
   <xacro:awm_quat_rpy q="${pos_q}" name="pos_rpy"/>
   <xacro:property name="initial_positions_file" value="$(arg initial_positions_file)"/>
+  <xacro:property name="pos_lim" value="${xacro.load_yaml('$(arg positioner_limits_file)')['positioner_joint']}"/>
   <xacro:property name="initial_positions" value="${xacro.load_yaml(initial_positions_file)}"/>
 
   <link name="world"/>
@@ -103,7 +113,7 @@
     conduit_r_deg="$(arg conduit_r_deg)" conduit_p_deg="$(arg conduit_p_deg)" conduit_y_deg="$(arg conduit_y_deg)"/>
 
   <xacro:awm_positioner parent="world" xyz_mm="${pos_xyz}" rpy_rad="${pos_rpy}" axis="${pos_axis}"
-    lower_deg="$(arg positioner_lower_deg)" upper_deg="$(arg positioner_upper_deg)"
-    velocity_deg_s="$(arg positioner_velocity_deg_s)" effort="100.0"/>
+    lower_deg="${pos_lim['lower_deg']}" upper_deg="${pos_lim['upper_deg']}"
+    velocity_deg_s="${pos_lim['max_velocity_deg_s']}" effort="100.0"/>
   <xacro:awm_positioner_ros2_control initial_rad="${initial_positions['positioner_joint']}"/>
 </robot>
