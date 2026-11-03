@@ -33,8 +33,8 @@ LOG = logging.getLogger('awm_geometry')
 SCHEMA = 'cell_view'
 SCHEMA_VERSION = '0.1'
 UP_AXES = ('+X', '-X', '+Y', '-Y', '+Z', '-Z')
-LINEAR_DEFLECTION_MM = 0.5   # contract: linear <= 0.5 mm
-ANGULAR_DEFLECTION_DEG = 20.0
+LINEAR_DEFLECTION_MM = 2.0   # contract v0.1 (2026-11-03): linear <= 2.0 mm, angular <= 30 deg, < 15 MB
+ANGULAR_DEFLECTION_DEG = 30.0
 
 
 def _mesh(shape: TopoDS_Shape):
