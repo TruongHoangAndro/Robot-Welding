@@ -6,6 +6,7 @@ from typing import List
 import numpy as np
 import pytest
 
+from awm_core import units
 from awm_path.core.kinematics import UrAnalyticKinematics, fk_tcp, pose_error
 from awm_path.core.states import config_label
 from awm_path.core.sweep import (CSV_COLUMNS, PlannerParams, pitch_points, required_points, sweep, tcp_pose,
@@ -83,7 +84,7 @@ def test_tcp_pose_beam_axis_and_psi() -> None:
         np.testing.assert_allclose(t[:3, 2], -f[:3, 2], atol=1e-12)
         np.testing.assert_allclose(t[:3, 3], f[:3, 3], atol=1e-12)
         cos_psi = float(t[:3, 0] @ f[:3, 0])
-        assert cos_psi == pytest.approx(math.cos(math.radians(psi)), abs=1e-12)
+        assert cos_psi == pytest.approx(math.cos(units.deg_to_rad(psi)), abs=1e-12)
     np.testing.assert_allclose(tcp_pose(f, 0.0)[:3, 0], f[:3, 0], atol=1e-12)
 
 
@@ -147,7 +148,7 @@ def test_wrist_singular_frame(kin, params) -> None:
     out = sweep([frame], tool(), kin, params, (0.0,))
     match = [c for c in out[0] if c.q_deg is not None and np.allclose(c.q_deg, q, atol=1e-6)]
     assert len(match) == 1 and match[0].reason == 'singular_wrist'
-    assert match[0].metrics.sin_q5 == pytest.approx(math.sin(math.radians(3.0)))
+    assert match[0].metrics.sin_q5 == pytest.approx(math.sin(units.deg_to_rad(3.0)))
 
 
 def test_joint_limit_reason(kin) -> None:
@@ -174,3 +175,42 @@ def test_sweep_and_csv_are_deterministic(tmp_path, frames, kin, params, layers) 
     assert header == list(CSV_COLUMNS) + ['valid']
     with pytest.raises(ValueError):
         write_candidates_csv(str(a), layers, {'bad': [[1]]})
+
+
+def test_backend_empty_at_q5_zero_is_near_singular(kin, params) -> None:
+    """R2: a reachable pose at q5 = 0 for which the backend returns [] -> ``no_ik_near_singular``."""
+    from awm_path.core.states import ik_existence
+    rng = np.random.default_rng(20261107)
+    for _ in range(2000):
+        q = rng.uniform(-180.0, 180.0, size=6)
+        q[4] = 0.0
+        t = kin.fk(q)
+        if not kin.ik(t) and ik_existence(t) == 'singular':
+            break
+    else:
+        pytest.fail('no empty-IK pose at q5 = 0 found in the seeded set')
+    frame = fk_tcp(kin, q, tool()) @ np.diag([1.0, -1.0, -1.0, 1.0])
+    out = sweep([frame], tool(), kin, params, (0.0,))
+    assert [c.reason for c in out[0]] == ['no_ik_near_singular']
+
+
+class _EmptyIk:
+    """Fake backend: real FK, IK always []."""
+
+    def __init__(self, kin) -> None:
+        self._kin = kin
+        self.name = 'empty-ik-fake'
+
+    def fk(self, q):
+        return self._kin.fk(q)
+
+    def ik(self, t):
+        return []
+
+
+def test_backend_empty_on_reachable_pose_has_own_reason(tmp_path, kin, params, frames) -> None:
+    out = sweep(frames[:2], tool(), _EmptyIk(kin), params, (0.0, 90.0))
+    assert {c.reason for layer in out for c in layer} == {'ik_backend_empty'}
+    path = tmp_path / 'c.csv'
+    write_candidates_csv(str(path), out)
+    assert path.read_text().count('ik_backend_empty') == 4

@@ -226,3 +226,34 @@ def test_e2e_closed_circle_is_rejected_with_reasons(kin) -> None:
     net = q[-1] - q[0] + (np.mod(q[0] - q[-1] + 180.0, 360.0) - 180.0)
     assert np.any(np.isclose(np.abs(net), 360.0, atol=1e-6))
     print(f'closed circle (psi 90): net joint turn after closing step {np.round(net, 3)}')
+
+
+def test_unwrapped_input_is_wrapped_not_lost() -> None:
+    """``solve`` is public: q outside (-180, 180] is wrapped before the window search (edge found, not lost)."""
+    layers = [[cand(0, [0, -90, 90, -90, 90, 362.0])], [cand(1, [0, -90, 90, -90, 90, 2.0])]]
+    res = solve(layers, None, P, closed=False)
+    assert res.ok and res.path[1].q_deg[5] - res.path[0].q_deg[5] == pytest.approx(0.0)
+    layers2 = [[cand(0, [0, -90, 90, -90, 90, 540.0])], [cand(1, [0, -90, 90, -90, 90, 182.0])]]
+    res2 = solve(layers2, None, P, closed=False)
+    assert res2.ok and res2.path[1].q_deg[5] - res2.path[0].q_deg[5] == pytest.approx(2.0)
+    layers_far = [[cand(0, [0, -90, 90, -90, 90, 722.0])], [cand(1, [0, -90, 90, -90, 90, -718.0])]]
+    res_far = solve(layers_far, None, P, closed=False)
+    assert res_far.ok and res_far.path[0].q_deg[5] == pytest.approx(2.0)
+    layers3 = [[cand(0, [0, -90, 90, -90, 90, 540.0])], [cand(1, [0, -90, 90, -90, 90, 2.0])]]
+    res3 = solve(layers3, None, P, closed=False)  # 540 = 180 (mod 360): 178 deg away from 2 -> no edge
+    assert not res3.ok and res3.failing_layers == (1,)
+
+
+def test_e2e_closed_circle_psi_free_is_rejected(kin) -> None:
+    """Same closed circle, ψ-free (36 values), 288 points: rejected; failing layer and reason recorded."""
+    from test_core_sweep import AXIS, CENTRE, R_MM, circle_frames, tool
+    from awm_path.core.sweep import sweep
+    layers = sweep(circle_frames(CENTRE, AXIS, R_MM, 288), tool(), kin, P, P.psi_free)
+    res = solve(layers, None, P, closed=True)
+    reasons = {k: sum(dict(rc).get(k, 0) for rc in res.reason_counts)
+               for k in ('wrist3_travel', 'joint_limit_unwrapped', 'no_closure')}
+    print(f'closed circle psi-free: failing layers {res.failing_layers}, max reached {res.max_reached_layer}, '
+          f'DP drops {reasons}, nodes {res.n_nodes}, wall {res.wall_time_s:.2f} s')
+    assert not res.ok and res.path == ()
+    assert res.failing_layers == (145,)
+    assert reasons['wrist3_travel'] > 0

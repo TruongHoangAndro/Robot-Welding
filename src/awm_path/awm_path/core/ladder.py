@@ -116,7 +116,8 @@ def _build_layer(cands: Sequence[Candidate], scores: Sequence[NodeScore], params
     rows.sort(key=lambda r: (r[0], r[1], r[2], r[3]))
     if not rows:
         return _Layer(np.zeros(0, int), np.zeros((0, 6)), np.zeros(0, int), np.zeros(0, int), np.zeros(0))
-    return _Layer(idx=np.array([r[3] for r in rows]), q=np.array([r[2] for r in rows], dtype=float),
+    # ``solve`` is public: joint values are wrapped into (-180, 180] so the window search never misses an edge.
+    return _Layer(idx=np.array([r[3] for r in rows]), q=wrap_deg(np.array([r[2] for r in rows], dtype=float)),
                   label=np.array([r[1] for r in rows]), psi=np.array([r[0] for r in rows]),
                   cost=np.array([r[4] for r in rows], dtype=float))
 

@@ -20,7 +20,7 @@ from awm_path.core.states import (LABEL_ORDER, SingularityMetrics, SingularityTh
                                   ik_existence, label_and_metrics, singular_reason, unwrapped_variants)
 
 #: Candidate rejection reasons of the kinematic sweep (``None`` = kinematically valid).
-REASONS = ('no_ik_unreachable', 'no_ik_near_singular', 'joint_limit',
+REASONS = ('no_ik_unreachable', 'no_ik_near_singular', 'ik_backend_empty', 'joint_limit',
            'singular_wrist', 'singular_elbow', 'singular_shoulder')
 
 #: UR5e joint limits (deg) from ``ur_description`` ``config/ur5e/joint_limits.yaml`` (elbow limited to ±180°).
@@ -140,7 +140,8 @@ def required_points(length_mm: float, rate_deg_per_mm: float, params: PlannerPar
 class Candidate:
     """One kinematic candidate: (point, ψ, IK solution). ``q_deg`` in (-180, 180] (unwrapping happens in the DP).
 
-    ``reason`` None = kinematically valid. For ``no_ik_*`` there is one candidate per (point, ψ) with no joint values.
+    ``reason`` None = kinematically valid. For ``no_ik_*`` / ``ik_backend_empty`` (backend returned [] although the
+    analytic test finds a strictly reachable pose) there is one candidate per (point, ψ) with no joint values.
     """
 
     point: int
@@ -170,7 +171,9 @@ def sweep(frames_mm: Sequence[np.ndarray], tool0_T_tcp: np.ndarray, kin: Kinemat
             sols = ik_tcp(kin, target, tool)
             if not sols:
                 cls = ik_existence(target @ tool_inv)
-                reason = 'no_ik_unreachable' if cls == 'unreachable' else 'no_ik_near_singular'
+                # 'reachable' with no backend solution is not a singularity: own reason, counted and visible.
+                reason = {'unreachable': 'no_ik_unreachable', 'singular': 'no_ik_near_singular'}.get(
+                    cls, 'ik_backend_empty')
                 layer.append(Candidate(i, j, float(psi), None, None, None, reason))
                 continue
             entries = []
