@@ -9,7 +9,7 @@ file, turns a pose spec into a joint state, and summarises the results; the ROS-
 Pose file (YAML / JSON, mm, degrees)::
 
     schema: awm_g2_poses/0.1
-    seam_faces: {J2: {n1: [F26], n2: [F35]}}          # D04 faces of the seams used by contact checks
+    seam_faces: {<seam>: {n1: [<face_id>], n2: [<face_id>]}}   # D04 faces of the seams used by contact checks
     poses:
       - id: C01                                       # unique
         kind: colliding | free | contact_zone
@@ -17,10 +17,10 @@ Pose file (YAML / JSON, mm, degrees)::
         theta_deg: 0.0                                # positioner angle
         tcp: {frame: part | world, position_mm: [x, y, z], beam_dir: [..], x_dir: [..]}   # or
         joints_deg: [q1, .., q6]
-        label: S+E-W+                                 # optional configuration label of the IK solution
+        label: <S±E±W±>                               # optional configuration label of the IK solution
         checks: [validity] | [validity, contact]      # contact needs `seam`
-        seam: J2
-        expect: {valid: false, objects: [jig_1]}      # objects: names expected in a contact pair (reported)
+        seam: <seam>
+        expect: {valid: false, objects: [<object_id>]}  # objects expected in a contact pair (reported)
 
 Verdict of one pose = F4 validity, and the F9 contact check when listed (a node is valid only if both pass).
 Pure Python, mm / deg (B-06).
