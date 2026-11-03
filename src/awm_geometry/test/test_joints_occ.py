@@ -50,7 +50,7 @@ def _circle_points(edge, n=12):
     return out, curve
 
 
-def _check_outer_joints(shape, tol=0.05, probe=0.5):
+def _check_outer_joints(shape, tol=0.05, probe=0.5, outer_r=OUTER_R):
     """Return the worst joint-aware and per-solid angles to the radial direction on outer joints."""
     from OCC.Core.GeomAbs import GeomAbs_Circle
 
@@ -62,7 +62,7 @@ def _check_outer_joints(shape, tol=0.05, probe=0.5):
     worst_new, worst_old, n_outer = 0.0, 0.0, 0
     for joint in found:
         points, curve = _circle_points(joint.edge_a)
-        if curve.GetType() != GeomAbs_Circle or abs(curve.Circle().Radius() - OUTER_R) > tol:
+        if curve.GetType() != GeomAbs_Circle or abs(curve.Circle().Radius() - outer_r) > tol:
             continue
         n_outer += 1
         circle = curve.Circle()
@@ -120,12 +120,15 @@ def test_gate_g1_golden_part(occ):
     from awm_geometry.assembly import compound, read_components
     from awm_geometry.joints import solids_of
 
-    name = os.environ.get('AWM_GOLDEN_COMPONENT', '564082-Assembly-3 parts')
+    from conftest import golden_record
+
+    rec = golden_record()
+    name = rec['component']
     components = read_components(os.environ['AWM_CELL_STEP'], name)
     assert components, f'component {name} not found'
     shape = compound([components[0].shape])
-    assert len(solids_of(shape)) == 3
-    n_outer, worst_new, worst_old, _ = _check_outer_joints(shape)
-    assert n_outer == 2  # J1 and J2
+    assert len(solids_of(shape)) == rec['solids']
+    n_outer, worst_new, worst_old, _ = _check_outer_joints(shape, outer_r=rec['outer_radius_mm'])
+    assert n_outer == rec['outer_joints']  # J1 and J2
     assert worst_new < G1_LIMIT_DEG
     assert worst_old > 40.0

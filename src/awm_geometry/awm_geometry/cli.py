@@ -10,6 +10,15 @@ Commands (lengths in metres, except export-view: mm per the D20 contract):
   export-view --step FILE [--job DIR] [--component NAME] [--up-axis +Y] --out DIR
                                              A13 D20 view model in mm: DIR/view.glb + DIR/topology.json
                                              (contract docs/generated/contracts/D20_view_model.md)
+  export-scene --step FILE --map MAP.yaml --repo DIR --job JOB [--chord-near-mm 0.1]
+                                             A15 / A18 spike scene (mm): cell/model hulls + frames.yaml +
+                                             scene_manifest.json; job import, D20, collision mesh, placement
+  export-cell-view --step FILE --components FILE.json --out DIR --up-axis AXIS
+                                             S10-lite display model DIR/cell_view.glb (one node per leaf
+                                             component, file frame, mm; contract S10_lite_cell_model.md)
+  inspect-assembly --step FILE --out FILE.json [--no-cylinders]
+                                             A18 input: component tree of a STEP assembly (paths,
+                                             names, placements 4x4 and bboxes in mm, file frame)
 
 Logs go to stderr; a one-line JSON summary goes to stdout.
 """
@@ -19,15 +28,16 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import math
 import os
 import shutil
 import sys
 from pathlib import Path
 from typing import List, Optional
 
+import numpy as np
+
 import awm_geometry
-from awm_core import jsonio
+from awm_core import jsonio, units
 from awm_core.hashing import sha256_file
 from awm_core.repository import JobPaths
 
@@ -45,11 +55,22 @@ def cmd_info(_args) -> dict:
 
 
 def cmd_import(args) -> dict:
-    from awm_geometry import occ_io, topology
     from awm_geometry import part as part_mod
 
     job = JobPaths(args.job)
-    step_src = Path(args.step)
+    copy_step(Path(args.step), job)
+    LOG.info('A11 reading %s%s', job.model_step,
+             f' (component {args.component})' if args.component else '')
+    LOG.info('A12 check & heal')
+    loaded = part_mod.load_part(job.model_step, args.component)
+    return write_part_record(job, Path(args.step).name, loaded, args.part_no, args.part_rev,
+                             args.linear_deflection_m, args.angular_deflection_deg)
+
+
+def copy_step(step_src: Path, job: JobPaths) -> None:
+    """A11: copy the STEP file into the job as read-only ``model.step`` (D01)."""
+    from awm_geometry import occ_io
+
     if not step_src.is_file():
         raise occ_io.GeometryError(f'STEP file not found: {step_src}')
     job.dir.mkdir(parents=True, exist_ok=True)
@@ -59,16 +80,19 @@ def cmd_import(args) -> dict:
             job.model_step.chmod(0o644)
         shutil.copyfile(step_src, job.model_step)
         job.model_step.chmod(0o444)
-    LOG.info('A11 reading %s%s', job.model_step,
-             f' (component {args.component})' if args.component else '')
-    LOG.info('A12 check & heal')
-    loaded = part_mod.load_part(job.model_step, args.component)
+
+
+def write_part_record(job: JobPaths, step_name: str, loaded, part_no: str, part_rev: str,
+                      linear_deflection_m: float, angular_deflection_deg: float) -> dict:
+    """A12-A14 outputs of a loaded part: model.brep, mesh.stl, edges.json, part.json."""
+    from awm_geometry import occ_io, topology
+
     shape, unit, healed, checks = loaded.shape, loaded.unit, loaded.healed, loaded.checks
     failed = [c for c in checks if not c.ok and c.name in ('brep_valid', 'has_solid')]
     occ_io.write_brep(shape, job.brep_cache)
-    LOG.info('A13 tessellate (linear deflection %.5f m)', args.linear_deflection_m)
-    triangles = occ_io.tessellate_to_stl(shape, job.mesh_stl, args.linear_deflection_m,
-                                         math.radians(args.angular_deflection_deg))
+    LOG.info('A13 tessellate (linear deflection %.5f m)', linear_deflection_m)
+    triangles = occ_io.tessellate_to_stl(shape, job.mesh_stl, linear_deflection_m,
+                                         units.deg_to_rad(angular_deflection_deg))
     LOG.info('A21 edge catalogue')
     catalogue = topology.edge_catalogue(shape)
     edges_doc = jsonio.make_header(_created_by(), [job.model_step], job.dir)
@@ -77,14 +101,14 @@ def cmd_import(args) -> dict:
     lo, hi = topology.bbox(shape)
     part = jsonio.make_header(_created_by(), [job.model_step], job.dir)
     part.update({
-        'part_no': args.part_no, 'part_rev': args.part_rev,
-        'step_file': step_src.name, 'step_sha256': sha256_file(job.model_step),
+        'part_no': part_no, 'part_rev': part_rev,
+        'step_file': step_name, 'step_sha256': sha256_file(job.model_step),
         'unit_source': unit, 'bbox_m': {'min': lo, 'max': hi},
         'counts': topology.counts(shape),
         'checks': [c.as_dict() for c in checks], 'healed': healed,
         'mesh': {'file': 'cache/mesh.stl', 'sha256': sha256_file(job.mesh_stl),
-                 'linear_deflection_m': args.linear_deflection_m,
-                 'angular_deflection_rad': math.radians(args.angular_deflection_deg),
+                 'linear_deflection_m': linear_deflection_m,
+                 'angular_deflection_rad': units.deg_to_rad(angular_deflection_deg),
                  'triangles': triangles},
         'brep_cache': {'file': 'cache/model.brep', 'sha256': sha256_file(job.brep_cache)},
         'edges_file': {'file': 'cache/edges.json', 'sha256': sha256_file(job.edges_json)},
@@ -148,6 +172,43 @@ def cmd_export_view(args) -> dict:
                        _created_by(), job)
 
 
+def cmd_inspect_assembly(args) -> dict:
+    from awm_geometry import assembly
+
+    step = Path(args.step)
+    LOG.info('A18 reading assembly %s', step)
+    components, unit = assembly.component_tree(step, cylinders=not args.no_cylinders)
+    scaled = [c['index'] for c in components
+              if abs(abs(np.linalg.det(np.asarray(c['local_placement_mm'])[:3, :3])) - 1.0) > 1e-9]
+    if scaled:
+        LOG.warning('%d placement(s) are not rigid (scale != 1): %s', len(scaled), scaled[:10])
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    doc = dict(jsonio.make_header(_created_by(), [step], out.parent), schema_version='2.0')
+    doc.update({'source': {'file': step.name, 'sha256': sha256_file(step)},
+                'unit_source': unit, 'units': {'length': 'mm'}, 'frame': 'file',
+                'components': components})
+    out.write_text(json.dumps(doc, indent=1) + '\n')
+    roots = [c for c in components if c['parent'] is None]
+    return {'out': str(out), 'components': len(components),
+            'solids': sum(c['solids'] for c in roots), 'unit_source': unit}
+
+
+def cmd_export_scene(args) -> dict:
+    from awm_geometry import scene
+
+    return scene.export_scene(Path(args.step), Path(args.map), Path(args.repo), args.job,
+                              chord_near_mm=args.chord_near_mm, chord_far_mm=args.chord_far_mm,
+                              padding_mm=args.padding_mm, created_by=_created_by())
+
+
+def cmd_export_cell_view(args) -> dict:
+    from awm_geometry import cell_view
+
+    return cell_view.export(Path(args.step), Path(args.components), Path(args.out), args.up_axis,
+                            _created_by())
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='awm_geometry', description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -179,11 +240,35 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--up-axis', default='+Z', choices=['+X', '-X', '+Y', '-Y', '+Z', '-Z'],
                    help='up axis of the source file (recorded only; no rotation is applied)')
     p.add_argument('--out', required=True)
+    p = sub.add_parser('inspect-assembly')
+    p.add_argument('--step', required=True)
+    p.add_argument('--out', required=True)
+    p.add_argument('--no-cylinders', action='store_true',
+                   help='skip the largest-cylinder axis of each leaf part')
+    p = sub.add_parser('export-scene')
+    p.add_argument('--step', required=True, help='cell CAD STEP assembly (D21)')
+    p.add_argument('--map', required=True, help='role map cad_map.yaml (component -> role, frames)')
+    p.add_argument('--repo', required=True, help='repository root (cell/model and jobs/<job> are written)')
+    p.add_argument('--job', required=True, help='job folder name <PartNo>_<PartRev>')
+    p.add_argument('--chord-near-mm', type=float, default=0.1,
+                   help='part collision mesh chord on the faces at joint edges (DES-001 5.4)')
+    p.add_argument('--chord-far-mm', type=float, default=0.5,
+                   help='part collision mesh chord elsewhere')
+    p.add_argument('--padding-mm', type=float, default=3.0,
+                   help='padding of the cell objects (D16 padding_mm)')
+    p = sub.add_parser('export-cell-view')
+    p.add_argument('--step', required=True, help='cell CAD STEP assembly')
+    p.add_argument('--components', required=True, help='cell_components.json of inspect-assembly')
+    p.add_argument('--out', required=True, help='folder for cell_view.glb')
+    p.add_argument('--up-axis', required=True, choices=['+X', '-X', '+Y', '-Y', '+Z', '-Z'],
+                   help='up axis of the file (recorded only; no rotation is applied); no default: it is cell data')
     return parser
 
 
 COMMANDS = {'info': cmd_info, 'import': cmd_import, 'sample': cmd_sample,
-            'make-test-part': cmd_make_test_part, 'export-view': cmd_export_view}
+            'make-test-part': cmd_make_test_part, 'export-view': cmd_export_view,
+            'inspect-assembly': cmd_inspect_assembly, 'export-scene': cmd_export_scene,
+            'export-cell-view': cmd_export_cell_view}
 
 
 def main(argv: Optional[List[str]] = None) -> int:

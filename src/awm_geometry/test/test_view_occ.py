@@ -321,18 +321,22 @@ def test_edge_in_two_joints_fails(tmp_path, occ, caplog):
 @pytest.mark.skipif(not os.environ.get('AWM_CELL_STEP'), reason='AWM_CELL_STEP not set')
 def test_golden_part_view(tmp_path, occ):
     """Golden part (cell CAD component): 3 solids, the two weld joints J1 / J2 closed, schema valid."""
-    name = os.environ.get('AWM_GOLDEN_COMPONENT', '564082-Assembly-3 parts')
+    from conftest import golden_record
+
+    rec = golden_record()
+    name = rec['product']
     topo, data = _export(os.environ['AWM_CELL_STEP'], tmp_path / 'golden',
                          '--component', name, '--up-axis', '+Y')
     assert topo['source']['component'] == name and topo['source']['up_axis'] == '+Y'
-    assert len(topo['solids']) == 3
+    assert len(topo['solids']) == rec['solids']
     check_glb(topo, data)
     check_joints_consistent(topo)
     assert all(j['closed'] for j in topo['joints'])
-    outer = [j for j in topo['joints'] if abs(j['length_mm'] - math.pi * 26.67) <= 1.0]
-    assert len(outer) == 2  # J1 (nipple - solid) and J2 (solid - elbow), outer diameter
+    circumference = math.pi * 2.0 * rec['outer_radius_mm']
+    outer = [j for j in topo['joints'] if abs(j['length_mm'] - circumference) <= 1.0]
+    assert len(outer) == rec['outer_joints']  # J1 (nipple - solid) and J2 (solid - elbow), outer diameter
     assert {(j['solid_a'], j['solid_b']) for j in outer} != {(outer[0]['solid_a'],
                                                              outer[0]['solid_b'])}
     # The bores of nipple, solid and elbow also meet edge to edge: find_joint_edges returns those
     # circles as well; all 4 joints are kept (lead decision 2026-11-02). Pinned so a change shows up.
-    assert len(topo['joints']) == 4
+    assert len(topo['joints']) == rec['joints']
