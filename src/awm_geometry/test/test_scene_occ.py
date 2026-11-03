@@ -397,15 +397,33 @@ def test_inside_out_shell_is_refused(occ):
         scene.closed_shell(verts, tris[:, [0, 2, 1]], 'box:1', 1)
 
 
-def _drop_first_face(monkeypatch):
+def _drop_first_face(monkeypatch, times=None):
+    """Make the first face seen return no triangulation (always, or only ``times`` times)."""
     from awm_geometry import scene
 
-    original, calls = scene._face_triangles, []
+    original, state = scene._face_triangles, {'face': None, 'dropped': 0}
 
     def patched(face):
-        calls.append(1)
-        return (None, None, 0.0) if len(calls) == 1 else original(face)
+        if state['face'] is None:
+            state['face'] = face
+        if face.IsSame(state['face']) and (times is None or state['dropped'] < times):
+            state['dropped'] += 1
+            return None, None, 0.0
+        return original(face)
     monkeypatch.setattr(scene, '_face_triangles', patched)
+    return state
+
+
+def test_cell_face_retessellated_once(occ, monkeypatch, caplog):
+    """A face BRepMesh leaves empty is meshed again alone (coarser angle, same chord) and logged."""
+    from awm_geometry import scene, testparts
+    from awm_geometry.occ_io import scale_shape
+
+    shape = scale_shape(testparts.box((0, 0, 0), (0.01, 0.01, 0.01)), units.m_to_mm(1.0))
+    state = _drop_first_face(monkeypatch, times=1)
+    pieces = scene._tessellate_mm(shape, 0.5, 15.0, 'table:1')
+    assert state['dropped'] == 1 and sum(len(t) for _, t in pieces) == 12
+    assert "'table:1': face 1 meshed again" in caplog.text
 
 
 def test_untessellated_cell_face_is_an_error(occ, monkeypatch):
