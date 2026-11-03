@@ -68,23 +68,38 @@ def _cos(deg: float) -> float:
     return math.cos(units.deg_to_rad(deg))
 
 
-def _dh(theta_deg: float, d: float, a: float, alpha_deg: float) -> np.ndarray:
-    ct, st, ca, sa = _cos(theta_deg), _sin(theta_deg), _cos(alpha_deg), _sin(alpha_deg)
+def _dh_rad(theta: float, d: float, a: float, alpha: float) -> np.ndarray:
+    ct, st, ca, sa = math.cos(theta), math.sin(theta), math.cos(alpha), math.sin(alpha)
     return np.array([[ct, -st * ca, st * sa, a * ct],
                      [st, ct * ca, -ct * sa, a * st],
                      [0.0, sa, ca, d],
                      [0.0, 0.0, 0.0, 1.0]])
 
 
-def wrist_centre_lib_mm(q_deg: Sequence[float], geo: UrGeometry = UR5E_GEOMETRY) -> np.ndarray:
-    """Wrist centre = origin of DH frame 5 (intersection of the wrist-2 and wrist-3 axes), UR ``base`` frame, mm."""
-    q = np.asarray(q_deg, dtype=float)
+def _dh(theta_deg: float, d: float, a: float, alpha_deg: float) -> np.ndarray:
+    return _dh_rad(units.deg_to_rad(theta_deg), d, a, units.deg_to_rad(alpha_deg))
+
+
+_ALPHA_RAD = tuple(units.deg_to_rad(np.asarray(_ALPHA_DEG)))
+
+
+def _wrist_centre_rad(q_rad: np.ndarray, geo: UrGeometry) -> np.ndarray:
     d = (geo.d1, 0.0, 0.0, geo.d4, geo.d5)
     a = (0.0, geo.a2, geo.a3, 0.0, 0.0)
     t = np.eye(4)
     for i in range(5):
-        t = t @ _dh(float(q[i]), d[i], a[i], _ALPHA_DEG[i])
+        t = t @ _dh_rad(float(q_rad[i]), d[i], a[i], float(_ALPHA_RAD[i]))
     return t[:3, 3].copy()
+
+
+def wrist_centre_lib_mm(q_deg: Sequence[float], geo: UrGeometry = UR5E_GEOMETRY) -> np.ndarray:
+    """Wrist centre = origin of DH frame 5 (intersection of the wrist-2 and wrist-3 axes), UR ``base`` frame, mm."""
+    return _wrist_centre_rad(units.deg_to_rad(np.asarray(q_deg, dtype=float)), geo)
+
+
+def _shoulder_u_rad(q_rad: np.ndarray, geo: UrGeometry) -> float:
+    c = _wrist_centre_rad(q_rad, geo)
+    return math.cos(q_rad[0]) * c[0] + math.sin(q_rad[0]) * c[1]
 
 
 def _shoulder_u_mm(q_deg: Sequence[float], geo: UrGeometry) -> float:
@@ -93,9 +108,7 @@ def _shoulder_u_mm(q_deg: Sequence[float], geo: UrGeometry) -> float:
     In the frame turned by q1 the wrist centre has a constant component d4 along the joint-2 axis; the remaining
     horizontal component ``u`` is the planar reach. The two shoulder IK branches have ``u = ±sqrt(r² - d4²)``.
     """
-    c = wrist_centre_lib_mm(q_deg, geo)
-    q1 = float(np.asarray(q_deg, dtype=float)[0])
-    return _cos(q1) * c[0] + _sin(q1) * c[1]
+    return _shoulder_u_rad(units.deg_to_rad(np.asarray(q_deg, dtype=float)), geo)
 
 
 def _flag(x: float, zero: float) -> str:
@@ -168,6 +181,16 @@ def singularity_metrics(q_deg: Sequence[float], geo: UrGeometry = UR5E_GEOMETRY)
     q = np.asarray(q_deg, dtype=float)
     return SingularityMetrics(sin_q5=abs(_sin(float(q[4]))), sin_q3=abs(_sin(float(q[2]))),
                               wrist_centre_mm=abs(_shoulder_u_mm(q, geo)))
+
+
+def label_and_metrics(q_deg: Sequence[float],
+                      geo: UrGeometry = UR5E_GEOMETRY) -> Tuple[str, SingularityMetrics]:
+    """``(config_label(q), singularity_metrics(q))`` with one wrist-centre evaluation (sweep hot path)."""
+    q_rad = units.deg_to_rad(np.asarray(q_deg, dtype=float))
+    u = _shoulder_u_rad(q_rad, geo)
+    s3, s5 = math.sin(q_rad[2]), math.sin(q_rad[4])
+    label = 'S' + _flag(u, _MM_ZERO) + 'E' + _flag(s3, _SIN_ZERO) + 'W' + _flag(s5, _SIN_ZERO)
+    return label, SingularityMetrics(sin_q5=abs(s5), sin_q3=abs(s3), wrist_centre_mm=abs(u))
 
 
 def singular_reason(metrics: SingularityMetrics, thresholds: SingularityThresholds) -> Optional[str]:

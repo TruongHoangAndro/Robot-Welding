@@ -167,3 +167,13 @@ def test_states_module_is_pure() -> None:
 
 def test_labels_cover_product() -> None:
     assert set(LABELS) == {f'S{a}E{b}W{c}' for a, b, c in itertools.product('+-', repeat=3)}
+
+
+def test_label_and_metrics_matches_separate_functions() -> None:
+    from awm_path.core.states import label_and_metrics
+    for q in _non_singular_states(100, seed=SEED + 7):
+        label, m = label_and_metrics(q)
+        assert label == config_label(q)
+        m2 = singularity_metrics(q)
+        assert (m.sin_q5, m.sin_q3) == pytest.approx((m2.sin_q5, m2.sin_q3), abs=1e-12)
+        assert m.wrist_centre_mm == pytest.approx(m2.wrist_centre_mm, abs=1e-9)
