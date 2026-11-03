@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<!-- 1-axis rotary positioner (CP-20, ADR-11; DES-001 §5.3 frames positioner_axis / positioner_flange).
+     Only frames and the joint live in the URDF: the rotating set (holders, jig, shaft side) and the static cell
+     come from the cell scene manifest and are planning-scene world objects (see awm_bringup cell_scene_loader:
+     MoveIt 2.12 pads robot links only against world objects, never in self-collision checks, so meshes in the
+     URDF would escape the 3 mm padding of F4).
+
+     positioner_flange coincides with positioner_axis at theta = 0 and turns about `axis` (unit vector in the
+     positioner_axis frame). Pose, axis and limits are parameters; defaults are documented Assumptions. -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:include filename="$(find awm_description)/urdf/units.xacro"/>
+
+  <xacro:macro name="awm_positioner" params="parent xyz_mm rpy_rad axis lower_deg upper_deg velocity_deg_s effort">
+    <link name="positioner_axis"/>
+    <joint name="world_to_positioner_axis" type="fixed">
+      <parent link="${parent}"/>
+      <child link="positioner_axis"/>
+      <origin xyz="${xyz_mm[0] * m_per_mm} ${xyz_mm[1] * m_per_mm} ${xyz_mm[2] * m_per_mm}"
+              rpy="${rpy_rad[0]} ${rpy_rad[1]} ${rpy_rad[2]}"/>
+    </joint>
+    <link name="positioner_flange"/>
+    <joint name="positioner_joint" type="revolute">
+      <parent link="positioner_axis"/>
+      <child link="positioner_flange"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <axis xyz="${axis[0]} ${axis[1]} ${axis[2]}"/>
+      <limit lower="${float(lower_deg) * rad_per_deg}" upper="${float(upper_deg) * rad_per_deg}"
+             velocity="${float(velocity_deg_s) * rad_per_deg}" effort="${effort}"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- Mock hardware for the positioner: its own hardware component in the same controller manager as the UR
+       (CP-20: awm_positioner is a separate ros2_control component). -->
+  <xacro:macro name="awm_positioner_ros2_control" params="initial_rad">
+    <ros2_control name="awm_positioner" type="system">
+      <hardware>
+        <plugin>mock_components/GenericSystem</plugin>
+        <param name="state_following_offset">0.0</param>
+      </hardware>
+      <joint name="positioner_joint">
+        <command_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">${float(initial_rad)}</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+    </ros2_control>
+  </xacro:macro>
+</robot>

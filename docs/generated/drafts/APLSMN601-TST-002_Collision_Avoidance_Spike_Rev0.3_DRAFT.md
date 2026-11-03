@@ -109,12 +109,12 @@ The software agent runs the spike; Truong Hoang runs the checks.
 ### 5.1 Definitions (frozen 2026-11-02; values in D16 `cell.yaml` where marked)
 | ID | Definition | Value |
 |---|---|---|
-| F1 | Pitch | Δs ≤ min(3 mm, Δq_max / seam-frame rotation rate); ≈ 1.16 mm at r = 13.3 mm |
+| F1 | Pitch | Δs ≤ min(3 mm, Δq_max / seam-frame rotation rate); ≈ 1.16 mm at r = 13.3 mm. This is a ceiling: the planner refines the pitch until consecutive IK solutions of one label move ≤ Δq_max (S.3 measured up to 13° joint steps at 1.16 mm on r 13.3 mm, ≤ 3.3° at 0.29 mm); the pitch used is recorded per seam (CP-53) |
 | F2 | Graph node | (point, ψ, configuration label from the joint values, **unwrapped** joint vector); 2π offsets enumerated at the first layer within the joint limits |
 | F3 | Edge | same configuration label and max \|Δq\| ≤ 5° (Δq_max) on unwrapped values; closed seams: the overlap reconnects to the first-layer state |
 | F4 | Validity | Collision check with 3 mm padding on every link except `nozzle_tip` |
 | F5 | Clearance (C2, C4) | Distance on **unpadded** geometry, by distance query or by a separate validity check with head / mount / conduit inflated by exactly the clearance. Method recorded |
-| F6 | Singularity (D16) | wrist \|sin q5\| ≥ sin 8.6°; elbow \|sin q3\| ≥ sin 5° (Assumption); shoulder: wrist centre ≥ 50 mm from the base Z axis (Assumption). Per-point values in `candidates.csv` |
+| F6 | Singularity (D16) | wrist \|sin q5\| ≥ sin 8.6°; elbow \|sin q3\| ≥ sin 5° (Assumption); shoulder: wrist centre ≥ 50 mm from the plane of the joint-1 and joint-2 axes, |u| (Assumption; the literal distance from the base Z axis is always ≥ d4 = 133.3 mm on the UR5e and could never trigger — CP-53). Per-point values in `candidates.csv` |
 | F7 | Tie-break | lowest cost, then lowest ψ index, then configuration-label order |
 | F8 | Mode C | seam axis within 0.05 mm / 0.1° of the positioner axis (D16, Assumption); otherwise Mode B / robot-only |
 | F9 | Contact | No ACM entry between any head link and the part. Nozzle collision geometry stops s_c = 0.3 mm (Assumption) short of the contact point. Per weld state: contact point(s) on the seam faces (faces of n1 / n2) within tolerance; no other face within s_c |
@@ -132,11 +132,11 @@ The software agent runs the spike; Truong Hoang runs the checks.
 |---|---|---|---|
 | C1 | Scene detects collisions correctly | G2 | Yes (entry) |
 | C2 | Seam coverage | ≥ 1 valid candidate at **100 %** of the J2 points; head body / mount / conduit clearance ≥ 5 mm (F5); contact check F9 passed | Yes |
-| C3 | Path continuity | One configuration label for the whole seam; max \|Δq\| ≤ 5° per step (F3); wrist 3 per F11 | Yes |
+| C3 | Path continuity | One configuration label for the whole seam (for J2: per arc, CP-53); max \|Δq\| ≤ 5° per step (F3); wrist 3 per F11 | Yes |
 | C4 | Approach, retract, air move | Collision-free, clearance ≥ 10 mm unpadded to part / fixture / holders | Reported |
 | C5 | Planning time | ≤ 30 s per seam on the dev PC, with the backend named | Yes (a fail → backend change, B-06, not Pivot) |
 | C6 | Robustness to placement error | C2–C4 with the part shifted ±2 mm and ±1° per axis (6 runs) | After the decision |
-| C8 | 360° coverage robot-only | % of J2 covered by one continuous path, and with 2 segments; per ψ case and head model | Reported (OI-27 input) |
+| C8 | 360° coverage robot-only | J2 is evaluated as **2 arcs** as entered by the Engineer (seam attribute `arcs` = 2; each ≤ 180° + overlap, emission stops between them; decision 2026-11-03, CP-53): C2 / C3 per arc; % covered with 2 segments per ψ case and head model. One closed robot-only path is impossible under F3 + F11 (CP-53) and is reported as such | Yes for the 2-arc case; OI-27 input |
 | C9 | J1 Mode C | Head clearance ≥ 5 mm over 360° + overlap at one robot pose; contact check F9 | Reported |
 
 ## 6. Decision rules

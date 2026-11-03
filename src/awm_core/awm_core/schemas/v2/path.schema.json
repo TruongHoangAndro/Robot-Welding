@@ -1,0 +1,302 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v2/path.schema.json",
+  "title": "path",
+  "description": "D07 weld path v2 (A41\u2013A49): part frame, mm / deg. One entry per arc (D04 `arcs`, CP-53). An arc is listed in `seams` only when 100 % of its points are reachable, collision-free and continuous; otherwise it is in `rejected` with failing points, and the seam is not weldable until every arc is accepted. Never a partial path (design rule 4).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "run_id",
+    "context",
+    "frame",
+    "tcp",
+    "planner",
+    "seams",
+    "rejected"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "run_id": {
+      "$ref": "common.schema.json#/$defs/run_id"
+    },
+    "context": {
+      "$ref": "common.schema.json#/$defs/context_record"
+    },
+    "frame": {
+      "const": "part"
+    },
+    "tcp": {
+      "type": "string",
+      "enum": [
+        "tcp_laser"
+      ]
+    },
+    "planner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kinematics_backend",
+        "scene_backend",
+        "params_sha256",
+        "psi_case",
+        "head_model"
+      ],
+      "properties": {
+        "kinematics_backend": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scene_backend": {
+          "type": "string",
+          "minLength": 1
+        },
+        "params_sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "psi_case": {
+          "type": "string",
+          "enum": [
+            "free",
+            "wire"
+          ]
+        },
+        "head_model": {
+          "type": "string",
+          "enum": [
+            "cad",
+            "box"
+          ]
+        }
+      }
+    },
+    "seams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "seam_id",
+          "arc",
+          "mode",
+          "config_label",
+          "travel_speed_mm_s",
+          "points",
+          "timed"
+        ],
+        "properties": {
+          "seam_id": {
+            "$ref": "common.schema.json#/$defs/seam_id"
+          },
+          "arc": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "index",
+              "of",
+              "start_s_mm",
+              "end_s_mm"
+            ],
+            "properties": {
+              "index": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "of": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "start_s_mm": {
+                "type": "number",
+                "minimum": 0
+              },
+              "end_s_mm": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "description": "arc of the seam (CP-53); a seam is accepted only when every arc is accepted"
+          },
+          "mode": {
+            "$ref": "common.schema.json#/$defs/positioner_mode"
+          },
+          "config_label": {
+            "$ref": "common.schema.json#/$defs/config_label"
+          },
+          "travel_speed_mm_s": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "overlap_mm": {
+            "type": "number",
+            "minimum": 0
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "s_mm",
+                "pose_mm",
+                "psi_deg",
+                "theta_deg",
+                "q_deg",
+                "min_clearance_mm"
+              ],
+              "properties": {
+                "s_mm": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "pose_mm": {
+                  "$ref": "common.schema.json#/$defs/pose_mm"
+                },
+                "psi_deg": {
+                  "type": "number"
+                },
+                "theta_deg": {
+                  "type": "number"
+                },
+                "q_deg": {
+                  "$ref": "common.schema.json#/$defs/joints6_deg"
+                },
+                "min_clearance_mm": {
+                  "type": "number"
+                }
+              },
+              "description": "tcp_laser pose in the part frame; theta = positioner angle"
+            },
+            "minItems": 2
+          },
+          "timed": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "points"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "approach",
+                    "weld",
+                    "retract",
+                    "positioner_weld"
+                  ]
+                },
+                "points": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "t_s",
+                      "q_deg",
+                      "theta_deg"
+                    ],
+                    "properties": {
+                      "t_s": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "q_deg": {
+                        "$ref": "common.schema.json#/$defs/joints6_deg"
+                      },
+                      "theta_deg": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "minItems": 2
+                }
+              }
+            },
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "rejected": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "seam_id",
+          "arc",
+          "reason",
+          "coverage_fraction",
+          "failing_points"
+        ],
+        "properties": {
+          "seam_id": {
+            "$ref": "common.schema.json#/$defs/seam_id"
+          },
+          "arc": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "index",
+              "of",
+              "start_s_mm",
+              "end_s_mm"
+            ],
+            "properties": {
+              "index": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "of": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "start_s_mm": {
+                "type": "number",
+                "minimum": 0
+              },
+              "end_s_mm": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "description": "arc of the seam (CP-53); a seam is accepted only when every arc is accepted"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "coverage_fraction": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "C8: longest continuous covered fraction (reported, never used as a path)"
+          },
+          "failing_points": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/failing_point"
+            }
+          }
+        }
+      }
+    }
+  }
+}

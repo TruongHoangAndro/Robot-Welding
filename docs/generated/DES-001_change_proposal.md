@@ -421,7 +421,7 @@ conditions, 5 / 10** (all three members 5 / 10 after round 2). New CP numbers st
 | B-13 | Staged Web UI; v2 data contracts frozen 2026-11-04 | accept_modified | P0 | CP-32 (modified) |
 | B-14 | Delivery stages Sim-1…HW-2; one DES-001 revision per gate; disposition table | accept_modified | P0 | CP-45 (new) |
 | B-15 | D09 is the exact commanded trajectory; M9 sends it verbatim | accept | P1 | CP-46 (new) |
-| B-16 | Release scope `trial`; production as promotion of the same bundle | escalate (E-02) | P1 | CP-47 (new, Proposed) |
+| B-16 | Release scope `trial`; production as promotion of the same bundle | escalate (E-02) → **option A, Truong 2026-11-03** | P1 | CP-47 (accepted 2026-11-03) |
 | B-17 | Typed `awm_interfaces` v1; emission tied to axis motion; M8 heartbeat; no automatic retry; EmissionLost | accept_modified | P1 | CP-27 (modified) |
 | B-18 | Named humans for PLC program, DES-002, safety, hardware execution; weld-event table; ADR-23 dates | escalate (E-03) | P1 | CP-35 (modified, Proposed) |
 | B-19 | Minimal Sim-2 runtime: Python M9, M8-minimal, table-driven M10 sim, mixed-mode refusal, fault injection | accept_modified | P1 | CP-48 (new) |
@@ -457,7 +457,7 @@ as **Proposed** amendments pending OI-38 / OI-39 — the decided ADR-17 and OI-2
 | E-id | OI | Question | Options | Board recommendation | Decider |
 |---|---|---|---|---|---|
 | E-01 | OI-37 | TST-002 decision on 2026-11-06 with frozen inputs, missing inputs = slip ≤ 3 days, not Pivot? | A yes; B decide with whatever exists, missing = Pivot; C no fixed date | A | Linh Tran, with Truong Hoang |
-| E-02 | OI-38 | Amend ADR-17 with a `trial` scope; production = promotion of the same bundle? | A amend now; B decide at HW-1 gate; C keep, run A72 / A73 outside M8 / M9 | A (B fallback); C not acceptable | Truong Hoang |
+| E-02 | OI-38 | Amend ADR-17 with a `trial` scope; production = promotion of the same bundle? | A amend now; B decide at HW-1 gate; C keep, run A72 / A73 outside M8 / M9 | A (B fallback); C not acceptable | Truong Hoang — **decided 2026-11-03: A** (schema v2: scope enum + `promoted_from`; DES-001 Rev 0.6 draft ADR-17 amended, OI-38 closed) |
 | E-03 | OI-39 | Amend OI-28: named human PLC & safety engineer, commissioning engineer, LSO? | A amend (names by 2026-11-20, LSO before HW-2); B PLC program only; C keep | A | Linh Tran, with Truong Hoang |
 | E-04 | OI-40 | Phase 1 deliverable on 2026-12-04? | A Sim-2 system, HW stages in PM-004; B move Phase 1 end after HW-2; C compress HW into December | A, with the customer agreement (OI-5) | Tac Huynh and Linh Tran |
 | E-05 | OI-41 | Filler wire on J1 / J2, and from which side? | A autogenous, free ψ; B wire leading, ±15°; C unknown: report both, decide on wire case | Answer by 2026-11-04, else C | Truong Hoang (welding engineer, Khang Doan) |
@@ -520,3 +520,72 @@ record line "M1 adds a joint-aware fused weldment shape" follow. The 0.05 mm coi
 **Assumption** (tolerance of the Fusion export), to be revisited if a customer STEP has gaps or overlaps at a joint;
 the tube-rule fallback (n1 = n2 = radial) stays documented in TST-002 Rev 0.3 §3.2.
 **DES-003 impact:** A11 / A21 / A41 descriptions use "joint detection" instead of "fused weldment shape".
+
+## CP-53 Closed seams welded robot-only are split into arcs; pitch refined to the joint step (TST-002 F1, C3, C8)
+
+**Status:** accepted by Truong Hoang on 2026-11-03 (J2 = 2 arcs; the number of arcs is entered by the Engineer in the
+UI, not chosen by software — Truong, 2026-11-03); pitch rule decided by the lead within F1 (≤ ceiling).
+**Finding (WP-S S.3):** a closed 360° seam welded by the robot alone makes the tool orientation turn once about the
+seam axis. That loop is not contractible in SO(3) (generator of π1(SO(3)) = Z2), while the forward-kinematics image of
+a joint path that returns to the same unwrapped state is contractible. Hence **at fixed ψ** some joint must make a net
+360° turn (topological fact); F11 (wrist 3 ±180° within one seam, fiber / conduit) and F3 (closure on the same
+first-layer state) reject every such path. With ψ allowed to vary, a net ±360° ψ unwinding would make the loop
+contractible; with the 10° ψ grid (step > Δq_max 5°) this did not happen on the synthetic r 13.3 mm placement
+(all 36 ψ, 288 points: no path, open or closed) — an **empirical** result for that placement, not a proof (review of
+S.3). Ψ-WIRE (±15°) cannot unwind 360°. Measured: ψ 90°, 288 points, the DP
+stops at layer 145 on wrist-3 travel; without F11 it closes only on q6 + 360°. Second finding: at the F1 pitch
+(1.16 mm, r 13.3 mm) joint steps reach 13°; at 0.29 mm they are ≤ 3.3°.
+**Decision:** (1) The Engineer decides whether a seam is split: seam attribute `arcs` (integer ≥ 1, default 1) and
+`arc_overlap_mm` in D04, entered in the seam editor S2 (A22 split). The software never splits a seam by itself; it plans
+every arc (equal lengths from the seam start), accepts the seam only when every arc is 100 %, and otherwise rejects the
+failing arc(s) with their failing points so the Engineer can change the number of arcs, the start point or the
+direction. Emission stops between arcs (WeldEnd / WeldStart at rest, DES-001 §6.2). For the spike, J2 is entered with
+2 arcs (each ≤ 180° + overlap); C2 / C3 apply per arc; C8 "2 segments" gates J2. A closed seam with `arcs` = 1 welded
+robot-only is rejected (reason recorded: net 360° joint turn needed, F3 / F11).
+Mode C (J1) is unaffected: the robot is at rest. (2) F1 is a ceiling: the planner refines the pitch until consecutive
+IK solutions of one label move ≤ Δq_max and records the pitch used.
+**Open:** weld quality at the arc restart / overlap (welding engineer; OI-11 / OI-16); whether a 360° wrist-3 turn is
+acceptable for the fiber and wire conduit (Khang Doan / Nghia Nguyen) — if yes, a later CP can relax F11.
+**F6 wording (S.3 review):** the shoulder-singularity metric is the distance |u| of the wrist centre from the plane of
+the joint-1 and joint-2 axes (≥ 50 mm, Assumption); the literal "distance from the base Z axis" is always ≥ d4 =
+133.3 mm on the UR5e and could never trigger. TST-002 Rev 0.3 F6 row updated.
+**DES-001 impact:** §4.3 step 4 / 5 note "closed seams welded robot-only are split into arcs (CP-53)"; A22 (split) and
+A42 (overlap) descriptions; TST-002 Rev 0.3 F1, C3, C8 rows updated in the draft.
+
+
+## CP-54 S10-lite cell model role editor pulled forward (decided by Truong, 2026-11-03)
+
+**Decision:** the role map of a cell / fixture CAD assembly (`cad_map`, ADR-16 / CP-23) is edited in a UI page
+(S10-lite) instead of by hand: after import the component tree is shown in 3D; the user assigns a role to each
+component (part, positioner rotating set, cell static, head CAD, ignore; picks the robot base and the positioner axis)
+and may give it a display name. The STEP file is never modified; display names live in the map. Default deny.
+PLAN Rev 0.6 had S10 after Phase 1 (CLI / API only) — S10-lite moves into WP3 now, before Sim-1, and runs in parallel
+with WP-S S.4 part C (one agent slot).
+**Phase 1 limits:** no server write path; the page validates and downloads `cad_map.yaml`; saving through `awm_api`
+`/cell/model` with role checks comes with T3.1. Contract: `docs/generated/contracts/S10_lite_cell_model.md`,
+schema `v2/cad_map.schema.json`.
+**Who edits (decided by Truong, 2026-11-03):** Admin edits the cell part of the map (`cell/cad/cad_map.yaml`: robot
+base, cell static, positioner axis and permanent rotating set); **Engineer edits the fixture part of the map per job**
+(job `fixture.step` / job-level map: fixture, clamps, holders specific to the part, the part itself). The Engineer
+cannot change the cell part. Enforced by `awm_api` when saving moves there (T3.1); S10-lite shows which part is being edited.
+**Open:** re-matching map entries after a new STEP export (component path + geometric fingerprint, A18 follow-up).
+**DES-001 impact:** §4.5 screens table S10 (Phase 1 lite; roles Admin = cell part, Engineer = job fixture part), build
+steps UI-1; §7.3 roles table (Engineer: "edit the job fixture role map"); §11 A18 UI; PLAN WP3.
+
+## CP-55 Cell static and rotating geometry are planning-scene objects, not URDF links (decided by Truong, 2026-11-03)
+
+**Finding (WP-S S.4 B, confirmed by review):** in MoveIt 2.12 (Jazzy) `check_state_validity` pads robot links only
+against world (scene) objects; self-collisions between URDF links are checked unpadded (`CollisionRequest`
+defaults `pad_environment_collisions = true`, `pad_self_collisions = false`; the service cannot change them). With the
+Pismo frame, jig, holders and the positioner rotating set as URDF links (D14 wording), the 3 mm padding (F4) and the
+clearance-by-padding method (F5) would silently not apply between the head and these objects.
+**Decision:** D14 (`awm_description`) holds the kinematics and the robot-mounted geometry only: UR5e from
+`ur_description`, LightWELD head / mount / nozzle / conduit, `positioner_joint` with `positioner_axis` /
+`positioner_flange` frames (no geometry). Cell static geometry and the positioner rotating set come from the A18 cell
+manifest as world collision objects; the rotating set is re-posed with the positioner angle; part / fixture from D19.
+**Rules that follow:** (1) a validity / clearance check at positioner angle θ is valid only when the scene reports θ
+applied (guard in the loader / checker; review finding 1 of S.4 B); (2) head ↔ UR arm links are checked unpadded —
+stated in the TST-002 record; (3) the URDF `positioner_flange` and the loader must use one source for
+world_T_positioner_axis.
+**DES-001 impact:** §5.1 D14 row ("cell statics … and permanent holders" → kinematics and robot-mounted geometry; static
+and rotating cell geometry = scene objects from A18), §5.4 rows Pismo frame / positioner, §4.2 `awm_description` row.

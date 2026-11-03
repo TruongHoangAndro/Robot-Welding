@@ -1,0 +1,61 @@
+{
+  "schema_version": "2.0",
+  "created_by": "lead (hand-made contract example T0.5; format only, values not kinematically checked)",
+  "created_at": "2026-11-03T09:00:00+07:00",
+  "inputs": [
+    {
+      "name": "model.step",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "part_no": "EXAMPLE-2TUBE",
+  "part_rev": "A",
+  "source": {
+    "step_file": "model.step",
+    "step_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "component": "two-tube example",
+    "up_axis": "+Z"
+  },
+  "unit_source": "mm",
+  "bbox_mm": {
+    "min": [
+      -40.0,
+      -13.335,
+      -13.335
+    ],
+    "max": [
+      40.0,
+      13.335,
+      13.335
+    ]
+  },
+  "counts": {
+    "solids": 2,
+    "shells": 2,
+    "faces": 8,
+    "edges": 8
+  },
+  "checks": [
+    {
+      "name": "brep_valid",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "healed": false,
+  "mesh": {
+    "file": "cache/collision.stl",
+    "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "linear_deflection_mm": 0.1,
+    "angular_deflection_deg": 5.0,
+    "triangles": 4096
+  },
+  "brep_cache": {
+    "file": "cache/model.brep",
+    "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "edges_file": {
+    "file": "cache/edges.json",
+    "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "schema_version": "2.0",
+  "created_by": "lead (hand-made contract example T0.5; format only, values not kinematically checked)",
+  "created_at": "2026-11-03T09:00:00+07:00",
+  "inputs": [
+    {
+      "name": "model.step",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "cache/collision.stl",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  ],
+  "source": "fixture_cad",
+  "verified": false,
+  "flange_T_part": {
+    "position_mm": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "quat_xyzw": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "objects": [
+    {
+      "object_id": "part",
+      "role": "part",
+      "parent_frame": "positioner_flange",
+      "pose_mm": {
+        "position_mm": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "quat_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mesh": {
+        "file": "cache/collision.stl",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "face_ids": true
+      },
+      "padding_mm": 0.0
+    },
+    {
+      "object_id": "holder_left",
+      "role": "holder",
+      "parent_frame": "positioner_flange",
+      "pose_mm": {
+        "position_mm": [
+          -60.0,
+          0.0,
+          0.0
+        ],
+        "quat_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mesh": {
+        "file": "cache/holder_left.stl",
+        "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "face_ids": false
+      },
+      "padding_mm": 3.0
+    }
+  ],
+  "scene_sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+}

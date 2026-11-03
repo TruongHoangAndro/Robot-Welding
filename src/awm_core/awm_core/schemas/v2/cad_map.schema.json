@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v2/cad_map.schema.json",
+  "title": "cad_map",
+  "description": "Role map of a cell / fixture CAD assembly (A18, ADR-16, CP-23, CP-54): which component is the robot base, the positioner rotating set, static cell geometry, the part, the head, or ignored; optional display names. Data, never source; edited in S10-lite (CP-54) or by hand. Default deny: an unmapped component is an error. The STEP file is never modified.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "source",
+    "match",
+    "default",
+    "frames",
+    "roles"
+  ],
+  "properties": {
+    "schema": {
+      "const": "cad_map/0.1"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "sha256",
+        "unit",
+        "up_axis"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "unit": {
+          "const": "mm"
+        },
+        "up_axis": {
+          "type": "string",
+          "enum": [
+            "+X",
+            "-X",
+            "+Y",
+            "-Y",
+            "+Z",
+            "-Z"
+          ]
+        }
+      }
+    },
+    "match": {
+      "const": "instance_name"
+    },
+    "default": {
+      "const": "deny"
+    },
+    "frames": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "world",
+        "ur_base",
+        "positioner_axis"
+      ],
+      "properties": {
+        "world": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "origin_from"
+          ],
+          "properties": {
+            "origin_from": {
+              "const": "ur_base"
+            }
+          }
+        },
+        "ur_base": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "component",
+            "use"
+          ],
+          "properties": {
+            "component": {
+              "type": "string",
+              "minLength": 1
+            },
+            "use": {
+              "const": "placement"
+            },
+            "note": {
+              "type": "string"
+            }
+          }
+        },
+        "positioner_axis": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "point_file_mm",
+            "direction_file"
+          ],
+          "properties": {
+            "point_file_mm": {
+              "$ref": "common.schema.json#/$defs/vec3"
+            },
+            "direction_file": {
+              "$ref": "common.schema.json#/$defs/vec3"
+            },
+            "note": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "part",
+        "positioner_rotating",
+        "cell_static",
+        "ignore"
+      ],
+      "properties": {
+        "part": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "positioner_rotating": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "cell_static": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "ignore": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "head_cad": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "depth"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "depth": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "display_names": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "instance name -> name shown in the UI (e.g. Part1:1 -> \"Holder left\"); never written back to the STEP"
+    },
+    "collision": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": [
+          "hull",
+          "mesh"
+        ]
+      },
+      "description": "instance name -> collision representation; default hull. Use mesh for non-convex parts that surround the part or the seam (e.g. a U-shaped jig). Added 2026-11-03 after the S.4 A review (jig hull covered J1)."
+    },
+    "contact_tolerance_mm": {
+      "type": "number",
+      "minimum": 0,
+      "description": "export-scene refuses a part vertex deeper than this inside any cell object (clamp contact allowed up to it); default 1.0 (Assumption)"
+    }
+  }
+}

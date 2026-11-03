@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v2/seams.schema.json",
+  "title": "seams",
+  "description": "D04 seam list v2 (A21\u2013A24): picked ids + attributes + self-contained seam geometry (B-09). Part frame, mm. Seam frame: X = t, Z = bisector(n1, n2) out of the material, Y = Z \u00d7 X.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "part_no",
+    "part_rev",
+    "seams"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "part_no": {
+      "type": "string",
+      "minLength": 1
+    },
+    "part_rev": {
+      "type": "string",
+      "minLength": 1
+    },
+    "seams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "seam_id",
+          "edges",
+          "joint_edge_id",
+          "solids",
+          "faces",
+          "reversed",
+          "range_mm",
+          "closed",
+          "length_mm",
+          "joint_type",
+          "sequence",
+          "arcs",
+          "arc_overlap_mm",
+          "fingerprint",
+          "geometry"
+        ],
+        "properties": {
+          "seam_id": {
+            "$ref": "common.schema.json#/$defs/seam_id"
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/edge_id"
+            },
+            "minItems": 1,
+            "description": "picked + chained edges in travel order"
+          },
+          "joint_edge_id": {
+            "oneOf": [
+              {
+                "$ref": "common.schema.json#/$defs/joint_edge_id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "solids": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "common.schema.json#/$defs/solid_id"
+                },
+                "minItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "faces": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "n1",
+              "n2"
+            ],
+            "properties": {
+              "n1": {
+                "type": "array",
+                "items": {
+                  "$ref": "common.schema.json#/$defs/face_id"
+                },
+                "minItems": 1
+              },
+              "n2": {
+                "type": "array",
+                "items": {
+                  "$ref": "common.schema.json#/$defs/face_id"
+                },
+                "minItems": 1
+              }
+            },
+            "description": "face ids that n1 / n2 come from (contact check F9)"
+          },
+          "reversed": {
+            "type": "boolean"
+          },
+          "range_mm": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "length_mm": {
+            "type": "number",
+            "minimum": 0
+          },
+          "joint_type": {
+            "type": "string",
+            "enum": [
+              "butt",
+              "fillet",
+              "lap",
+              "groove"
+            ]
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "leg_mm": {
+            "oneOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arcs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "description": "number of weld arcs entered by the Engineer (CP-53); 1 = one path; arcs split the seam into equal lengths from its start; never chosen by software"
+          },
+          "arc_overlap_mm": {
+            "type": "number",
+            "minimum": 0,
+            "description": "overlap of consecutive arcs (and of the last arc over the start on closed seams)"
+          },
+          "note": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string",
+            "minLength": 1
+          },
+          "geometry": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "spacing_mm",
+              "points"
+            ],
+            "properties": {
+              "spacing_mm": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "points": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "s_mm",
+                    "p_mm",
+                    "t",
+                    "n1",
+                    "n2"
+                  ],
+                  "properties": {
+                    "s_mm": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "p_mm": {
+                      "$ref": "common.schema.json#/$defs/vec3"
+                    },
+                    "t": {
+                      "$ref": "common.schema.json#/$defs/unit_vec3"
+                    },
+                    "n1": {
+                      "$ref": "common.schema.json#/$defs/unit_vec3"
+                    },
+                    "n2": {
+                      "$ref": "common.schema.json#/$defs/unit_vec3"
+                    }
+                  },
+                  "description": "t = travel direction; n1 / n2 = outward normals of the exterior faces of solid_a / solid_b (joint) or of the two adjacent faces"
+                },
+                "minItems": 2
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

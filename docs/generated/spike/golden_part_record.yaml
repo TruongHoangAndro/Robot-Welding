@@ -1,0 +1,10 @@
+# Golden part facts for the real-CAD tests of awm_geometry (spike record, TST-002 §9). Test data, never source:
+# tests read this file (or the file named by AWM_GOLDEN_RECORD) together with AWM_CELL_STEP.
+# Source: docs/generated/spike/cell_components.md (inspect-assembly) and the D20 export of the component.
+component: '564082-Assembly-3 parts:2'   # instance name in the cell CAD (only instance)
+product: '564082-Assembly-3 parts'
+job: 564082_A
+solids: 3
+outer_radius_mm: 13.335                  # nipple / solid / elbow tube outer radius (D 26.67 mm)
+outer_joints: 2                          # J1 (nipple - solid), J2 (solid - elbow)
+joints: 4                                # outer + bore circles (lead decision 2026-11-02)

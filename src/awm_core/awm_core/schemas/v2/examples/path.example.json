@@ -1,0 +1,377 @@
+{
+  "schema_version": "2.0",
+  "created_by": "lead (hand-made contract example T0.5; format only, values not kinematically checked)",
+  "created_at": "2026-11-03T09:00:00+07:00",
+  "inputs": [
+    {
+      "name": "seams.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "process.json",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "name": "placement.json",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  ],
+  "run_id": "R20261103T020000Z-a1b2c3",
+  "context": {
+    "cell_id": "APLSMN601-CELL",
+    "cell_rev": "A",
+    "d14_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "cell_config_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "calibration": {
+      "calibration_id": "CAL-NOMINAL",
+      "status": "NOMINAL",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "components": {
+        "kinematics": "1111111111111111111111111111111111111111111111111111111111111111",
+        "positioner_axis": "2222222222222222222222222222222222222222222222222222222222222222",
+        "fixture": "3333333333333333333333333333333333333333333333333333333333333333",
+        "tcp/round": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    "robot_serial": "SIM",
+    "kinematics_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "controller_calibration_sha256": null,
+    "ur_safety_checksum": null,
+    "ur_installation": null,
+    "git": {
+      "commit": "68fa836",
+      "dirty": false
+    },
+    "image_digest": null
+  },
+  "frame": "part",
+  "tcp": "tcp_laser",
+  "planner": {
+    "kinematics_backend": "ur_analytic_ik-0.1.0.post3/ur5e",
+    "scene_backend": "move_group/check_state_validity",
+    "params_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+    "psi_case": "free",
+    "head_model": "box"
+  },
+  "seams": [
+    {
+      "seam_id": "S01",
+      "arc": {
+        "index": 1,
+        "of": 1,
+        "start_s_mm": 0.0,
+        "end_s_mm": 83.786276
+      },
+      "mode": "C",
+      "config_label": "S+E-W+",
+      "travel_speed_mm_s": 8.0,
+      "overlap_mm": 2.327397,
+      "points": [
+        {
+          "s_mm": 0.0,
+          "pose_mm": {
+            "position_mm": [
+              0.0,
+              0.0,
+              13.335
+            ],
+            "quat_xyzw": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "psi_deg": 0.0,
+          "theta_deg": 0.0,
+          "q_deg": [
+            -90.0,
+            -100.0,
+            -110.0,
+            -60.0,
+            90.0,
+            0.0
+          ],
+          "min_clearance_mm": 7.5
+        },
+        {
+          "s_mm": 10.473285,
+          "pose_mm": {
+            "position_mm": [
+              0.0,
+              0.0,
+              13.335
+            ],
+            "quat_xyzw": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "psi_deg": 0.0,
+          "theta_deg": 45.0,
+          "q_deg": [
+            -90.0,
+            -100.0,
+            -110.0,
+            -60.0,
+            90.0,
+            0.0
+          ],
+          "min_clearance_mm": 7.5
+        },
+        {
+          "s_mm": 20.946569,
+          "pose_mm": {
+            "position_mm": [
+              0.0,
+              0.0,
+              13.335
+            ],
+            "quat_xyzw": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "psi_deg": 0.0,
+          "theta_deg": 90.0,
+          "q_deg": [
+            -90.0,
+            -100.0,
+            -110.0,
+            -60.0,
+            90.0,
+            0.0
+          ],
+          "min_clearance_mm": 7.5
+        },
+        {
+          "s_mm": 31.419854,
+          "pose_mm": {
+            "position_mm": [
+              0.0,
+              0.0,
+              13.335
+            ],
+            "quat_xyzw": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "psi_deg": 0.0,
+          "theta_deg": 135.0,
+          "q_deg": [
+            -90.0,
+            -100.0,
+            -110.0,
+            -60.0,
+            90.0,
+            0.0
+          ],
+          "min_clearance_mm": 7.5
+        },
+        {
+          "s_mm": 41.893138,
+          "pose_mm": {
+            "position_mm": [
+              0.0,
+              0.0,
+              13.335
+            ],
+            "quat_xyzw": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "psi_deg": 0.0,
+          "theta_deg": 180.0,
+          "q_deg": [
+            -90.0,
+            -100.0,
+            -110.0,
+            -60.0,
+            90.0,
+            0.0
+          ],
+          "min_clearance_mm": 7.5
+        },
+        {
+          "s_mm": 52.366423,
+          "pose_mm": {
+            "position_mm": [
+              0.0,
+              0.0,
+              13.335
+            ],
+            "quat_xyzw": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "psi_deg": 0.0,
+          "theta_deg": 225.0,
+          "q_deg": [
+            -90.0,
+            -100.0,
+            -110.0,
+            -60.0,
+            90.0,
+            0.0
+          ],
+          "min_clearance_mm": 7.5
+        },
+        {
+          "s_mm": 62.839707,
+          "pose_mm": {
+            "position_mm": [
+              0.0,
+              0.0,
+              13.335
+            ],
+            "quat_xyzw": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "psi_deg": 0.0,
+          "theta_deg": 270.0,
+          "q_deg": [
+            -90.0,
+            -100.0,
+            -110.0,
+            -60.0,
+            90.0,
+            0.0
+          ],
+          "min_clearance_mm": 7.5
+        },
+        {
+          "s_mm": 73.312992,
+          "pose_mm": {
+            "position_mm": [
+              0.0,
+              0.0,
+              13.335
+            ],
+            "quat_xyzw": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "psi_deg": 0.0,
+          "theta_deg": 315.0,
+          "q_deg": [
+            -90.0,
+            -100.0,
+            -110.0,
+            -60.0,
+            90.0,
+            0.0
+          ],
+          "min_clearance_mm": 7.5
+        },
+        {
+          "s_mm": 83.786276,
+          "pose_mm": {
+            "position_mm": [
+              0.0,
+              0.0,
+              13.335
+            ],
+            "quat_xyzw": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          "psi_deg": 0.0,
+          "theta_deg": 360.0,
+          "q_deg": [
+            -90.0,
+            -100.0,
+            -110.0,
+            -60.0,
+            90.0,
+            0.0
+          ],
+          "min_clearance_mm": 7.5
+        }
+      ],
+      "timed": [
+        {
+          "kind": "positioner_weld",
+          "points": [
+            {
+              "t_s": 0.0,
+              "q_deg": [
+                -90.0,
+                -100.0,
+                -110.0,
+                -60.0,
+                90.0,
+                0.0
+              ],
+              "theta_deg": 0.0
+            },
+            {
+              "t_s": 10.764209,
+              "q_deg": [
+                -90.0,
+                -100.0,
+                -110.0,
+                -60.0,
+                90.0,
+                0.0
+              ],
+              "theta_deg": 370.0
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "rejected": [
+    {
+      "seam_id": "S02",
+      "arc": {
+        "index": 2,
+        "of": 2,
+        "start_s_mm": 41.9,
+        "end_s_mm": 85.8
+      },
+      "reason": "no continuous path (C2 / C3)",
+      "coverage_fraction": 0.62,
+      "failing_points": [
+        {
+          "index": 31,
+          "s_mm": 51.2,
+          "reasons": {
+            "collision": 212,
+            "singular_wrist": 40,
+            "edge_dq": 36
+          },
+          "colliding": [
+            {
+              "link": "head_body",
+              "object": "holder_left"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

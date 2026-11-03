@@ -9,18 +9,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from OCC.Core.BRep import BRep_Builder
+from OCC.Core.BRepAdaptor import BRepAdaptor_Surface
+from OCC.Core.BRepBndLib import brepbndlib
+from OCC.Core.Bnd import Bnd_Box
+from OCC.Core.GeomAbs import GeomAbs_Cylinder
 from OCC.Core.IFSelect import IFSelect_RetDone
 from OCC.Core.STEPCAFControl import STEPCAFControl_Reader
 from OCC.Core.TDF import TDF_Label, TDF_LabelSequence
 from OCC.Core.TDocStd import TDocStd_Document
-from OCC.Core.TopAbs import TopAbs_SOLID
+from OCC.Core.TopAbs import TopAbs_FACE, TopAbs_SOLID
 from OCC.Core.TopExp import TopExp_Explorer
 from OCC.Core.TopLoc import TopLoc_Location
-from OCC.Core.TopoDS import TopoDS_Compound, TopoDS_Shape
+from OCC.Core.TopoDS import TopoDS_Compound, TopoDS_Shape, topods
 from OCC.Core.XCAFDoc import XCAFDoc_DocumentTool
+from OCC.Core.gp import gp_Trsf
 
 from awm_geometry.occ_io import GeometryError, file_length_unit
 
@@ -155,3 +160,133 @@ def compound(shapes: List[TopoDS_Shape]) -> TopoDS_Compound:
     for shape in shapes:
         builder.Add(result, shape)
     return result
+
+
+# --- Component tree (inspect-assembly, input to the A18 CAD map, ADR-16) -------------------------
+
+def _matrix(trsf: gp_Trsf) -> List[List[float]]:
+    """4x4 homogeneous matrix of a transform (rows; translation in the session unit, mm)."""
+    rows = [[trsf.Value(r, c) for c in range(1, 5)] for r in range(1, 4)]
+    return rows + [[0.0, 0.0, 0.0, 1.0]]
+
+
+def _box(shape: TopoDS_Shape) -> Optional[Bnd_Box]:
+    """Bounding box of a placed shape (exact B-Rep bounds, no gap); None if the shape is empty."""
+    box = Bnd_Box()
+    box.SetGap(0.0)
+    brepbndlib.AddOptimal(shape, box, False, False)
+    return None if box.IsVoid() else box
+
+
+def _box_dict(box: Optional[Bnd_Box]) -> Optional[Dict[str, List[float]]]:
+    if box is None:
+        return None
+    xmin, ymin, zmin, xmax, ymax, zmax = box.Get()
+    return {'min': [xmin, ymin, zmin], 'max': [xmax, ymax, zmax]}
+
+
+def _count_solids(shape: TopoDS_Shape) -> int:
+    n = 0
+    exp = TopExp_Explorer(shape, TopAbs_SOLID)
+    while exp.More():
+        n += 1
+        exp.Next()
+    return n
+
+
+def main_cylinder(shape: TopoDS_Shape) -> Optional[Dict[str, object]]:
+    """Axis of the largest-area cylindrical face of a placed shape (file frame), or None.
+
+    Used to find rotation axes (for example a positioner shaft) in an assembly without markers.
+    ``point_mm`` is the cylinder's axis location; the axis sign is the face's own (not oriented).
+    """
+    from awm_geometry.topology import face_area
+
+    best = None
+    exp = TopExp_Explorer(shape, TopAbs_FACE)
+    while exp.More():
+        face = topods.Face(exp.Current())
+        exp.Next()
+        surf = BRepAdaptor_Surface(face)
+        if surf.GetType() != GeomAbs_Cylinder:
+            continue
+        area = face_area(face)
+        if best is None or area > best[0]:
+            best = (area, surf.Cylinder())
+    if best is None:
+        return None
+    area, cyl = best
+    ax = cyl.Axis()
+    d, p = ax.Direction(), ax.Location()
+    return {'axis': [d.X(), d.Y(), d.Z()], 'point_mm': [p.X(), p.Y(), p.Z()],
+            'radius_mm': cyl.Radius(), 'area_mm2': area}
+
+
+def component_tree(step: PathLike, cylinders: bool = True,
+                   shapes: bool = False) -> Tuple[List[Dict[str, object]], str]:
+    """Every node of the assembly tree in depth-first order (parents first), placed in the file frame.
+
+    Returns ``(components, file length unit)``. Each component dict has: ``index``, ``parent`` (index
+    or None), ``depth``, ``path`` (names joined by `` / ``), ``instance_name``, ``product_name``,
+    ``is_assembly``, ``children``, ``local_placement_mm`` and ``placement_mm`` (4x4, translation in
+    mm, file frame), ``bbox_mm`` (``{min, max}`` or None), ``solids`` and, for leaf parts when
+    ``cylinders`` is set, ``main_cylinder`` (see :func:`main_cylinder`). With ``shapes`` every dict also holds
+    ``_shape``: the node's shape placed in the file frame (not JSON-serialisable). No unit conversion: OCCT
+    reads STEP into its session unit (mm).
+    """
+    path = Path(step)
+    _doc, tool, unit = _open(path)
+    out: List[Dict[str, object]] = []
+    boxes: List[Optional[Bnd_Box]] = []
+
+    def walk(label: TDF_Label, location: TopLoc_Location, parent: Optional[int],
+             depth: int, trail: List[str]) -> None:
+        ref, local = label, TopLoc_Location()
+        instance = ''
+        if tool.IsReference(label):
+            ref = TDF_Label()
+            tool.GetReferredShape(label, ref)
+            local = tool.GetLocation(label)
+            location = location.Multiplied(local)
+            instance = _name(label)
+        product = _name(ref)
+        trail = trail + [instance or product]
+        index = len(out)
+        node: Dict[str, object] = {
+            'index': index, 'parent': parent, 'depth': depth, 'path': ' / '.join(trail),
+            'instance_name': instance, 'product_name': product,
+            'is_assembly': bool(tool.IsAssembly(ref)), 'children': 0,
+            'local_placement_mm': _matrix(local.Transformation()),
+            'placement_mm': _matrix(location.Transformation()),
+            'bbox_mm': None, 'solids': 0}
+        if shapes:
+            node['_shape'] = tool.GetShape(ref).Moved(location)
+        out.append(node)
+        boxes.append(None)
+        if node['is_assembly']:
+            children = TDF_LabelSequence()
+            tool.GetComponents(ref, children)
+            node['children'] = children.Length()
+            box = Bnd_Box()
+            for i in range(1, children.Length() + 1):
+                child = len(out)
+                walk(children.Value(i), location, index, depth + 1, trail)
+                node['solids'] += out[child]['solids']
+                if boxes[child] is not None:
+                    box.Add(boxes[child])
+            boxes[index] = None if box.IsVoid() else box
+        else:
+            shape = tool.GetShape(ref).Moved(location)
+            node['solids'] = _count_solids(shape)
+            boxes[index] = _box(shape)
+            if cylinders:
+                node['main_cylinder'] = main_cylinder(shape)
+        node['bbox_mm'] = _box_dict(boxes[index])
+
+    roots = TDF_LabelSequence()
+    tool.GetFreeShapes(roots)
+    for i in range(1, roots.Length() + 1):
+        walk(roots.Value(i), TopLoc_Location(), None, 0, [])
+    if not out:
+        raise GeometryError(f'STEP file {path} contains no shape')
+    return out, unit

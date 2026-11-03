@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<!-- The only unit conversion of the cell v2 xacro files (ADR-14, design rule 7).
+     Project values (xacro args, launch args, manifests) are mm and degrees; URDF is m and rad (REP 103).
+     Every mm / deg value is converted with exactly these two factors; no other scale literal is allowed in the
+     xacro files. test_cell_v2.py checks that both equal awm_core.units (MM_PER_M, DEG_PER_RAD), so the xacro
+     stays tied to the single Python adapter without importing it. -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:property name="m_per_mm" value="0.001"/>
+  <xacro:property name="rad_per_deg" value="${pi / 180.0}"/>
+</robot>

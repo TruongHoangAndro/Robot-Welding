@@ -1,0 +1,11 @@
+# Cell v2 MoveIt joint limits (rad, REP 103). UR joints as in joint_limits.yaml (do not raise).
+# positioner_joint is NOT here: its limits come only from positioner_limits.yaml (the launch adds them).
+default_velocity_scaling_factor: 0.1
+default_acceleration_scaling_factor: 0.1
+joint_limits:
+  shoulder_pan_joint: {has_velocity_limits: true, max_velocity: 3.14159, has_acceleration_limits: true, max_acceleration: 5.0}
+  shoulder_lift_joint: {has_velocity_limits: true, max_velocity: 3.14159, has_acceleration_limits: true, max_acceleration: 5.0}
+  elbow_joint: {has_velocity_limits: true, max_velocity: 3.14159, has_acceleration_limits: true, max_acceleration: 5.0}
+  wrist_1_joint: {has_velocity_limits: true, max_velocity: 3.14159, has_acceleration_limits: true, max_acceleration: 5.0}
+  wrist_2_joint: {has_velocity_limits: true, max_velocity: 3.14159, has_acceleration_limits: true, max_acceleration: 5.0}
+  wrist_3_joint: {has_velocity_limits: true, max_velocity: 3.14159, has_acceleration_limits: true, max_acceleration: 5.0}

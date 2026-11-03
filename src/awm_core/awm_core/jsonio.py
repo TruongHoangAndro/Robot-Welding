@@ -67,11 +67,16 @@ def _inline_common(node: Any, defs: Dict[str, Any]) -> Any:
 
 @lru_cache(maxsize=None)
 def load_schema(name: str) -> Dict[str, Any]:
-    """Load a schema by name (e.g. ``'part'``) with the common definitions inlined."""
+    """Load a schema by name (e.g. ``'part'``) with the common definitions inlined.
+
+    A name with a folder prefix (``'v2/part'``) loads from that sub-folder of the schema
+    directory and inlines the ``common.schema.json`` of the same folder (contract freeze T0.5:
+    the v2 set lives in ``schemas/v2`` until T0.1 migrates the code).
+    """
     path = SCHEMA_DIR / f'{name}.schema.json'
     if not path.is_file():
         raise FileNotFoundError(f'no JSON schema named {name!r} in {SCHEMA_DIR}')
-    common = json.loads((SCHEMA_DIR / _COMMON).read_text())
+    common = json.loads((path.parent / _COMMON).read_text())
     schema = json.loads(path.read_text())
     resolved = _inline_common(schema, common['$defs'])
     jsonschema.Draft202012Validator.check_schema(resolved)

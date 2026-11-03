@@ -97,8 +97,8 @@ after("function owners and J2 strategy decided 2026-10-29 (OI-27, OI-28) | Truon
       "(ADR-21 rejected, ADR-19 reduced); ordered Sim-1 slice; staged Web UI and contract freeze; delivery stages "
       "Sim-1…HW-2 (new 2.3); D09 as the exact commanded trajectory; typed weld events without automatic retry; "
       "minimal Sim-2 runtime; ADR-22 conformance wording; accuracy chain restructured; dated open items; network "
-      "and host security (new 8.1); M11 / M12 deferred; hardware-stage gate items. Proposed amendments of decided "
-      "items pending escalation: trial release scope (ADR-17, OI-38), named human PLC / safety roles (OI-28, OI-39). "
+      "and host security (new 8.1); M11 / M12 deferred; hardware-stage gate items. Amendment of ADR-17 with a trial release "
+      "scope (OI-38, E-02 = A, Truong 2026-11-03); proposed amendment pending escalation: named human PLC / safety roles (OI-28, OI-39). "
       "OI-36…OI-44 added; OI-7, OI-8, OI-33, OI-34, OI-35 closed | Truong Hoang (draft by the software agent) |")
 
 # --- references and terms -----------------------------------------------------------------------
@@ -122,7 +122,7 @@ rep("| ψ (tool yaw) | Rotation of the weld head about its beam axis — redunda
     "| ψ (tool yaw) | Rotation of the weld head about its beam axis — redundant DOF used for reach, collision and "
     "singularity avoidance; redundant only inside the ψ window of the WPS (filler wire side, tip type; B-05) |")
 rep("| Release scope | `simulation` or `production` (ADR-17) |",
-    "| Release scope | `simulation` or `production` (ADR-17); `trial` Proposed (B-16, OI-38) |")
+    "| Release scope | `simulation` or `production` (ADR-17); `trial` (hardware mode, A72 / A73) and `production` = promotion of a trial bundle (ADR-17 as amended 2026-11-03, OI-38) |")
 after("| ADS | Beckhoff Automation Device Specification protocol (TCP 48898) |",
       "\n| Error budget | List of all position error sources between the planned TCP pose and the real seam, with their "
       "values and combined result, compared with the allowed seam deviation (12.2) |"
@@ -186,7 +186,7 @@ before("## 3. Context viewpoint",
        "| HW-2 | Trial weld (A73) | LightWELD on site (OI-21); Laser Safety Officer named; Class 4 controlled area and "
        "written SOP; enclosure complete incl. OI-24; fume extraction interlocked; PLC interlock matrix and weld-event "
        "conformance PASS; OI-22 decided | Trial-weld records; production gate (A74) | Trial-weld campaign (release "
-       "scope per OI-38) |\n"
+       "scope `trial`, ADR-17) |\n"
        "| Phase 2 | MIG, continuous 7-axis motion, pause / resume (A86), automatic Mode B and A17, seam re-match, "
        "M11 / M12 packages, STL fallback | — | — | — |\n\n")
 
@@ -230,7 +230,7 @@ rep("| M7 Verification & Release | `awm_verify` | Run program in URSim, playback
     "`production`, ADR-17) and lock |",
     "| M7 Verification & Release | `awm_verify` | URSim replay = M8 / M9 runtime chain in Sim-2 (B-19); playback in the "
     "Web simulation view, reach / collision / cycle-time report, dry-run and trial-weld records, release workflow "
-    "(scopes `simulation` / `production`, ADR-17; `trial` Proposed, OI-38) and lock into a frozen per-revision bundle "
+    "(scopes `simulation` / `trial` / `production`, ADR-17 as amended 2026-11-03) and lock into a frozen per-revision bundle "
     "(ADR-20); rebuilds the scene from the frozen bundle and self-tests it with the C1 pose set before verification; "
     "verifies the controller-interpolated motion at the controller rate (B-06, B-15) |")
 rep("alarm handling and recovery, speed-scaling supervision; pause / resume with overlap in Phase 2 |",
@@ -370,7 +370,7 @@ rep("JSON, ROS 2 joint-trajectory segments (robot 6 joints + positioner) + weld 
     "self-contained (B-15, B-09); URScript export = fallback |")
 rep("`release.schema.json` (program rev, hashes, scope `simulation` / `production`, approver, date) | job/`release.json` |",
     "`release.schema.json` (program rev, manifest = SHA-256 of every file of the frozen bundle (ADR-20), context "
-    "record, scope `simulation` / `production` (`trial` Proposed, OI-38), approver, date) | "
+    "record, scope `simulation` / `trial` / `production`; production carries `promoted_from` = the trial release of the same bundle, approver, date) | "
     "job/`programs/<rev>/release.json` + job/`active_<scope>.json` |")
 rep("| D12 | Weld log | M11 | M12 | SQLite table + CSV export |",
     "| D12 | Weld log | M8 (Phase 1), M11 (Phase 2) | M12 | JSON lines, append-only, start and end record per seam "
@@ -514,7 +514,7 @@ rep("positioner turns at ω = travel speed / seam radius plus the closing overla
     "positioner turns at ω = travel speed / seam radius plus the closing overlap; ramps planned by A47 and placed "
     "inside the dwell or the closing overlap, B-20);")
 after("Air moves may run with override.",
-      " Exception (Proposed, B-16, pending OI-38): a `trial`-scope dry run with emission disabled by hardware may run "
+      " Exception (ADR-17 as amended 2026-11-03, B-16): a `trial`-scope dry run with emission disabled by hardware may run "
       "weld segments with override. Weld segments are planned clear of UR safety slow-down zones and reduced-mode "
       "triggers (B-25, HW-1).")
 after("J2 (solid ↔ elbow) is 76.6 mm off the axis with its axis perpendicular to it → robot alone or Mode B.",
@@ -651,12 +651,12 @@ rep("no CAD → URDF plug-in | Decided 2026-10-27 |",
     "`ignore`, an unmapped component fails the import (B-07) | Decided 2026-10-27; default-deny Proposed (B-07) |")
 rep("| Decided 2026-10-27 | Sim-2 exercises the same release and hash checks as production without faking A72 / A73 "
     "records |",
-    "| Decided 2026-10-27. **Proposed amendment (B-16, pending OI-38 / escalation E-02):** scopes simulation / trial / "
+    "| Decided 2026-10-27; **amended 2026-11-03 (B-16, OI-38, escalation E-02 = option A, Truong Hoang):** scopes simulation / trial / "
     "production. `trial`: hardware mode only, authenticated Engineer; dry run when the PLC reports emission disabled "
     "by hardware (override allowed on all segments), trial weld at 100 %; parts marked TRIAL in D12. `production`: "
     "promotion of the same frozen bundle (same D09 SHA) after PASS trial records and the A74 gate checks. The "
     "runtime accepts `simulation` only in simulation mode, `trial` / `production` only in hardware mode. Before "
-    "Sim-2 the M8 scope check is a data table; until the decision the release CLI refuses `production` | Sim-2 "
+    "Sim-2 the M8 scope check is a data table; until the HW-2 gate code exists the release CLI refuses `production` | Sim-2 "
     "exercises the same release and hash checks as production without faking A72 / A73 records. Without a trial "
     "scope A72 / A73 cannot run through M8 / M9 (production needs their records; A72 at reduced speed conflicts with "
     "the 100 % rule) |"
@@ -703,7 +703,7 @@ add_columns("| ADR | Decision | Status | Alternatives / reason |", ["Decide by (
     "ADR-01": ["2026-11-06"], "ADR-02": ["2026-11-06"], "ADR-05": ["2026-11-06"], "ADR-07": ["2026-11-06"],
     "ADR-08": ["Sim-1 exit (before WP4)"], "ADR-12": ["2026-11-06 (OI-29)"], "ADR-13": ["2026-11-06"],
     "ADR-15": ["2026-11-06"], "ADR-16": ["Decided; default-deny 2026-11-06"],
-    "ADR-17": ["Decided; amendment per OI-38"], "ADR-18": ["HW-1 gate"], "ADR-19": ["2026-11-06"],
+    "ADR-17": ["Decided; amended 2026-11-03 (OI-38)"], "ADR-18": ["HW-1 gate"], "ADR-19": ["2026-11-06"],
     "ADR-20": ["2026-11-06"], "ADR-21": ["— (rejected)"], "ADR-22": ["2026-11-20 (with OI-14)"],
     "ADR-23": ["2026-11-20 (OI-32)"],
 }, default=["Decided"])
@@ -924,7 +924,7 @@ rep("execution on hardware (calibration, dry run, trial weld, inspection) assign
     "at most 3 working days rather than a Pivot? Options: A yes, as proposed; B decide on 2026-11-06 with whatever "
     "evidence exists, missing evidence = Pivot signal; C no fixed date. Board recommendation: A | ADR-12, TST-002, "
     "OI-29 | Linh Tran (Engineering Manager), with Truong Hoang |"
-    "\n| OI-38 | **Escalation E-02 — not decided.** Amend ADR-17 (decided 2026-10-27) with a `trial` release scope so "
+    "\n| OI-38 | ~~Escalation E-02~~ — **closed 2026-11-03: option A (Truong Hoang)**, ADR-17 amended. Amend ADR-17 (decided 2026-10-27) with a `trial` release scope so "
     "that A72 / A73 run through M8 / M9 / M10, and make production a promotion of the same frozen bundle? Options: A "
     "amend now (scope table and CLI refusal before Sim-2, gate code at HW-2); B decide at the HW-1 gate, scope check "
     "built as a data table either way; C keep ADR-17 and run A72 / A73 outside M8 / M9 (breaks AD8). Board "
@@ -984,7 +984,7 @@ add_columns("| # | Item | Needed for | Owner |", ["Needed by (stage)", "Due", "C
     "OI-32": ["Sim-2", "2026-11-20", "Yes"],
     "OI-36": ["HW-2", "HW-2 gate", "No"],
     "OI-37": ["Sim-0 exit", "2026-11-06", "Yes"],
-    "OI-38": ["Sim-2 (scope table)", "2026-11-20 (or HW-1 gate, option B)", "No"],
+    "OI-38": ["Sim-2 (scope table)", "closed 2026-11-03", "Yes"],
     "OI-39": ["Sim-2", "2026-11-20", "Yes"],
     "OI-40": ["Sim-1", "2026-11-13", "Yes"],
     "OI-41": ["TST-002 decision", "2026-11-04", "Yes"],

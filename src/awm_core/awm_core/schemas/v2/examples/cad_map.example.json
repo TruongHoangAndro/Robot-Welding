@@ -1,0 +1,71 @@
+{
+  "schema": "cad_map/0.1",
+  "source": {
+    "file": "docs/3D/APLSMN601_Automated Weldment System.step",
+    "sha256": "bc66c09ef1878d0e7389cf852b695d8b59917994a98d5739e67ba627bab7e824",
+    "unit": "mm",
+    "up_axis": "+Y"
+  },
+  "match": "instance_name",
+  "default": "deny",
+  "frames": {
+    "world": {
+      "origin_from": "ur_base"
+    },
+    "ur_base": {
+      "component": "UR5E/UR7E:1",
+      "use": "placement",
+      "note": "origin on top of pedestal Part5 (file Y 518.40); identity rotation; = ur_description base_link (Assumption)"
+    },
+    "positioner_axis": {
+      "point_file_mm": [
+        -102.03,
+        593.4,
+        321.58
+      ],
+      "direction_file": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "note": "axis of pulleys :1 / :4, holders Part1 / Part2, nipple and solid; 145.0 mm above the motor shaft"
+    }
+  },
+  "roles": {
+    "part": [
+      "564082-Assembly-3 parts:2"
+    ],
+    "positioner_rotating": [
+      "Part1:1",
+      "Part2:1",
+      "Part3:1",
+      "HTPK20S5M150-A-C15:1",
+      "HTPK20S5M150-A-C15:4"
+    ],
+    "cell_static": [
+      "2500001:1",
+      "Part5:1",
+      "Jig:1",
+      "60CM30X_3D:1",
+      "GSACL25-8-12:1",
+      "Rotary Shaft:1",
+      "HTPK20S5M150-A-C15:2",
+      "HTPK20S5M150-A-C15:3",
+      "Timing Belts:1",
+      "Timing Belts:2"
+    ],
+    "head_cad": [
+      {
+        "path": "ASSY, Welding tool:1",
+        "depth": 1
+      }
+    ],
+    "ignore": [
+      "UR5E/UR7E:1"
+    ]
+  },
+  "display_names": {
+    "Part1:1": "Holder nipple end",
+    "Part3:1": "Holder elbow end"
+  }
+}
