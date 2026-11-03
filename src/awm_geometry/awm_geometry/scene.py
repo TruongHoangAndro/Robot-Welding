@@ -293,8 +293,8 @@ def _face_triangles(face) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], f
     return pos, idx, float(tri.Deflection())
 
 
-def _tessellate_mm(shape: TopoDS_Shape, linear_mm: float, angular_deg: float,
-                   label: str) -> List[Tuple[np.ndarray, np.ndarray]]:
+def _tessellate_mm(shape: TopoDS_Shape, linear_mm: float, angular_deg: float, label: str,
+                   retried: Optional[List[Dict[str, Any]]] = None) -> List[Tuple[np.ndarray, np.ndarray]]:
     """Triangles (file frame, mm, not welded) per solid of a component shape read from the STEP (session unit
     mm); a component without solids (surfaces only) gives one entry for all its faces."""
     breptools.Clean(shape)
@@ -328,6 +328,9 @@ def _tessellate_mm(shape: TopoDS_Shape, linear_mm: float, angular_deg: float,
                 if pos is not None:
                     LOG.warning('%r: face %d meshed again alone (angular %.0f deg, chord %.2f mm, achieved '
                                 '%.3f mm)', label, face_no, retry_deg, linear_mm, deflection)
+                    if retried is not None:
+                        retried.append({'face': face_no, 'angular_deflection_deg': float(retry_deg),
+                                        'achieved_chord_mm': float(deflection)})
                     break
             if pos is None:
                 raise GeometryError(f'{label!r}: face {face_no} has no triangulation: its collision geometry '
@@ -345,7 +348,7 @@ def _tessellate_mm(shape: TopoDS_Shape, linear_mm: float, angular_deg: float,
 
 def closed_shell(verts: np.ndarray, tris: np.ndarray, label: str, k: int) -> Tuple[np.ndarray, np.ndarray]:
     """Weld one solid's tessellation into a closed, outward shell; raise if it is open or inside-out."""
-    v, t = meshops.weld(verts, tris, MESH_WELD_MM)  # per solid: touching solids stay separate shells
+    v, t = meshops.weld(verts, tris, MESH_WELD_MM)  # welded per solid: touching solids are not merged
     if not meshops.is_closed(t):
         raise GeometryError(f'tessellated mesh of {label!r} (solid {k}) is not closed: the export guard cannot '
                             'test inside / outside (use collision: hull or fix the CAD)')
@@ -436,8 +439,10 @@ def _cell_objects(tree, direct, modes, fr, padding_mm: float) -> List[Dict[str, 
         file_T_comp = np.asarray(node['placement_mm'], dtype=float)
         mode = modes[index]
         extra: Dict[str, Any] = {}
+        retried: List[Dict[str, Any]] = []
         if mode == 'hull':
-            pieces = _tessellate_mm(node['_shape'], HULL_LINEAR_DEFLECTION_MM, HULL_ANGULAR_DEFLECTION_DEG, label)
+            pieces = _tessellate_mm(node['_shape'], HULL_LINEAR_DEFLECTION_MM, HULL_ANGULAR_DEFLECTION_DEG, label,
+                                    retried)
             pts = np.vstack([v for v, _ in pieces])
             local = (pts - file_T_comp[:3, 3]) @ file_T_comp[:3, :3]  # inverse of a rigid placement
             verts, tris = hull.convex_hull(local)
@@ -452,7 +457,7 @@ def _cell_objects(tree, direct, modes, fr, padding_mm: float) -> List[Dict[str, 
         else:
             verts_list, tris_list, offset = [], [], 0
             for k, (pts, raw) in enumerate(_tessellate_mm(node['_shape'], MESH_LINEAR_DEFLECTION_MM,
-                                                          MESH_ANGULAR_DEFLECTION_DEG, label), start=1):
+                                                          MESH_ANGULAR_DEFLECTION_DEG, label, retried), start=1):
                 local = (pts - file_T_comp[:3, 3]) @ file_T_comp[:3, :3]
                 v, t = closed_shell(local, raw, label, k)
                 verts_list.append(v)
@@ -461,6 +466,8 @@ def _cell_objects(tree, direct, modes, fr, padding_mm: float) -> List[Dict[str, 
             verts, tris = np.vstack(verts_list), np.vstack(tris_list)
             LOG.info('A18 %s (%s, %s): mesh %d vertices, %d triangles, %d closed shell(s)', oid, label, role,
                      len(verts), len(tris), len(verts_list))
+        if retried:
+            extra['retried_faces'] = retried
         parent = PARENT[role]
         obj = {'object_id': oid, 'role': role, 'component': label, 'parent_frame': parent,
                'pose_mm': pose_mm(parent_T_file[parent] @ file_T_comp), 'collision': mode,
@@ -513,22 +520,73 @@ def _job_from_name(repo: Repository, job_name: str) -> Tuple[str, str]:
     return part_no, part_rev
 
 
-def _clear_model_dir(model_dir: Path) -> None:
-    """Remove the files a previous export wrote, so the folder and the new manifest agree."""
-    if model_dir.is_dir():
-        for path in model_dir.iterdir():
-            if path.is_file() and (path.suffix.lower() == '.stl'
-                                   or path.name in ('scene_manifest.json', 'frames.yaml')):
-                path.unlink()
-    model_dir.mkdir(parents=True, exist_ok=True)
+STAGING_PREFIX = '.staging-export-scene-'
 
 
-def _promote(staging: Path, final: Path) -> None:
-    """Move every file of ``staging`` to the same relative path under ``final`` (replacing old files)."""
-    for src in sorted(p for p in staging.rglob('*') if p.is_file()):
-        dst = final / src.relative_to(staging)
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        os.replace(src, dst)
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def remove_orphaned_staging(root: Path) -> List[Path]:
+    """Remove staging folders of earlier runs whose process is gone (or of this pid); return them."""
+    removed = []
+    if root.is_dir():
+        for path in root.glob(f'{STAGING_PREFIX}*'):
+            suffix = path.name[len(STAGING_PREFIX):]
+            if not suffix.isdigit():
+                continue
+            pid = int(suffix)
+            if pid == os.getpid() or not _pid_alive(pid):
+                shutil.rmtree(path, ignore_errors=True)
+                removed.append(path)
+                LOG.warning('removed orphaned staging folder %s', path)
+    return removed
+
+
+def _keep_foreign_files(old_dir: Path, staged_dir: Path) -> None:
+    """Copy files of other modules (in the old job folder, not produced by this export) into the staged folder."""
+    if not old_dir.is_dir():
+        return
+    for src in old_dir.rglob('*'):
+        if src.is_file():
+            dst = staged_dir / src.relative_to(old_dir)
+            if not dst.exists():
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+
+
+def swap_dirs(pairs: List[Tuple[Path, Path]]) -> None:
+    """Put each staged folder in place of its final folder by renames: old aside, staged in, old deleted.
+
+    If any rename fails, every step already done is undone (staged folders are removed, old folders restored).
+    """
+    done: List[Dict[str, Any]] = []
+    try:
+        for staged, final in pairs:
+            step: Dict[str, Any] = {'final': final, 'old': None, 'placed': False}
+            done.append(step)
+            final.parent.mkdir(parents=True, exist_ok=True)
+            if final.exists():
+                step['old'] = final.with_name(f'.{final.name}.old-{os.getpid()}')
+                os.replace(final, step['old'])
+            os.replace(staged, final)
+            step['placed'] = True
+    except BaseException:
+        for step in reversed(done):
+            if step['placed']:
+                shutil.rmtree(step['final'], ignore_errors=True)
+            if step['old'] is not None and step['old'].exists():
+                os.replace(step['old'], step['final'])
+        raise
+    for step in done:
+        if step['old'] is not None:
+            shutil.rmtree(step['old'], ignore_errors=True)
 
 
 def guard_record(tolerance: float, chord_near_mm: float, chord_far_mm: float) -> Dict[str, Any]:
@@ -561,6 +619,7 @@ def export_scene(step: Path, map_path: Path, repo_root: Path, job_name: str, cho
         raise GeometryError('need 0 < chord-near-mm <= chord-far-mm')
     repo = Repository(repo_root)
     part_no, part_rev = _job_from_name(repo, job_name)
+    remove_orphaned_staging(repo.root)
     cmap = load_map(map_path, step)
     tolerance = float(cmap.get('contact_tolerance_mm', DEFAULT_CONTACT_TOLERANCE_MM))
     LOG.info('A18 reading assembly %s', step)
@@ -590,7 +649,7 @@ def export_scene(step: Path, map_path: Path, repo_root: Path, job_name: str, cho
     # --- all checks passed: write into a staging folder, then move into place --------------------------------
     model_dir = repo.cell_dir / 'model'
     job_final = repo.job(part_no, part_rev)
-    staging_root = repo.root / f'.staging-export-scene-{os.getpid()}'
+    staging_root = repo.root / f'{STAGING_PREFIX}{os.getpid()}'
     if staging_root.exists():
         shutil.rmtree(staging_root)
     stage = Repository(staging_root)
@@ -644,17 +703,16 @@ def export_scene(step: Path, map_path: Path, repo_root: Path, job_name: str, cho
                          'mesh': {'file': 'cache/collision.stl', 'sha256': sha256_file(collision),
                                   'face_ids': True},
                          'padding_mm': PART_PADDING_MM}]
-        placement = jsonio.make_header(created_by, [job.model_step, collision, faces_json], job.dir)
+        # the cell manifest is an input: a new cell with an old job (or the reverse) fails the hash check
+        placement = jsonio.make_header(created_by, [job.model_step, collision, faces_json,
+                                                    stage_model / 'scene_manifest.json'], job.dir)
         placement.update({'schema_version': '2.0', 'source': 'fixture_cad', 'verified': False,
                           'flange_T_part': pose_mm(flange_T_part), 'objects': part_objects,
                           'scene_sha256': canonical_sha256(part_objects)})
         jsonio.write_json(job.dir / 'placement.json', placement, 'v2/placement')
 
-        _clear_model_dir(model_dir)
-        _promote(stage_model, model_dir)
-        if job_final.model_step.exists():
-            job_final.model_step.chmod(0o644)
-        _promote(job.dir, job_final.dir)
+        _keep_foreign_files(job_final.dir, job.dir)
+        swap_dirs([(stage_model, model_dir), (job.dir, job_final.dir)])
     finally:
         shutil.rmtree(staging_root, ignore_errors=True)
 
@@ -665,6 +723,7 @@ def export_scene(step: Path, map_path: Path, repo_root: Path, job_name: str, cho
                                      'hull_volume_ratio': o.get('hull_volume_ratio'),
                                      'part_max_depth_mm': o['part_max_depth_mm']} for o in objects},
         'guard': guard,
+        'retried_faces': sum(len(o.get('retried_faces', [])) for o in objects),
         'part': {'component': component, 'triangles': int(len(tris)), 'faces': len(face_records),
                  'near_joint_faces': len(near), 'edges': record['edges'], 'joints': len(view_summary['joints'])},
         'world_T_base': pose_mm(fr['world_T_base']),

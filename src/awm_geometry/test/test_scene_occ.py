@@ -426,6 +426,110 @@ def test_cell_face_retessellated_once(occ, monkeypatch, caplog):
     assert "'table:1': face 1 meshed again" in caplog.text
 
 
+def test_retry_rejected_when_chord_does_not_hold(occ, monkeypatch):
+    """Every retry meshes the face but with a chord above the requested one: still an error (N4)."""
+    from awm_geometry import scene, testparts
+    from awm_geometry.occ_io import GeometryError, scale_shape
+
+    original, state = scene._face_triangles, {'face': None, 'calls': 0}
+
+    def patched(face):
+        if state['face'] is None:
+            state['face'] = face
+        if face.IsSame(state['face']):
+            state['calls'] += 1
+            if state['calls'] == 1:
+                return None, None, 0.0
+            pos, idx, _ = original(face)
+            return pos, idx, 99.0  # meshed, but far too coarse
+        return original(face)
+    monkeypatch.setattr(scene, '_face_triangles', patched)
+    shape = scale_shape(testparts.box((0, 0, 0), (0.01, 0.01, 0.01)), units.m_to_mm(1.0))
+    with pytest.raises(GeometryError, match=r"'table:1': face 1 has no triangulation"):
+        scene._tessellate_mm(shape, 0.5, 15.0, 'table:1')
+    assert state['calls'] == 1 + len(scene.RETRY_ANGULAR_DEG)
+
+
+def test_retried_face_is_recorded_in_manifest(tmp_path, occ, monkeypatch):
+    """N1: a retried face appears in the object's retried_faces and in the CLI summary."""
+    import io
+    import contextlib
+
+    _drop_first_face(monkeypatch, times=1)
+    step = _cell(tmp_path)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code, repo = _run(tmp_path, _map, step=step)
+    assert code == 0
+    man = jsonio.read_json(repo / 'cell' / 'model' / 'scene_manifest.json', 'v2/cell_scene',
+                           base_dir=repo / 'cell' / 'model')
+    retried = [(o['object_id'], f) for o in man['objects'] for f in o.get('retried_faces', [])]
+    assert len(retried) == 1
+    _, entry = retried[0]
+    assert entry['face'] == 1 and entry['angular_deflection_deg'] == scene_retry_first()
+    assert entry['achieved_chord_mm'] <= man['hull_tessellation']['linear_deflection_mm']
+
+
+def scene_retry_first():
+    from awm_geometry import scene
+    return scene.RETRY_ANGULAR_DEG[0]
+
+
+def test_orphaned_staging_folders_are_removed(tmp_path, occ):
+    """N2: staging folders of dead runs are removed at the start; one of a live process is kept."""
+    step = _cell(tmp_path)
+    repo = tmp_path / 'repo'
+    dead = repo / '.staging-export-scene-999999999'
+    alive = repo / f'.staging-export-scene-{os.getppid()}'
+    for d in (dead, alive):
+        (d / 'cell').mkdir(parents=True)
+    code, _ = _run(tmp_path, _map, step=step)
+    assert code == 0
+    assert not dead.exists() and alive.exists()
+
+
+def test_placement_links_the_cell_manifest(scene):
+    """N3a: placement.json lists cell/model/scene_manifest.json with its SHA-256 (stale-mix check)."""
+    job = scene / 'jobs' / 'TEST_A'
+    doc = jsonio.read_json(job / 'placement.json', 'v2/placement', base_dir=job)
+    names = {Path(i['name']).as_posix(): i['sha256'] for i in doc['inputs']}
+    assert names['../../cell/model/scene_manifest.json'] == hashing.sha256_file(
+        scene / 'cell' / 'model' / 'scene_manifest.json')
+
+
+def test_failed_swap_restores_previous_outputs(tmp_path, occ, monkeypatch, caplog):
+    """N3b: if moving the staged job into place fails, cell/model and the job are as before; no leftovers."""
+    from awm_geometry import scene
+
+    step = _cell(tmp_path)
+    code, repo = _run(tmp_path, _map, step=step)
+    assert code == 0
+    (repo / 'jobs' / 'TEST_A' / 'seams.json').write_text('{}')  # a file of another module stays
+    before = _tree_snapshot(repo)
+    real_replace = os.replace
+
+    def failing(src, dst, *a, **k):
+        if Path(dst) == repo / 'jobs' / 'TEST_A' and '.staging' in str(src):
+            raise OSError('disk full (test)')
+        return real_replace(src, dst, *a, **k)
+    monkeypatch.setattr(scene.os, 'replace', failing)
+    code, _ = _run(tmp_path, _map, step=step)
+    assert code == 1 and 'disk full' in caplog.text
+    assert _tree_snapshot(repo) == before
+    assert sorted(p.name for p in repo.iterdir()) == ['cell', 'jobs']
+    assert sorted(p.name for p in (repo / 'cell').iterdir()) == ['model']
+    assert sorted(p.name for p in (repo / 'jobs').iterdir()) == ['TEST_A']
+
+
+def test_foreign_job_files_survive_a_new_export(tmp_path, occ):
+    step = _cell(tmp_path)
+    code, repo = _run(tmp_path, _map, step=step)
+    seams = repo / 'jobs' / 'TEST_A' / 'seams.json'
+    seams.write_text('{"keep": 1}')
+    code, repo = _run(tmp_path, _map, step=step)
+    assert code == 0 and seams.read_text() == '{"keep": 1}'
+
+
 def test_untessellated_cell_face_is_an_error(occ, monkeypatch):
     from awm_geometry import scene, testparts
     from awm_geometry.occ_io import GeometryError, scale_shape
