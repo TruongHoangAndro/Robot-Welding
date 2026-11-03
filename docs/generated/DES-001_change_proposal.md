@@ -523,7 +523,8 @@ the tube-rule fallback (n1 = n2 = radial) stays documented in TST-002 Rev 0.3 §
 
 ## CP-53 Closed seams welded robot-only are split into arcs; pitch refined to the joint step (TST-002 F1, C3, C8)
 
-**Status:** accepted by Truong Hoang on 2026-11-03 (J2 = 2 arcs); pitch rule decided by the lead within F1 (≤ ceiling).
+**Status:** accepted by Truong Hoang on 2026-11-03 (J2 = 2 arcs; the number of arcs is entered by the Engineer in the
+UI, not chosen by software — Truong, 2026-11-03); pitch rule decided by the lead within F1 (≤ ceiling).
 **Finding (WP-S S.3):** a closed 360° seam welded by the robot alone makes the tool orientation turn once about the
 seam axis. That loop is not contractible in SO(3) (generator of π1(SO(3)) = Z2), while the forward-kinematics image of
 a joint path that returns to the same unwrapped state is contractible. Hence at fixed ψ some joint must make a net
@@ -531,8 +532,13 @@ a joint path that returns to the same unwrapped state is contractible. Hence at 
 every such path, and ψ cannot unwind it (10° ψ step > Δq_max 5°; Ψ-WIRE ±15°). Measured: ψ 90°, 288 points, the DP
 stops at layer 145 on wrist-3 travel; without F11 it closes only on q6 + 360°. Second finding: at the F1 pitch
 (1.16 mm, r 13.3 mm) joint steps reach 13°; at 0.29 mm they are ≤ 3.3°.
-**Decision:** (1) A closed seam welded robot-only is planned as arcs (J2: 2 arcs, each ≤ 180° + overlap; emission
-stops between arcs, WeldEnd / WeldStart at rest per DES-001 §6.2). C2 / C3 apply per arc; C8 "2 segments" gates J2.
+**Decision:** (1) The Engineer decides whether a seam is split: seam attribute `arcs` (integer ≥ 1, default 1) and
+`arc_overlap_mm` in D04, entered in the seam editor S2 (A22 split). The software never splits a seam by itself; it plans
+every arc (equal lengths from the seam start), accepts the seam only when every arc is 100 %, and otherwise rejects the
+failing arc(s) with their failing points so the Engineer can change the number of arcs, the start point or the
+direction. Emission stops between arcs (WeldEnd / WeldStart at rest, DES-001 §6.2). For the spike, J2 is entered with
+2 arcs (each ≤ 180° + overlap); C2 / C3 apply per arc; C8 "2 segments" gates J2. A closed seam with `arcs` = 1 welded
+robot-only is rejected (reason recorded: net 360° joint turn needed, F3 / F11).
 Mode C (J1) is unaffected: the robot is at rest. (2) F1 is a ceiling: the planner refines the pitch until consecutive
 IK solutions of one label move ≤ Δq_max and records the pitch used.
 **Open:** weld quality at the arc restart / overlap (welding engineer; OI-11 / OI-16); whether a 360° wrist-3 turn is

@@ -56,6 +56,12 @@
   "seams": [
     {
       "seam_id": "S01",
+      "arc": {
+        "index": 1,
+        "of": 1,
+        "start_s_mm": 0.0,
+        "end_s_mm": 83.786276
+      },
       "mode": "C",
       "config_label": "S+E-W+",
       "travel_speed_mm_s": 8.0,
@@ -341,6 +347,12 @@
   "rejected": [
     {
       "seam_id": "S02",
+      "arc": {
+        "index": 2,
+        "of": 2,
+        "start_s_mm": 41.9,
+        "end_s_mm": 85.8
+      },
       "reason": "no continuous path (C2 / C3)",
       "coverage_fraction": 0.62,
       "failing_points": [

@@ -40,6 +40,8 @@
       "joint_type": "butt",
       "sequence": 1,
       "leg_mm": null,
+      "arcs": 1,
+      "arc_overlap_mm": 2.0,
       "fingerprint": "circle:r0.0133:c0.0000,0.0000,0.0000",
       "geometry": {
         "spacing_mm": 10.473285,

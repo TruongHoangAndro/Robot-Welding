@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "v2/path.schema.json",
   "title": "path",
-  "description": "D07 weld path v2 (A41\u2013A49): part frame, mm / deg. A seam is listed in `seams` only when 100 % of its points are reachable, collision-free and continuous; otherwise it is in `rejected` with failing points. Never a partial path (design rule 4).",
+  "description": "D07 weld path v2 (A41\u2013A49): part frame, mm / deg. One entry per arc (D04 `arcs`, CP-53). An arc is listed in `seams` only when 100 % of its points are reachable, collision-free and continuous; otherwise it is in `rejected` with failing points, and the seam is not weldable until every arc is accepted. Never a partial path (design rule 4).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -91,6 +91,7 @@
         "additionalProperties": false,
         "required": [
           "seam_id",
+          "arc",
           "mode",
           "config_label",
           "travel_speed_mm_s",
@@ -100,6 +101,35 @@
         "properties": {
           "seam_id": {
             "$ref": "common.schema.json#/$defs/seam_id"
+          },
+          "arc": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "index",
+              "of",
+              "start_s_mm",
+              "end_s_mm"
+            ],
+            "properties": {
+              "index": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "of": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "start_s_mm": {
+                "type": "number",
+                "minimum": 0
+              },
+              "end_s_mm": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "description": "arc of the seam (CP-53); a seam is accepted only when every arc is accepted"
           },
           "mode": {
             "$ref": "common.schema.json#/$defs/positioner_mode"
@@ -211,6 +241,7 @@
         "additionalProperties": false,
         "required": [
           "seam_id",
+          "arc",
           "reason",
           "coverage_fraction",
           "failing_points"
@@ -218,6 +249,35 @@
         "properties": {
           "seam_id": {
             "$ref": "common.schema.json#/$defs/seam_id"
+          },
+          "arc": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "index",
+              "of",
+              "start_s_mm",
+              "end_s_mm"
+            ],
+            "properties": {
+              "index": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "of": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "start_s_mm": {
+                "type": "number",
+                "minimum": 0
+              },
+              "end_s_mm": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "description": "arc of the seam (CP-53); a seam is accepted only when every arc is accepted"
           },
           "reason": {
             "type": "string",

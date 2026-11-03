@@ -136,7 +136,7 @@ The software agent runs the spike; Truong Hoang runs the checks.
 | C4 | Approach, retract, air move | Collision-free, clearance ≥ 10 mm unpadded to part / fixture / holders | Reported |
 | C5 | Planning time | ≤ 30 s per seam on the dev PC, with the backend named | Yes (a fail → backend change, B-06, not Pivot) |
 | C6 | Robustness to placement error | C2–C4 with the part shifted ±2 mm and ±1° per axis (6 runs) | After the decision |
-| C8 | 360° coverage robot-only | J2 is evaluated as **2 arcs** (each ≤ 180° + overlap, emission stops between them; decision 2026-11-03, CP-53): C2 / C3 per arc; % covered with 2 segments per ψ case and head model. One closed robot-only path is impossible under F3 + F11 (CP-53) and is reported as such | Yes for the 2-arc case; OI-27 input |
+| C8 | 360° coverage robot-only | J2 is evaluated as **2 arcs** as entered by the Engineer (seam attribute `arcs` = 2; each ≤ 180° + overlap, emission stops between them; decision 2026-11-03, CP-53): C2 / C3 per arc; % covered with 2 segments per ψ case and head model. One closed robot-only path is impossible under F3 + F11 (CP-53) and is reported as such | Yes for the 2-arc case; OI-27 input |
 | C9 | J1 Mode C | Head clearance ≥ 5 mm over 360° + overlap at one robot pose; contact check F9 | Reported |
 
 ## 6. Decision rules

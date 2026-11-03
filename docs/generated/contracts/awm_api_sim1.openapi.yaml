@@ -325,6 +325,8 @@ components:
         joint_type: {type: string, enum: [butt, fillet, lap, groove]}
         sequence: {type: integer, minimum: 1}
         leg_mm: {type: [number, 'null'], minimum: 0}
+        arcs: {type: integer, minimum: 1, maximum: 12, default: 1, description: 'number of weld arcs entered by the Engineer (CP-53); equal lengths from the seam start'}
+        arc_overlap_mm: {type: number, minimum: 0, description: 'overlap between consecutive arcs; default from the WPS'}
         note: {type: string}
     Run:
       type: object
