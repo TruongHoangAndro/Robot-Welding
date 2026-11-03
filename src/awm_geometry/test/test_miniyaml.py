@@ -68,6 +68,16 @@ def test_same_result_as_pyyaml_where_installed():
         assert yaml.safe_load(MAP_TEXT) == EXPECTED
 
 
+def test_apostrophe_in_plain_scalar_and_comments():
+    """A quote opens a quoted token only at the start of a token; '#' after a space outside quotes is a comment."""
+    text = "a: robot's base # c\nb: 'it''s' # c\nc: [x, 'y # z'] # c\nd: -Y\ne: -1.5\n"
+    data = {'a': "robot's base", 'b': "it's", 'c': ['x', 'y # z'], 'd': '-Y', 'e': -1.5}
+    assert miniyaml.loads(text) == data
+    if importlib.util.find_spec('yaml') is not None:
+        import yaml
+        assert yaml.safe_load(text) == data
+
+
 def test_round_trip():
     data = {'world_T_base': {'position_mm': [0.0, 0.0, 0.0], 'quat_xyzw': [0.0, 0.0, 0.0, 1.0],
                              'note': 'Assumption: x: y # z'},
@@ -79,8 +89,14 @@ def test_round_trip():
         assert yaml.safe_load(text) == data
 
 
-@pytest.mark.parametrize('text', ['a: &x 1', 'a: {b: 1}', 'a: |\n  x', 'a:\n  - [1, [2]]',
-                                  'a: 1\n   b: 2', 'a: 1\na: 2', 'a: \'x'])
+@pytest.mark.parametrize('text', [
+    'a: &x 1', 'a: {b: 1}', 'a: |\n  x', 'a:\n  - [1, [2]]', 'a: 1\n   b: 2', 'a: 1\na: 2', 'a: \'x',
+    'a: [1, ]', 'a: [1,,2]', 'a: [, 1]',                       # empty flow items
+    'a: - b', 'a: ? b', 'a: , b', 'a: ] b', 'a: } b', 'a: ?',  # plain scalars starting with an indicator
+    '---\na: 1\n---\nb: 2', 'a: 1\n---',                     # a second document
+    "a: 'x' 'y'", 'a: "x" "y"', "a: 'x'y",                    # text after a closing quote
+    '? a\n: 1', '?', 'a:\n  ? b',                             # complex keys
+])
 def test_unsupported_or_malformed_fails(text):
     with pytest.raises(miniyaml.YamlSubsetError):
         miniyaml.loads(text)

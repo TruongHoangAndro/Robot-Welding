@@ -23,28 +23,69 @@ class YamlSubsetError(ValueError):
     """The text uses YAML outside the supported subset, or is malformed."""
 
 
-def _strip_comment(line: str) -> str:
-    quote = None
-    for i, ch in enumerate(line):
-        if quote:
-            if ch == quote:
-                quote = None
-        elif ch in ('"', "'"):
-            quote = ch
-        elif ch == '#' and (i == 0 or line[i - 1] in ' \t'):
+_TOKEN_START = (':', '-', '[', ',', '?')
+
+
+def _closing_quote(text: str, i: int, lineno: int) -> int:
+    """Index of the quote that closes the quoted token opening at ``text[i]``."""
+    quote, j = text[i], i + 1
+    while j < len(text):
+        ch = text[j]
+        if quote == "'" and ch == "'":
+            if j + 1 < len(text) and text[j + 1] == "'":
+                j += 2
+                continue
+            return j
+        if quote == '"' and ch == '\\':
+            j += 2
+            continue
+        if quote == '"' and ch == '"':
+            return j
+        j += 1
+    raise YamlSubsetError(f'line {lineno}: unterminated quote: {text!r}')
+
+
+def _opens_quote(text: str, i: int) -> bool:
+    """A quote opens a quoted token only at the start of a token (line start, after ': ', '- ', '[', ',')."""
+    if text[i] not in ('"', "'"):
+        return False
+    prev = text[:i].rstrip()
+    return prev == '' or prev[-1] in _TOKEN_START
+
+
+def _quote_spans(text: str, lineno: int) -> List[Tuple[int, int]]:
+    spans, i = [], 0
+    while i < len(text):
+        if _opens_quote(text, i):
+            j = _closing_quote(text, i, lineno)
+            spans.append((i, j))
+            i = j + 1
+        else:
+            i += 1
+    return spans
+
+
+def _outside(spans: List[Tuple[int, int]], i: int) -> bool:
+    return not any(a <= i <= b for a, b in spans)
+
+
+def _strip_comment(line: str, lineno: int) -> str:
+    i = 0
+    while i < len(line):
+        if _opens_quote(line, i):
+            i = _closing_quote(line, i, lineno) + 1
+            continue
+        if line[i] == '#' and (i == 0 or line[i - 1] in ' \t'):
             return line[:i].rstrip()
+        i += 1
     return line.rstrip()
 
 
-def _split_outside_quotes(text: str, sep: str) -> List[str]:
-    parts, quote, start = [], None, 0
+def _split_outside_quotes(text: str, sep: str, lineno: int) -> List[str]:
+    spans = _quote_spans(text, lineno)
+    parts, start = [], 0
     for i, ch in enumerate(text):
-        if quote:
-            if ch == quote:
-                quote = None
-        elif ch in ('"', "'"):
-            quote = ch
-        elif ch == sep:
+        if ch == sep and _outside(spans, i):
             parts.append(text[start:i])
             start = i + 1
     parts.append(text[start:])
@@ -52,14 +93,9 @@ def _split_outside_quotes(text: str, sep: str) -> List[str]:
 
 
 def _key_value(text: str, lineno: int) -> Tuple[str, str]:
-    quote = None
+    spans = _quote_spans(text, lineno)
     for i, ch in enumerate(text):
-        if quote:
-            if ch == quote:
-                quote = None
-        elif ch in ('"', "'"):
-            quote = ch
-        elif ch == ':' and (i + 1 == len(text) or text[i + 1] == ' '):
+        if ch == ':' and _outside(spans, i) and (i + 1 == len(text) or text[i + 1] == ' '):
             key = _scalar(text[:i].strip(), lineno)
             if not isinstance(key, str):
                 key = str(key)
@@ -70,11 +106,11 @@ def _key_value(text: str, lineno: int) -> Tuple[str, str]:
 def _scalar(text: str, lineno: int) -> Any:
     if text == '':
         return None
-    if text[0] == "'":
-        if len(text) < 2 or text[-1] != "'":
-            raise YamlSubsetError(f'line {lineno}: unterminated quote: {text!r}')
-        return text[1:-1].replace("''", "'")
-    if text[0] == '"':
+    if text[0] in ('"', "'"):
+        if _quote_spans(text, lineno) != [(0, len(text) - 1)]:
+            raise YamlSubsetError(f'line {lineno}: text after a closing quote: {text!r}')
+        if text[0] == "'":
+            return text[1:-1].replace("''", "'")
         try:
             return json.loads(text)
         except ValueError as exc:
@@ -83,10 +119,15 @@ def _scalar(text: str, lineno: int) -> Any:
         if text[-1] != ']':
             raise YamlSubsetError(f'line {lineno}: unterminated flow sequence: {text!r}')
         inner = text[1:-1].strip()
-        if '[' in inner:
+        if not inner:
+            return []
+        items = [p.strip() for p in _split_outside_quotes(inner, ',', lineno)]
+        if any(item == '' for item in items):
+            raise YamlSubsetError(f'line {lineno}: empty item in flow sequence: {text!r}')
+        if any(item[0] == '[' for item in items):
             raise YamlSubsetError(f'line {lineno}: nested flow sequences are not supported')
-        return [] if not inner else [_scalar(p.strip(), lineno) for p in _split_outside_quotes(inner, ',')]
-    if text[0] in _UNSUPPORTED:
+        return [_scalar(item, lineno) for item in items]
+    if text[0] in _UNSUPPORTED or text[0] in ',]}?' or text == '-' or text.startswith('- '):
         raise YamlSubsetError(f'line {lineno}: unsupported YAML syntax: {text!r}')
     if text in ('null', '~', 'Null', 'NULL'):
         return None
@@ -106,12 +147,20 @@ def _scalar(text: str, lineno: int) -> Any:
 def loads(text: str) -> Any:
     """Parse ``text`` (the supported subset) into dicts, lists and scalars."""
     lines: List[Tuple[int, str, int]] = []
+    seen_marker = False
     for n, raw in enumerate(text.splitlines(), start=1):
         if '\t' in raw[:len(raw) - len(raw.lstrip())]:
             raise YamlSubsetError(f'line {n}: tab indentation')
-        body = _strip_comment(raw)
-        if body.strip() in ('', '---'):
+        body = _strip_comment(raw, n)
+        if body.strip() == '':
             continue
+        if body.strip() == '---':
+            if lines or seen_marker:
+                raise YamlSubsetError(f'line {n}: only one document is supported')
+            seen_marker = True
+            continue
+        if body.strip()[0] == '?':
+            raise YamlSubsetError(f'line {n}: complex keys ("?") are not supported')
         lines.append((len(body) - len(body.lstrip(' ')), body.strip(), n))
     if not lines:
         return None
