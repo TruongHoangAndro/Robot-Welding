@@ -149,3 +149,20 @@ def test_v2_refuses_v1_and_partial_records():
     del path['context']['git']
     with pytest.raises(jsonio.SchemaValidationError):
         jsonio.validate(path, 'v2/path')
+
+
+def test_v2_release_scopes_trial_and_promotion():
+    """E-02 = A (Truong 2026-11-03): scopes simulation / trial / production; production promotes a trial bundle."""
+    v2 = jsonio.SCHEMA_DIR / 'v2'
+    base = json.loads((v2 / 'examples' / 'release.example.json').read_text())
+    trial = dict(base, scope='trial')
+    jsonio.validate(trial, 'v2/release')
+    production = dict(base, scope='production')
+    with pytest.raises(SchemaValidationError):
+        jsonio.validate(production, 'v2/release')  # no promoted_from
+    production['promoted_from'] = {'program_rev': base['program_rev'], 'release_sha256': SHA}
+    jsonio.validate(production, 'v2/release')
+    with pytest.raises(SchemaValidationError):
+        jsonio.validate(dict(trial, promoted_from=production['promoted_from']), 'v2/release')
+    active = json.loads((v2 / 'examples' / 'active.example.json').read_text())
+    jsonio.validate(dict(active, scope='trial'), 'v2/active')

@@ -294,7 +294,7 @@ components:
         job_id: {type: string}
         part_no: {type: string}
         part_rev: {type: string}
-        status: {type: string, enum: [importing, draft, planned, simulated, released_simulation, released_production, error]}
+        status: {type: string, enum: [importing, draft, planned, simulated, released_simulation, released_trial, released_production, error]}
         updated_at: {type: string, format: date-time}
     JobDetail:
       allOf:
@@ -311,6 +311,7 @@ components:
               type: object
               properties:
                 simulation: {type: [string, 'null']}
+                trial: {type: [string, 'null']}
                 production: {type: [string, 'null']}
             active_run: {type: [string, 'null']}
     SeamPick:

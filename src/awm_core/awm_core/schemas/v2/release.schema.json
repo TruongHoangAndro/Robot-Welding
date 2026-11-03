@@ -76,8 +76,44 @@
     "locked": {
       "const": true
     },
+    "promoted_from": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "program_rev",
+        "release_sha256"
+      ],
+      "description": "production only: the trial release of the same frozen bundle (same program_sha256) whose A72 / A73 records passed (ADR-17, E-02)",
+      "properties": {
+        "program_rev": {
+          "$ref": "common.schema.json#/$defs/program_rev"
+        },
+        "release_sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        }
+      }
+    },
     "note": {
       "type": "string"
+    }
+  },
+  "if": {
+    "properties": {
+      "scope": {
+        "const": "production"
+      }
+    }
+  },
+  "then": {
+    "required": [
+      "promoted_from"
+    ]
+  },
+  "else": {
+    "not": {
+      "required": [
+        "promoted_from"
+      ]
     }
   }
 }

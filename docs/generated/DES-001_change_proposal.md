@@ -421,7 +421,7 @@ conditions, 5 / 10** (all three members 5 / 10 after round 2). New CP numbers st
 | B-13 | Staged Web UI; v2 data contracts frozen 2026-11-04 | accept_modified | P0 | CP-32 (modified) |
 | B-14 | Delivery stages Sim-1…HW-2; one DES-001 revision per gate; disposition table | accept_modified | P0 | CP-45 (new) |
 | B-15 | D09 is the exact commanded trajectory; M9 sends it verbatim | accept | P1 | CP-46 (new) |
-| B-16 | Release scope `trial`; production as promotion of the same bundle | escalate (E-02) | P1 | CP-47 (new, Proposed) |
+| B-16 | Release scope `trial`; production as promotion of the same bundle | escalate (E-02) → **option A, Truong 2026-11-03** | P1 | CP-47 (accepted 2026-11-03) |
 | B-17 | Typed `awm_interfaces` v1; emission tied to axis motion; M8 heartbeat; no automatic retry; EmissionLost | accept_modified | P1 | CP-27 (modified) |
 | B-18 | Named humans for PLC program, DES-002, safety, hardware execution; weld-event table; ADR-23 dates | escalate (E-03) | P1 | CP-35 (modified, Proposed) |
 | B-19 | Minimal Sim-2 runtime: Python M9, M8-minimal, table-driven M10 sim, mixed-mode refusal, fault injection | accept_modified | P1 | CP-48 (new) |
@@ -457,7 +457,7 @@ as **Proposed** amendments pending OI-38 / OI-39 — the decided ADR-17 and OI-2
 | E-id | OI | Question | Options | Board recommendation | Decider |
 |---|---|---|---|---|---|
 | E-01 | OI-37 | TST-002 decision on 2026-11-06 with frozen inputs, missing inputs = slip ≤ 3 days, not Pivot? | A yes; B decide with whatever exists, missing = Pivot; C no fixed date | A | Linh Tran, with Truong Hoang |
-| E-02 | OI-38 | Amend ADR-17 with a `trial` scope; production = promotion of the same bundle? | A amend now; B decide at HW-1 gate; C keep, run A72 / A73 outside M8 / M9 | A (B fallback); C not acceptable | Truong Hoang |
+| E-02 | OI-38 | Amend ADR-17 with a `trial` scope; production = promotion of the same bundle? | A amend now; B decide at HW-1 gate; C keep, run A72 / A73 outside M8 / M9 | A (B fallback); C not acceptable | Truong Hoang — **decided 2026-11-03: A** (schema v2: scope enum + `promoted_from`; DES-001 Rev 0.6 draft ADR-17 amended, OI-38 closed) |
 | E-03 | OI-39 | Amend OI-28: named human PLC & safety engineer, commissioning engineer, LSO? | A amend (names by 2026-11-20, LSO before HW-2); B PLC program only; C keep | A | Linh Tran, with Truong Hoang |
 | E-04 | OI-40 | Phase 1 deliverable on 2026-12-04? | A Sim-2 system, HW stages in PM-004; B move Phase 1 end after HW-2; C compress HW into December | A, with the customer agreement (OI-5) | Tac Huynh and Linh Tran |
 | E-05 | OI-41 | Filler wire on J1 / J2, and from which side? | A autogenous, free ψ; B wire leading, ±15°; C unknown: report both, decide on wire case | Answer by 2026-11-04, else C | Truong Hoang (welding engineer, Khang Doan) |

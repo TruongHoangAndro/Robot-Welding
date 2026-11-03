@@ -124,9 +124,10 @@
       "type": "string",
       "enum": [
         "simulation",
+        "trial",
         "production"
       ],
-      "description": "ADR-17; a `trial` scope is Proposed (E-02 / OI-38) and needs a MINOR change"
+      "description": "ADR-17 as amended by E-02 = A (Truong 2026-11-03): simulation (simulation mode only), trial (hardware mode, A72 dry run / A73 trial weld), production (promotion of a trial bundle)"
     },
     "positioner_mode": {
       "type": "string",
