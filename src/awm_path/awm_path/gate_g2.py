@@ -30,6 +30,7 @@ from awm_core.hashing import sha256_file
 from awm_path.core.contact import ContactParams, PartMesh, contact_check, point_triangle_distances
 from awm_path.core.gate import GatePose, GateResult, gate_summary, load_pose_specs, resolve_pose
 from awm_path.core.kinematics import fk_tcp
+from awm_path.core.scene_files import JobObject, part_object_files, world_T_object
 
 #: F5 weld clearance recorded with every pose (TST-002 C2, D16 weld_clearance_mm). Information only in G2.
 WELD_CLEARANCE_MM = 5.0
@@ -63,9 +64,10 @@ def _nearest_face(part: PartMesh, point: np.ndarray) -> Optional[Tuple[str, floa
 
 
 def run_gate(scene, kin, poses: Sequence[GatePose], seams: Mapping[str, Tuple[Tuple[str, ...], Tuple[str, ...]]],
-             part: PartMesh, flange_T_part: np.ndarray, contact_params: ContactParams,
+             part: PartMesh, part_object: JobObject, contact_params: ContactParams,
              clearance_mm: float = WELD_CLEARANCE_MM) -> List[GateResult]:
-    """Evaluate every pose. ``scene`` provides ``world_T_links``, ``check`` and ``check_clearance`` (mm / deg)."""
+    """Evaluate every pose. ``scene`` provides ``world_T_links``, ``check`` and ``check_clearance`` (mm / deg);
+    ``part_object`` is the D19 part object (its parent frame is respected, ``scene_files.world_T_object``)."""
     zeros = [0.0] * 6
     w = scene.world_T_links(zeros, 0.0, ['base_link', 'tool0', 'tcp_laser'])
     world_T_base = w['base_link']
@@ -74,7 +76,8 @@ def run_gate(scene, kin, poses: Sequence[GatePose], seams: Mapping[str, Tuple[Tu
     for pose in poses:
         t0 = time.perf_counter()
         theta = pose.theta_deg
-        world_T_part = scene.world_T_links(zeros, theta, ['positioner_flange'])['positioner_flange'] @ flange_T_part
+        world_T_part = world_T_object(part_object, scene.world_T_links(zeros, theta, ['positioner_flange'])[
+            'positioner_flange'])
         q, how = resolve_pose(pose, world_T_base, world_T_part, tool0_T_tcp, kin)
         t1 = time.perf_counter()
         (f4,) = scene.check([q], theta)
@@ -197,15 +200,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         try:
             scene = MoveGroupCellScene(node, cell_manifest, placement, job, head_model=args.head_model)
             scene.load(timeout_s=180.0)
-            parts = [o for o in scene.job.objects if o.role == 'part' and o.face_ids]
-            if len(parts) != 1:
-                raise RuntimeError(f'expected one part object with face ids in {placement}, got {len(parts)}')
-            mesh_file = job / json.loads(placement.read_text())['objects'][scene.job.objects.index(parts[0])][
-                'mesh']['file']
-            faces_file = mesh_file.parent / 'collision_faces.json'
+            part_obj, mesh_file, faces_file = part_object_files(scene.job)
             part = PartMesh.from_files(mesh_file, faces_file)
             t0 = time.perf_counter()
-            results = run_gate(scene, kin, poses, seams, part, parts[0].parent_T_obj_mm, contact_params)
+            results = run_gate(scene, kin, poses, seams, part, part_obj, contact_params)
             wall = time.perf_counter() - t0
         except Exception:
             print(sim.log_tail(60), file=sys.stderr)

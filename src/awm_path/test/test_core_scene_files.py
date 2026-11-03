@@ -9,8 +9,8 @@ import pytest
 
 from awm_core.hashing import sha256_file
 from awm_path.core.scene_files import (CLEARANCE_METHOD, DEFAULT_CLEARANCE_LINKS, SceneFileError,
-                                       clearance_padding_mm, load_cell_manifest, load_job_scene, scene_hash,
-                                       world_T_object)
+                                       clearance_padding_mm, load_cell_manifest, load_job_scene, part_object_files,
+                                       scene_hash, world_T_object)
 
 HEX = 'ab' * 32
 
@@ -57,6 +57,20 @@ def test_load_job_scene_reads_objects_in_mm(tmp_path) -> None:
     assert np.allclose(obj.parent_T_obj_mm[:3, 3], [10.0, 20.0, 30.0])
     assert obj.triangles.shape == (2, 3) and obj.vertices_mm.shape == (4, 3)
     assert obj.mesh_sha256 == sha256_file(job / 'cache' / 'collision.stl')
+    assert obj.mesh_file == job / 'cache' / 'collision.stl'
+
+
+def test_part_object_files(tmp_path) -> None:
+    job = _job(tmp_path)
+    scene = load_job_scene(job / 'placement.json', job)
+    obj, stl, faces = part_object_files(scene)
+    assert obj.object_id == 'part' and stl == job / 'cache' / 'collision.stl'
+    assert faces == job / 'cache' / 'collision_faces.json'
+    doc = json.loads((job / 'placement.json').read_text())
+    doc['objects'][0]['mesh']['face_ids'] = False
+    (job / 'placement.json').write_text(json.dumps(doc))
+    with pytest.raises(SceneFileError, match='one part object'):
+        part_object_files(load_job_scene(job / 'placement.json', job))
 
 
 def test_load_job_scene_refuses_stale_mesh(tmp_path) -> None:

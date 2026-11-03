@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Mapping, Tuple, Union
+from typing import Dict, Iterable, Mapping, Optional, Tuple, Union
 
 import numpy as np
 
@@ -54,6 +54,7 @@ class JobObject:
     triangles: np.ndarray
     mesh_sha256: str
     face_ids: bool
+    mesh_file: Optional[Path] = None
 
 
 @dataclass(frozen=True)
@@ -99,9 +100,21 @@ def load_job_scene(placement: PathLike, job_dir: PathLike) -> JobScene:
             raise SceneFileError(f'{placement}: {o["mesh"]["file"]} sha256 {digest} != {o["mesh"]["sha256"]}')
         verts, tris = read_stl(mesh)
         objects.append(JobObject(o['object_id'], o['role'], o['parent_frame'], _pose_mm(o['pose_mm']), verts, tris,
-                                 digest, bool(o['mesh']['face_ids'])))
+                                 digest, bool(o['mesh']['face_ids']), mesh))
     return JobScene(placement, sha256_file(placement), doc['scene_sha256'], doc['source'], bool(doc['verified']),
                     tuple(objects))
+
+
+#: Face map written next to the part collision mesh by export-scene (S.4 A3).
+COLLISION_FACES_FILE = 'collision_faces.json'
+
+
+def part_object_files(job: JobScene) -> Tuple[JobObject, Path, Path]:
+    """The single part object with per-triangle face ids, its (hash-checked) mesh file and the face map next to it."""
+    parts = [o for o in job.objects if o.role == 'part' and o.face_ids]
+    if len(parts) != 1 or parts[0].mesh_file is None:
+        raise SceneFileError(f'{job.path}: expected one part object with face ids, got {len(parts)}')
+    return parts[0], parts[0].mesh_file, parts[0].mesh_file.parent / COLLISION_FACES_FILE
 
 
 def load_cell_manifest(path: PathLike) -> CellManifest:
@@ -139,5 +152,5 @@ def clearance_padding_mm(f4_padding_mm: Mapping[str, float], links: Iterable[str
     return {k: (float(clearance_mm) if k in links else 0.0) for k in f4_padding_mm}
 
 
-__all__ = ['DEFAULT_CLEARANCE_LINKS', 'CLEARANCE_METHOD', 'SceneFileError', 'JobObject', 'JobScene', 'CellManifest',
+__all__ = ['COLLISION_FACES_FILE', 'part_object_files', 'DEFAULT_CLEARANCE_LINKS', 'CLEARANCE_METHOD', 'SceneFileError', 'JobObject', 'JobScene', 'CellManifest',
            'load_job_scene', 'load_cell_manifest', 'world_T_object', 'scene_hash', 'clearance_padding_mm']

@@ -87,6 +87,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     from awm_path.backends.move_group import MoveGroupCellScene
     from awm_path.core.contact import ContactParams, PartMesh
     from awm_path.core.kinematics import UrAnalyticKinematics
+    from awm_path.core.scene_files import part_object_files, world_T_object
     from awm_path.core.scoring import SceneScoreParams, score_candidates
     from awm_path.core.sweep import PlannerParams, required_points, sweep, write_candidates_csv
     from awm_path.gate_g2 import _git, launch_args_from_frames
@@ -118,12 +119,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         try:
             scene = MoveGroupCellScene(node, cell_manifest, placement, job, head_model=args.head_model)
             scene.load(timeout_s=180.0)
-            part_obj = [o for o in scene.job.objects if o.role == 'part' and o.face_ids][0]
-            part = PartMesh.from_files(job / 'cache' / 'collision.stl', job / 'cache' / 'collision_faces.json')
+            part_obj, mesh_file, faces_file = part_object_files(scene.job)
+            part = PartMesh.from_files(mesh_file, faces_file)     # mesh hash checked against the placement
             w = scene.world_T_links([0.0] * 6, args.theta_deg, ['base_link', 'tool0', 'tcp_laser',
                                                                  'positioner_flange'])
             tool0_T_tcp = np.linalg.inv(w['tool0']) @ w['tcp_laser']
-            base_T_part = np.linalg.inv(w['base_link']) @ w['positioner_flange'] @ part_obj.parent_T_obj_mm
+            base_T_part = np.linalg.inv(w['base_link']) @ world_T_object(part_obj, w['positioner_flange'])
             frames_base = [base_T_part @ f for f in part_frames]
             t0 = time.perf_counter()
             layers = sweep(frames_base, tool0_T_tcp, kin, params, psi)
@@ -146,7 +147,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         'created_by': 'awm_path.scene_timing', 'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         'commit': _git(['rev-parse', 'HEAD'], here), 'dirty': bool(_git(['status', '--porcelain'], here)),
         'inputs': [{'name': p.name, 'sha256': sha256_file(p)} for p in (frames_file, cell_manifest, placement,
-                                                                         topo_file)],
+                                                                         topo_file, mesh_file, faces_file)],
         'scene_backend': scene.record, 'kinematics_backend': kin.name, 'head_model': args.head_model,
         'psi_case': args.psi_case, 'theta_deg': args.theta_deg, 'joint': args.joint,
         'seam_faces': {'n1': list(seam_faces[0]), 'n2': list(seam_faces[1])},

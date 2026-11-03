@@ -8,6 +8,7 @@ import pytest
 from awm_path.core.contact import ContactParams, PartMesh
 from awm_path.core.gate import load_pose_specs
 from awm_path.core.scene import StateCheck
+from awm_path.core.scene_files import JobObject
 from awm_path.gate_g2 import launch_args_from_frames, run_gate, write_gate_log
 
 
@@ -70,11 +71,14 @@ def _doc():
     ]}
 
 
+def _part(parent='positioner_flange'):
+    return JobObject('part', 'part', parent, np.eye(4), np.zeros((3, 3)), np.zeros((1, 3), int), 'ab' * 32, True)
+
+
 def test_run_gate_combines_validity_and_contact():
     poses, seams = load_pose_specs(_doc())
     scene = FakeScene()
-    part_T = np.eye(4)
-    results = run_gate(scene, FakeKin(), poses, seams, _plate(), part_T, ContactParams())
+    results = run_gate(scene, FakeKin(), poses, seams, _plate(), _part(), ContactParams())
     by = {r.pose.pose_id: r for r in results}
     assert not by['C1'].valid and by['C1'].passed and by['C1'].expected_object_seen
     assert by['F1'].valid and by['F1'].passed
@@ -87,9 +91,17 @@ def test_run_gate_combines_validity_and_contact():
     assert by['F2'].valid and by['F2'].contact.ok
 
 
+def test_run_gate_respects_the_parent_frame_of_the_part():
+    """A part attached to world does not follow the positioner angle (scene_files.world_T_object)."""
+    poses, seams = load_pose_specs(_doc())
+    results = run_gate(FakeScene(), FakeKin(), poses, seams, _plate(), _part('world'), ContactParams())
+    z = {r.pose.pose_id: r for r in results}['Z1']
+    assert z.details['theta_deg'] == 5.0 and z.details['q_deg'][2] == pytest.approx(0.0)
+
+
 def test_write_gate_log(tmp_path):
     poses, seams = load_pose_specs(_doc())
-    results = run_gate(FakeScene(), FakeKin(), poses, seams, _plate(), np.eye(4), ContactParams())
+    results = run_gate(FakeScene(), FakeKin(), poses, seams, _plate(), _part(), ContactParams())
     j, md = write_gate_log(tmp_path / 'g2_log.json', tmp_path / 'g2_log.md', {'commit': 'abc'}, results)
     doc = json.loads(j.read_text())
     assert doc['record']['commit'] == 'abc'
