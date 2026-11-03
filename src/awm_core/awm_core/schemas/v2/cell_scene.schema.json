@@ -260,8 +260,16 @@
                   "exclusiveMinimum": 0
                 },
                 "achieved_chord_mm": {
-                  "type": "number",
-                  "minimum": 0
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0,
+                  "description": "null when nodes_only"
+                },
+                "nodes_only": {
+                  "type": "boolean",
+                  "description": "hull mode only: no retry covered the face (zero-area or < 99 % of the face area), so the hull uses the face nodes without triangles (S.4 A review M1)"
                 }
               }
             }
