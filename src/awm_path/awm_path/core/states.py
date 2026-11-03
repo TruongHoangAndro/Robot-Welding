@@ -227,7 +227,8 @@ def ik_existence(base_link_T_tool0: np.ndarray, geo: UrGeometry = UR5E_GEOMETRY)
     phi = math.atan2(p5[1], p5[0])
     half = math.acos(geo.d4 / r)
     singular = feasible = False
-    for q1_rad in (phi + half + math.pi / 2.0, phi - half + math.pi / 2.0):
+    quarter = units.deg_to_rad(90.0)
+    for q1_rad in (phi + half + quarter, phi - half + quarter):
         s1, c1 = math.sin(q1_rad), math.cos(q1_rad)
         c5 = (p6[0] * s1 - p6[1] * c1 - geo.d4) / geo.d6
         if abs(c5) > 1.0 + _COS_TOL:
