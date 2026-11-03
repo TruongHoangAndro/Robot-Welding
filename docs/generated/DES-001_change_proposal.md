@@ -552,3 +552,18 @@ the joint-1 and joint-2 axes (≥ 50 mm, Assumption); the literal "distance from
 **DES-001 impact:** §4.3 step 4 / 5 note "closed seams welded robot-only are split into arcs (CP-53)"; A22 (split) and
 A42 (overlap) descriptions; TST-002 Rev 0.3 F1, C3, C8 rows updated in the draft.
 
+
+## CP-54 S10-lite cell model role editor pulled forward (decided by Truong, 2026-11-03)
+
+**Decision:** the role map of a cell / fixture CAD assembly (`cad_map`, ADR-16 / CP-23) is edited in a UI page
+(S10-lite) instead of by hand: after import the component tree is shown in 3D; the user assigns a role to each
+component (part, positioner rotating set, cell static, head CAD, ignore; picks the robot base and the positioner axis)
+and may give it a display name. The STEP file is never modified; display names live in the map. Default deny.
+PLAN Rev 0.6 had S10 after Phase 1 (CLI / API only) — S10-lite moves into WP3 now, before Sim-1, and runs in parallel
+with WP-S S.4 part C (one agent slot).
+**Phase 1 limits:** no server write path; the page validates and downloads `cad_map.yaml`; saving through `awm_api`
+`/cell/model` with role checks comes with T3.1. Contract: `docs/generated/contracts/S10_lite_cell_model.md`,
+schema `v2/cad_map.schema.json`.
+**Open:** who may edit (DES-001 §7.3 says Admin for the cell model; Engineer for the fixture part per job?);
+re-matching map entries after a new STEP export (component path + geometric fingerprint, A18 follow-up).
+**DES-001 impact:** §4.5 screens table S10 (Phase 1 lite), build steps UI-1; §11 A18 UI; PLAN WP3.

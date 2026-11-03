@@ -120,14 +120,17 @@ def test_v2_contract_schemas_and_examples():
     v2 = jsonio.SCHEMA_DIR / 'v2'
     names = sorted(p.name[:-len('.schema.json')] for p in v2.glob('*.schema.json')
                    if p.name != 'common.schema.json')
-    assert names == ['active', 'part', 'path', 'placement', 'program', 'release', 'seams']
+    assert names == ['active', 'cad_map', 'part', 'path', 'placement', 'program', 'release', 'seams']
+    cell_data = {'cad_map'}  # hand / UI edited cell data with its own `schema` tag, not a job document
     for name in names:
         schema = jsonio.load_schema(f'v2/{name}')
         assert 'common.schema.json' not in json.dumps(schema), name
-        for key in ('schema_version', 'created_by', 'created_at', 'inputs'):
-            assert key in schema['required'], (name, key)
         example = json.loads((v2 / 'examples' / f'{name}.example.json').read_text())
         jsonio.validate(example, f'v2/{name}')
+        if name in cell_data:
+            continue
+        for key in ('schema_version', 'created_by', 'created_at', 'inputs'):
+            assert key in schema['required'], (name, key)
         assert example['schema_version'].startswith('2.')
 
 
