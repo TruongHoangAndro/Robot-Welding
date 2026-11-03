@@ -25,39 +25,63 @@ ROBOT_T = [[1.0, 0.0, 0.0, -200.0], [0.0, 1.0, 0.0, 20.0], [0.0, 0.0, 1.0, 0.0],
 AXIS_POINT, AXIS_DIR = [0.0, 100.0, 50.0], [1.0, 0.0, 0.0]
 HOLDER = ((-0.060, 0.090, 0.040), (-0.040, 0.110, 0.060))   # metres (testparts unit), on the axis
 TABLE = ((-0.300, -0.010, -0.100), (0.100, 0.000, 0.100))   # plate under everything
+# U-shaped jig around the tube (part: x -30..40, y 86.665..113.335, z 36.665..63.335 mm), open towards +Y:
+# its convex hull swallows the part, its mesh keeps >= 6 mm clearance.
+JIG = [((-0.010, 0.070, 0.025), (0.010, 0.080, 0.075)),
+       ((-0.010, 0.080, 0.025), (0.010, 0.120, 0.030)),
+       ((-0.010, 0.080, 0.070), (0.010, 0.120, 0.075))]
+TUBE_BOTTOM_MM = 100.0 - 13.335
 
 
-def _cell(tmp_path):
+def _clamp(overlap_mm):
+    """Box under the tube whose top face is ``overlap_mm`` above the tube bottom line (metres)."""
+    return ((-0.020, 0.075, 0.045), (-0.010, units.mm_to_m(TUBE_BOTTOM_MM + overlap_mm), 0.055))
+
+
+def _cell(tmp_path, clamp_overlap_mm=None, name='cell.step'):
+    from OCC.Core.TopAbs import TopAbs_FACE
+    from OCC.Core.TopExp import TopExp_Explorer
+
     from awm_geometry import testparts
 
+    sheet = TopExp_Explorer(testparts.box((0.3, 0.3, 0.3), (0.31, 0.31, 0.31)), TopAbs_FACE).Current()
     comps = testparts.weldment_assembly()[:1] + [
         ('robot', [testparts.box((0.0, 0.0, 0.0), (0.020, 0.030, 0.020))]),
         ('holder', [testparts.box(*HOLDER)]),
         ('table', [testparts.box(*TABLE)]),
         ('tool', [testparts.box((0.0, 0.200, 0.0), (0.010, 0.210, 0.010))]),
+        ('jig', [testparts.box(*b) for b in JIG]),
+        ('dup', [testparts.box((0.5, 0.5, 0.5), (0.51, 0.51, 0.51))]),
+        ('dup', [testparts.box((0.6, 0.5, 0.5), (0.61, 0.51, 0.51))]),
+        ('sheet', [sheet]),
     ]
-    step = tmp_path / 'cell.step'
-    testparts.write_assembly(step, comps, [PART_T, ROBOT_T, None, None, None], instance_names=True)
+    if clamp_overlap_mm is not None:
+        comps.append(('clamp', [testparts.box(*_clamp(clamp_overlap_mm))]))
+    step = tmp_path / name
+    testparts.write_assembly(step, comps, [PART_T, ROBOT_T] + [None] * (len(comps) - 2), instance_names=True)
     return step
 
 
-def _map(step, **override):
+def _map(step, collision=None, tolerance=None, axis_dir=None, **override):
     cmap = {
         'schema': 'cad_map/0.1',
         'source': {'file': step.name, 'sha256': hashing.sha256_file(step), 'unit': 'mm', 'up_axis': '+Y'},
         'match': 'instance_name', 'default': 'deny',
         'frames': {'world': {'origin_from': 'ur_base'},
                    'ur_base': {'component': 'robot:1', 'use': 'placement'},
-                   'positioner_axis': {'point_file_mm': AXIS_POINT, 'direction_file': AXIS_DIR}},
+                   'positioner_axis': {'point_file_mm': AXIS_POINT,
+                                       'direction_file': axis_dir or AXIS_DIR}},
         'roles': {'part': ['weldment:1'], 'positioner_rotating': ['holder:1'],
-                  'cell_static': ['table:1'], 'head_cad': [{'path': 'tool:1', 'depth': 1}],
-                  'ignore': ['robot:1']},
+                  'cell_static': ['table:1', 'jig:1'], 'head_cad': [{'path': 'tool:1', 'depth': 1}],
+                  'ignore': ['robot:1', 'dup:1', 'dup:2', 'sheet:1']},
+        'collision': {'jig:1': 'mesh'} if collision is None else collision,
+        'contact_tolerance_mm': 1.0 if tolerance is None else tolerance,
     }
     cmap['roles'].update(override)
     return cmap
 
 
-def _run(tmp_path, cmap, step=None):
+def _run(tmp_path, cmap, step=None, job='TEST_A'):
     from awm_geometry import cli
 
     step = step or _cell(tmp_path)
@@ -65,7 +89,7 @@ def _run(tmp_path, cmap, step=None):
     map_path.write_text(miniyaml.dumps(cmap(step) if callable(cmap) else cmap))
     repo = tmp_path / 'repo'
     code = cli.main(['export-scene', '--step', str(step), '--map', str(map_path), '--repo', str(repo),
-                     '--job', 'TEST_A', '--chord-near-mm', '0.1'])
+                     '--job', job, '--chord-near-mm', '0.1'])
     return code, repo
 
 
@@ -103,7 +127,7 @@ def _manifest(scene):
 def test_manifest_objects_roles_parents(scene):
     man = _manifest(scene)
     objs = {o['object_id']: o for o in man['objects']}
-    assert set(objs) == {'holder_1', 'table_1'}
+    assert set(objs) == {'holder_1', 'table_1', 'jig_1'}
     assert objs['holder_1']['role'] == 'positioner_rotating'
     assert objs['holder_1']['parent_frame'] == 'positioner_flange'
     assert objs['table_1']['role'] == 'cell_static' and objs['table_1']['parent_frame'] == 'world'
@@ -207,14 +231,117 @@ def test_unmapped_component_is_an_error(tmp_path, occ, caplog):
     assert not (repo / 'cell' / 'model' / 'scene_manifest.json').exists()
 
 
-def test_ambiguous_and_stale_map_entries_fail(tmp_path, occ, caplog):
-    code, _ = _run(tmp_path, lambda s: _map(s, head_cad=['nothing:1']))
+def test_unknown_entry_and_wrong_sha_fail(tmp_path, occ, caplog):
+    code, _ = _run(tmp_path, lambda s: _map(s, cell_static=['table:1', 'jig:1', 'nothing:1']))
     assert code == 1 and 'matches no component' in caplog.text
     step = _cell(tmp_path)
     bad = _map(step)
     bad['source']['sha256'] = '0' * 64
     code, _ = _run(tmp_path, bad, step)
     assert code == 1 and 'SHA-256' in caplog.text
+
+
+def _fails(tmp_path, caplog, cmap, *needles, **kw):
+    code, repo = _run(tmp_path, cmap, **kw)
+    assert code == 1
+    for needle in needles:
+        assert needle in caplog.text, (needle, caplog.text[-2000:])
+    assert not (repo / 'cell').exists() and not (repo / 'jobs').exists()  # nothing written
+
+
+def test_ambiguous_entry_fails(tmp_path, occ, caplog):
+    _fails(tmp_path, caplog, lambda s: _map(s, ignore=['robot:1', 'dup-body1:1', 'sheet:1']),
+           "'dup-body1:1' matches 2 components")
+
+
+def test_component_under_two_roles_fails(tmp_path, occ, caplog):
+    _fails(tmp_path, caplog, lambda s: _map(s, ignore=['robot:1', 'dup:1', 'dup:2', 'sheet:1', 'table:1']),
+           "'table:1' is already mapped as cell_static")
+
+
+def test_child_inside_mapped_ancestor_fails(tmp_path, occ, caplog):
+    _fails(tmp_path, caplog, lambda s: _map(s, ignore=['robot:1', 'dup:1', 'dup:2', 'sheet:1', 'table-body1:1']),
+           'inside a component mapped as cell_static')
+
+
+def test_surface_only_component_is_denied(tmp_path, occ, caplog):
+    _fails(tmp_path, caplog, lambda s: _map(s, ignore=['robot:1', 'dup:1', 'dup:2']), 'not mapped', 'sheet:1')
+
+
+def test_bad_axis_fails(tmp_path, occ, caplog):
+    _fails(tmp_path, caplog, lambda s: _map(s, axis_dir=[2.0, 0.0, 0.0]), 'unit length')
+
+
+def test_non_finite_axis_raises(occ):
+    """NaN cannot be written in the YAML subset (the schema refuses it); the frame code refuses it as well."""
+    from awm_geometry import scene
+
+    tree = [{'index': 0, 'parent': None, 'instance_name': '', 'placement_mm': np.eye(4).tolist()},
+            {'index': 1, 'parent': 0, 'instance_name': 'robot:1', 'placement_mm': np.eye(4).tolist()}]
+    cmap = {'source': {'up_axis': '+Y'},
+            'frames': {'world': {'origin_from': 'ur_base'}, 'ur_base': {'component': 'robot:1'},
+                       'positioner_axis': {'point_file_mm': [0.0, 0.0, 0.0],
+                                           'direction_file': [float('nan'), 0.0, 0.0]}}}
+    with pytest.raises(scene.MapError, match='finite'):
+        scene.cell_frames(tree, cmap)
+    cmap['frames']['positioner_axis'] = {'point_file_mm': [0.0, float('inf'), 0.0], 'direction_file': AXIS_DIR}
+    with pytest.raises(scene.MapError, match='finite'):
+        scene.cell_frames(tree, cmap)
+
+
+def test_map_schema_is_checked(tmp_path, occ, caplog):
+    def bad(step):
+        cmap = _map(step)
+        cmap['frames']['ur_base']['extra'] = 1
+        return cmap
+    _fails(tmp_path, caplog, bad, 'v2/cad_map')
+
+
+def test_bad_job_fails_before_writing(tmp_path, occ, caplog):
+    _fails(tmp_path, caplog, _map, 'job', job='bad job')
+
+
+def test_hull_around_part_is_refused(tmp_path, occ, caplog):
+    """The U-jig as a convex hull swallows the tube: export refused, object, part faces and depth listed."""
+    _fails(tmp_path, caplog, lambda s: _map(s, collision={'jig:1': 'hull'}), 'jig_1', 'deeper than', 'F')
+
+
+def test_contact_within_tolerance_passes_beyond_fails(tmp_path, occ, caplog):
+    """Clamp under the middle of the tube (no tessellation vertex there): found by the surface samples."""
+    step = _cell(tmp_path, clamp_overlap_mm=0.5, name='c05.step')
+    code, repo = _run(tmp_path, lambda s: _map(s, cell_static=['table:1', 'jig:1', 'clamp:1']), step=step)
+    assert code == 0
+    objs = {o['object_id']: o for o in _manifest(repo)['objects']}
+    assert 0.3 < objs['clamp_1']['part_max_depth_mm'] <= 0.5 + TOL_MM
+    assert objs['jig_1']['part_max_depth_mm'] == 0.0
+    other = tmp_path / 'x'
+    other.mkdir()
+    step = _cell(other, clamp_overlap_mm=2.0, name='c20.step')
+    _fails(other, caplog, lambda s: _map(s, cell_static=['table:1', 'jig:1', 'clamp:1']), 'clamp_1', step=step)
+
+
+def test_collision_modes_in_manifest(scene):
+    from awm_geometry import meshops
+
+    objs = {o['object_id']: o for o in _manifest(scene)['objects']}
+    assert objs['jig_1']['collision'] == 'mesh' and objs['table_1']['collision'] == 'hull'
+    # three touching boxes = three closed shells (checked at export); the STL reader merges their shared corners,
+    # so check the enclosed volume of the whole mesh here
+    verts, tris = stl.read_stl(scene / 'cell' / 'model' / objs['jig_1']['mesh']['file'])
+    assert meshops.volume(verts, tris) == pytest.approx(20 * 10 * 50 + 2 * 20 * 40 * 5, rel=1e-6)
+    assert objs['table_1']['hull_volume_ratio'] == pytest.approx(1.0, rel=1e-6)
+    assert 'hull_volume_ratio' not in objs['jig_1']
+
+
+def test_stale_files_are_removed(tmp_path, occ):
+    step = _cell(tmp_path)
+    stale = tmp_path / 'repo' / 'cell' / 'model' / 'old_object.stl'
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(b'x')
+    code, repo = _run(tmp_path, _map, step=step)
+    assert code == 0 and not stale.exists()
+    files = {p.name for p in (repo / 'cell' / 'model').iterdir()}
+    assert files == {'frames.yaml', 'scene_manifest.json'} | {o['mesh']['file'] for o in _manifest(repo)['objects']}
 
 
 def test_object_ids_are_sanitised(occ):

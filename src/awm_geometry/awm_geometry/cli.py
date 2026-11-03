@@ -28,7 +28,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import math
 import os
 import shutil
 import sys
@@ -38,7 +37,7 @@ from typing import List, Optional
 import numpy as np
 
 import awm_geometry
-from awm_core import jsonio
+from awm_core import jsonio, units
 from awm_core.hashing import sha256_file
 from awm_core.repository import JobPaths
 
@@ -93,7 +92,7 @@ def write_part_record(job: JobPaths, step_name: str, loaded, part_no: str, part_
     occ_io.write_brep(shape, job.brep_cache)
     LOG.info('A13 tessellate (linear deflection %.5f m)', linear_deflection_m)
     triangles = occ_io.tessellate_to_stl(shape, job.mesh_stl, linear_deflection_m,
-                                         math.radians(angular_deflection_deg))
+                                         units.deg_to_rad(angular_deflection_deg))
     LOG.info('A21 edge catalogue')
     catalogue = topology.edge_catalogue(shape)
     edges_doc = jsonio.make_header(_created_by(), [job.model_step], job.dir)
@@ -109,7 +108,7 @@ def write_part_record(job: JobPaths, step_name: str, loaded, part_no: str, part_
         'checks': [c.as_dict() for c in checks], 'healed': healed,
         'mesh': {'file': 'cache/mesh.stl', 'sha256': sha256_file(job.mesh_stl),
                  'linear_deflection_m': linear_deflection_m,
-                 'angular_deflection_rad': math.radians(angular_deflection_deg),
+                 'angular_deflection_rad': units.deg_to_rad(angular_deflection_deg),
                  'triangles': triangles},
         'brep_cache': {'file': 'cache/model.brep', 'sha256': sha256_file(job.brep_cache)},
         'edges_file': {'file': 'cache/edges.json', 'sha256': sha256_file(job.edges_json)},

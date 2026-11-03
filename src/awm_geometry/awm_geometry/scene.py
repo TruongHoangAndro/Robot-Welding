@@ -4,8 +4,10 @@ Inputs: the cell STEP assembly (D21) and a role map ``cad_map.yaml`` (data, neve
 frames). Outputs, all in mm:
 
 * ``<repo>/cell/model/frames.yaml`` — ``world_T_file``, ``world_T_base``, ``world_T_positioner_axis``;
-* ``<repo>/cell/model/<object_id>.stl`` — convex hull per mapped ``cell_static`` / ``positioner_rotating``
-  component, in the component's own frame; ``scene_manifest.json`` lists them with pose, parent, hash, padding;
+* ``<repo>/cell/model/<object_id>.stl`` — per mapped ``cell_static`` / ``positioner_rotating`` component, in the
+  component's own frame: its convex hull (default) or, where the map's ``collision`` says ``mesh``, its closed
+  tessellated mesh; ``scene_manifest.json`` lists them with pose, parent, hash, padding, collision mode. The folder
+  is rewritten on every export (stale meshes removed);
 * ``<repo>/jobs/<job>/`` — job import of the ``part`` component (model.step, part.json, edges.json, …), D20 view
   model in ``cache/view/``, collision mesh ``cache/collision.stl`` + ``cache/collision_faces.json`` (triangle →
   face_id), ``placement.json`` (v2 D19).
@@ -21,7 +23,10 @@ Frames (every one an **Assumption** until ``REF_*`` markers exist, OI-23):
 * ``part``: the part component is read placed in the file frame (as ``import`` / ``export-view`` do), so the part
   frame is the file frame and ``flange_T_part = flange_T_file``. D20 / edges.json coordinates are in it.
 
-Default deny: every component that carries solids must be covered by a map entry (itself or an ancestor).
+Default deny: every component with geometry (solids or surfaces) must be covered by a map entry (itself or an
+ancestor). Export guard: points sampled on the part collision mesh (spacing ``GUARD_SPACING_MM``, every vertex
+included) must not lie deeper than the map's ``contact_tolerance_mm`` inside any cell object at θ = 0, measured
+against the object's collision mesh; otherwise nothing is written and the object, part faces and depth are listed.
 """
 
 from __future__ import annotations
@@ -34,9 +39,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from OCC.Core.BRep import BRep_Tool
+from OCC.Core.BRepGProp import brepgprop
 from OCC.Core.BRepMesh import BRepMesh_IncrementalMesh
+from OCC.Core.GProp import GProp_GProps
 from OCC.Core.BRepTools import breptools
-from OCC.Core.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED
+from OCC.Core.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED, TopAbs_SOLID
 from OCC.Core.TopExp import TopExp_Explorer, topexp
 from OCC.Core.TopLoc import TopLoc_Location
 from OCC.Core.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
@@ -44,8 +51,8 @@ from OCC.Core.TopoDS import TopoDS_Shape, topods
 
 from awm_core import frames, jsonio, units
 from awm_core.hashing import sha256_bytes, sha256_file
-from awm_core.repository import JobPaths, Repository
-from awm_geometry import assembly, hull, joints, miniyaml, topology, view
+from awm_core.repository import Repository
+from awm_geometry import assembly, hull, joints, meshops, miniyaml, topology, view
 from awm_geometry.occ_io import GeometryError
 
 LOG = logging.getLogger('awm_geometry')
@@ -58,6 +65,12 @@ ENTRY_KEYS = {'name', 'path', 'depth'}
 #: than the exact envelope — covered by the 3 mm padding (DES-001 §5.4).
 HULL_LINEAR_DEFLECTION_MM = 0.2
 HULL_ANGULAR_DEFLECTION_DEG = 15.0
+MESH_LINEAR_DEFLECTION_MM = 0.5   # collision: mesh (S.4 A review: linear <= 0.5 mm)
+MESH_ANGULAR_DEFLECTION_DEG = 15.0
+MESH_WELD_MM = 1.0e-4             # coincident tessellation nodes of neighbouring faces are merged
+COLLISION_MODES = ('hull', 'mesh')
+DEFAULT_CONTACT_TOLERANCE_MM = 1.0  # cad_map default (Assumption, scene decision D8)
+GUARD_SPACING_MM = 1.0            # sample spacing on the part surface for the export guard
 PART_NEAR_ANGULAR_DEG = 5.0
 PART_FAR_ANGULAR_DEG = 15.0
 PART_PADDING_MM = 0.0  # the nozzle tip may touch the part; padding sits on the head links (B-04)
@@ -110,6 +123,10 @@ def load_map(path: Path, step: Path) -> Dict[str, Any]:
     if not path.is_file():
         raise MapError(f'role map not found: {path}')
     cmap = miniyaml.load(path)
+    try:
+        jsonio.validate(cmap, 'v2/cad_map')
+    except jsonio.SchemaValidationError as exc:
+        raise MapError(f'{path}: {exc}') from exc
     if not isinstance(cmap, dict) or cmap.get('schema') != MAP_SCHEMA:
         raise MapError(f'{path}: schema must be {MAP_SCHEMA!r}')
     if cmap.get('match') != 'instance_name' or cmap.get('default') != 'deny':
@@ -182,9 +199,9 @@ def resolve_roles(tree: List[Dict[str, Any]], cmap: Dict[str, Any]) -> Dict[int,
         elif inherited:
             covered[i] = inherited
     unmapped = [rel[n['index']] for n in tree
-                if not n['is_assembly'] and n['solids'] > 0 and n['index'] not in covered]
+                if not n['is_assembly'] and n['bbox_mm'] is not None and n['index'] not in covered]
     if unmapped:
-        problems.append(f'{len(unmapped)} component(s) with solids not mapped (default deny): '
+        problems.append(f'{len(unmapped)} component(s) with geometry not mapped (default deny): '
                         + '; '.join(unmapped[:20]) + (' …' if len(unmapped) > 20 else ''))
     if problems:
         raise MapError('role map does not fit the assembly:\n  ' + '\n  '.join(problems))
@@ -203,14 +220,20 @@ def cell_frames(tree: List[Dict[str, Any]], cmap: Dict[str, Any]) -> Dict[str, A
     if len(hits) != 1:
         raise MapError(f'frames.ur_base.component {ur_name!r} matches {len(hits)} components (expected 1)')
     file_T_ur = np.asarray(hits[0]['placement_mm'], dtype=float)
+    if not np.isfinite(file_T_ur).all():
+        raise MapError(f'placement of {ur_name!r} is not finite')
     rot = world_R_file(cmap['source']['up_axis'])
     world_T_file = frames.make_transform(-rot @ file_T_ur[:3, 3], rot)
     world_T_base = world_T_file @ file_T_ur @ frames.make_transform([0, 0, 0], rot.T)
     axis = fr.get('positioner_axis') or {}
     point = np.asarray(axis.get('point_file_mm'), dtype=float)
     direction = np.asarray(axis.get('direction_file'), dtype=float)
-    if point.shape != (3,) or direction.shape != (3,) or np.linalg.norm(direction) == 0:
+    if point.shape != (3,) or direction.shape != (3,):
         raise MapError('frames.positioner_axis needs point_file_mm and direction_file (3 numbers each)')
+    if not (np.isfinite(point).all() and np.isfinite(direction).all()):
+        raise MapError('frames.positioner_axis: point_file_mm and direction_file must be finite')
+    if abs(np.linalg.norm(direction) - 1.0) > 1e-6:
+        raise MapError(f'frames.positioner_axis.direction_file {direction.tolist()} must have unit length')
     p_w = (world_T_file @ np.append(point, 1.0))[:3]
     x = rot @ direction / np.linalg.norm(direction)
     up = np.array([0.0, 0.0, 1.0])
@@ -263,24 +286,42 @@ def _face_triangles(face) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], f
     return pos, idx, float(tri.Deflection())
 
 
-def shape_nodes_mm(shape: TopoDS_Shape) -> np.ndarray:
-    """Tessellation nodes (file frame, mm) of a component shape read from the STEP (session unit mm)."""
+def _tessellate_mm(shape: TopoDS_Shape, linear_mm: float,
+                   angular_deg: float) -> List[Tuple[np.ndarray, np.ndarray]]:
+    """Triangles (file frame, mm, not welded) per solid of a component shape read from the STEP (session unit
+    mm); a component without solids (surfaces only) gives one entry for all its faces."""
     breptools.Clean(shape)
-    mesher = BRepMesh_IncrementalMesh(shape, HULL_LINEAR_DEFLECTION_MM, False,
-                                      units.deg_to_rad(HULL_ANGULAR_DEFLECTION_DEG), True)
+    mesher = BRepMesh_IncrementalMesh(shape, linear_mm, False, units.deg_to_rad(angular_deg), True)
     mesher.Perform()
     if not mesher.IsDone():
         raise GeometryError('tessellation failed')
-    chunks = []
-    exp = TopExp_Explorer(shape, TopAbs_FACE)
-    while exp.More():
-        pos, _, _ = _face_triangles(topods.Face(exp.Current()))
-        if pos is not None:
-            chunks.append(pos)
-        exp.Next()
-    if not chunks:
+    parts = []
+    solids = TopExp_Explorer(shape, TopAbs_SOLID)
+    while solids.More():
+        parts.append(solids.Current())
+        solids.Next()
+    out = []
+    for piece in parts or [shape]:
+        verts, tris, offset = [], [], 0
+        exp = TopExp_Explorer(piece, TopAbs_FACE)
+        while exp.More():
+            pos, idx, _ = _face_triangles(topods.Face(exp.Current()))
+            if pos is not None:
+                verts.append(pos)
+                tris.append(idx + offset)
+                offset += len(pos)
+            exp.Next()
+        if verts:
+            out.append((np.vstack(verts), np.vstack(tris)))
+    if not out:
         raise GeometryError('component has no tessellated face')
-    return np.vstack(chunks)
+    return out
+
+
+def _solid_volume_mm3(shape: TopoDS_Shape) -> float:
+    props = GProp_GProps()
+    brepgprop.VolumeProperties(shape, props)
+    return abs(float(props.Mass()))
 
 
 def part_collision_mesh(shape_m: TopoDS_Shape, chord_near_mm: float, chord_far_mm: float
@@ -312,7 +353,7 @@ def part_collision_mesh(shape_m: TopoDS_Shape, chord_near_mm: float, chord_far_m
         pos, idx, deflection = _face_triangles(topods.Face(faces.FindKey(i)))
         count = 0 if idx is None else len(idx)
         if count == 0:
-            LOG.warning('F%d has no triangulation (degenerate face): no collision triangles', i)
+            raise GeometryError(f'part face F{i} has no triangulation: the collision mesh would have a hole')
         else:
             verts.append(units.m_to_mm(pos))
             tris.append(idx + n_verts)
@@ -325,7 +366,25 @@ def part_collision_mesh(shape_m: TopoDS_Shape, chord_near_mm: float, chord_far_m
 
 # --- export ---------------------------------------------------------------------------------------------------
 
-def _cell_objects(tree, direct, fr, model_dir: Path, padding_mm: float) -> List[Dict[str, Any]]:
+def collision_modes(direct, tree, cmap) -> Dict[int, str]:
+    """Collision mode per cell object (``hull`` default); every map entry must name a mapped cell object."""
+    names = {tree[i]['instance_name']: i for i, (role, _) in direct.items() if role in PARENT}
+    modes = {i: 'hull' for i in names.values()}
+    problems = []
+    for name, mode in (cmap.get('collision') or {}).items():
+        if name not in names:
+            problems.append(f'collision: {name!r} is not a cell_static / positioner_rotating component of the map')
+        elif mode not in COLLISION_MODES:
+            problems.append(f'collision: {name!r} mode {mode!r} not in {COLLISION_MODES}')
+        else:
+            modes[names[name]] = mode
+    if problems:
+        raise MapError('\n  '.join(['role map collision entries:'] + problems))
+    return modes
+
+
+def _cell_objects(tree, direct, modes, fr, padding_mm: float) -> List[Dict[str, Any]]:
+    """Scene objects with their meshes in memory (``_verts`` in the component frame, ``_tris``, ``_file_T``)."""
     flange_T_file = frames.invert(fr['world_T_flange']) @ fr['world_T_file']
     parent_T_file = {'world': fr['world_T_file'], 'positioner_flange': flange_T_file}
     objects, ids = [], set()
@@ -333,50 +392,148 @@ def _cell_objects(tree, direct, fr, model_dir: Path, padding_mm: float) -> List[
         if role not in PARENT:
             continue
         node = tree[index]
-        name = node['instance_name'] or node['product_name']
-        oid = object_id(name)
+        oid = object_id(node['instance_name'] or node['product_name'])
         if oid in ids:
             raise MapError(f'object id {oid!r} of {label!r} is not unique')
         ids.add(oid)
         file_T_comp = np.asarray(node['placement_mm'], dtype=float)
-        pts = shape_nodes_mm(node['_shape'])
-        local = (pts - file_T_comp[:3, 3]) @ file_T_comp[:3, :3]  # inverse of a rigid placement
-        verts, tris = hull.convex_hull(local)
-        mesh = model_dir / f'{oid}.stl'
-        hull.write_stl(mesh, verts, tris)
+        mode = modes[index]
+        extra: Dict[str, Any] = {}
+        if mode == 'hull':
+            pieces = _tessellate_mm(node['_shape'], HULL_LINEAR_DEFLECTION_MM, HULL_ANGULAR_DEFLECTION_DEG)
+            pts = np.vstack([v for v, _ in pieces])
+            local = (pts - file_T_comp[:3, 3]) @ file_T_comp[:3, :3]  # inverse of a rigid placement
+            verts, tris = hull.convex_hull(local)
+            diag = float(np.linalg.norm(local.max(axis=0) - local.min(axis=0)))
+            if not hull.contains(verts, tris, local, 1e-6 * diag + 1e-9).all():
+                raise GeometryError(f'hull of {label!r} does not contain all its tessellation nodes')
+            solid = _solid_volume_mm3(node['_shape'])
+            ratio = meshops.volume(verts, tris) / solid if solid > 0 else None
+            extra['hull_volume_ratio'] = ratio
+            LOG.info('A18 %s (%s, %s): hull %d vertices, %d triangles, hull / solid volume %s', oid, label, role,
+                     len(verts), len(tris), 'n/a (no solid)' if ratio is None else f'{ratio:.2f}')
+        else:
+            verts_list, tris_list, offset = [], [], 0
+            for k, (pts, raw) in enumerate(_tessellate_mm(node['_shape'], MESH_LINEAR_DEFLECTION_MM,
+                                                          MESH_ANGULAR_DEFLECTION_DEG), start=1):
+                local = (pts - file_T_comp[:3, 3]) @ file_T_comp[:3, :3]
+                v, t = meshops.weld(local, raw, MESH_WELD_MM)  # per solid: touching solids stay separate shells
+                if not meshops.is_closed(t):
+                    raise GeometryError(f'tessellated mesh of {label!r} (solid {k}) is not closed: the export '
+                                        'guard cannot test inside / outside (use collision: hull or fix the CAD)')
+                verts_list.append(v)
+                tris_list.append(t + offset)
+                offset += len(v)
+            verts, tris = np.vstack(verts_list), np.vstack(tris_list)
+            LOG.info('A18 %s (%s, %s): mesh %d vertices, %d triangles, %d closed shell(s)', oid, label, role,
+                     len(verts), len(tris), len(verts_list))
         parent = PARENT[role]
-        LOG.info('A18 %s (%s, %s): %d points -> hull %d vertices, %d triangles', oid, label, role, len(pts),
-                 len(verts), len(tris))
-        objects.append({'object_id': oid, 'role': role, 'component': label, 'parent_frame': parent,
-                        'pose_mm': pose_mm(parent_T_file[parent] @ file_T_comp),
-                        'mesh': {'file': mesh.name, 'sha256': sha256_file(mesh), 'face_ids': False,
-                                 'vertices': int(len(verts)), 'triangles': int(len(tris))},
-                        'padding_mm': float(padding_mm)})
+        obj = {'object_id': oid, 'role': role, 'component': label, 'parent_frame': parent,
+               'pose_mm': pose_mm(parent_T_file[parent] @ file_T_comp), 'collision': mode,
+               'mesh': {'file': f'{oid}.stl', 'sha256': None, 'face_ids': False,
+                        'vertices': int(len(verts)), 'triangles': int(len(tris))},
+               'padding_mm': float(padding_mm), **extra,
+               '_verts': verts, '_tris': tris, '_file_T': file_T_comp}
+        objects.append(obj)
     return objects
+
+
+def export_guard(objects, part_verts, part_tris, face_records, tolerance_mm: float) -> List[Dict[str, Any]]:
+    """Penetration of the part surface into every object (part frame = file frame, θ = 0).
+
+    Sets ``part_max_depth_mm`` on each object; raises if any sample is deeper than ``tolerance_mm``.
+    """
+    samples, owner = meshops.sample_surface(part_verts, part_tris, GUARD_SPACING_MM)
+    firsts = np.array([r['first_triangle'] for r in face_records])
+    face_of = np.array([r['face_id'] for r in face_records])[np.searchsorted(firsts, owner, side='right') - 1]
+    problems, table = [], []
+    for obj in objects:
+        t = obj['_file_T']
+        verts_file = obj['_verts'] @ t[:3, :3].T + t[:3, 3]
+        depth = meshops.penetration(verts_file, obj['_tris'], samples)
+        deepest = float(depth.max()) if len(depth) else 0.0
+        obj['part_max_depth_mm'] = deepest
+        faces = sorted(set(face_of[depth > 0].tolist()), key=lambda f: int(f[1:]))
+        table.append({'object_id': obj['object_id'], 'max_depth_mm': deepest, 'part_faces': faces})
+        if deepest > tolerance_mm:
+            deep = sorted(set(face_of[depth > tolerance_mm].tolist()), key=lambda f: int(f[1:]))
+            problems.append(f'{obj["object_id"]} ({obj["component"]}, {obj["collision"]}): part points up to '
+                            f'{deepest:.3f} mm deep, deeper than {tolerance_mm} mm on faces {", ".join(deep)}')
+        LOG.info('guard %s: max part depth %.3f mm%s', obj['object_id'], deepest,
+                 f' (faces {", ".join(faces)})' if faces else '')
+    if problems:
+        raise GeometryError('export refused, part inside cell objects (contact_tolerance_mm '
+                            f'{tolerance_mm}):\n  ' + '\n  '.join(problems))
+    return table
+
+
+def _job_from_name(repo: Repository, job_name: str) -> Tuple[str, str]:
+    if '_' not in job_name:
+        raise GeometryError(f'job {job_name!r} must be <PartNo>_<PartRev>')
+    part_no, part_rev = job_name.rsplit('_', 1)
+    try:
+        if repo.job_id(part_no, part_rev) != job_name:
+            raise ValueError(job_name)
+    except ValueError as exc:
+        raise GeometryError(f'job {job_name!r} is not a valid job id: {exc}') from exc
+    return part_no, part_rev
+
+
+def _clear_model_dir(model_dir: Path) -> None:
+    """Remove the files a previous export wrote, so the folder and the new manifest agree."""
+    if model_dir.is_dir():
+        for path in model_dir.iterdir():
+            if path.is_file() and (path.suffix.lower() == '.stl'
+                                   or path.name in ('scene_manifest.json', 'frames.yaml')):
+                path.unlink()
+    model_dir.mkdir(parents=True, exist_ok=True)
 
 
 def export_scene(step: Path, map_path: Path, repo_root: Path, job_name: str, chord_near_mm: float,
                  chord_far_mm: float, padding_mm: float, created_by: str) -> Dict[str, Any]:
-    """Write the cell part and the job part of the spike scene (see module docstring); return a summary."""
+    """Write the cell part and the job part of the spike scene (see module docstring); return a summary.
+
+    Everything is computed and checked first (map, frames, meshes, export guard); files are written only then.
+    """
     from awm_geometry import cli, part
 
     if not step.is_file():
         raise GeometryError(f'STEP file not found: {step}')
     if not 0 < chord_near_mm <= chord_far_mm:
         raise GeometryError('need 0 < chord-near-mm <= chord-far-mm')
+    repo = Repository(repo_root)
+    part_no, part_rev = _job_from_name(repo, job_name)
     cmap = load_map(map_path, step)
+    tolerance = float(cmap.get('contact_tolerance_mm', DEFAULT_CONTACT_TOLERANCE_MM))
     LOG.info('A18 reading assembly %s', step)
     tree, _unit = assembly.component_tree(step, cylinders=False, shapes=True)
     direct = resolve_roles(tree, cmap)
     parts = [(i, label) for i, (role, label) in direct.items() if role == 'part']
     if len(parts) != 1:
         raise MapError(f'the map must name exactly one part component, found {len(parts)}')
+    modes = collision_modes(direct, tree, cmap)
     fr = cell_frames(tree, cmap)
+    objects = _cell_objects(tree, direct, modes, fr, padding_mm)
+    part_node = tree[parts[0][0]]
+    component = part_node['instance_name'] or part_node['product_name']
+    roles: Dict[str, int] = {}
+    for role, _label in direct.values():
+        roles[role] = roles.get(role, 0) + 1
+    del tree, part_node  # release the cell shapes before the part read
 
-    repo = Repository(repo_root)
+    LOG.info('A11 reading part component %r', component)
+    loaded = part.load_part(step, component)
+    verts, tris, face_records = part_collision_mesh(loaded.shape, chord_near_mm, chord_far_mm)
+    guard = export_guard(objects, verts, tris, face_records, tolerance)
+
+    # --- all checks passed: write -------------------------------------------------------------------------
     model_dir = repo.cell_dir / 'model'
-    model_dir.mkdir(parents=True, exist_ok=True)
-    objects = _cell_objects(tree, direct, fr, model_dir, padding_mm)
+    _clear_model_dir(model_dir)
+    for obj in objects:
+        mesh = model_dir / obj['mesh']['file']
+        hull.write_stl(mesh, obj.pop('_verts'), obj.pop('_tris'))
+        obj.pop('_file_T')
+        obj['mesh']['sha256'] = sha256_file(mesh)
     write_frames(model_dir / 'frames.yaml', fr, step, map_path, cmap)
     manifest = {
         'schema': 'awm_cell_scene/0.1', 'created_by': created_by, 'created_at': jsonio.utc_now_iso(),
@@ -385,30 +542,26 @@ def export_scene(step: Path, map_path: Path, repo_root: Path, job_name: str, cho
         'unit': 'mm', 'frames_file': 'frames.yaml',
         'hull_tessellation': {'linear_deflection_mm': HULL_LINEAR_DEFLECTION_MM,
                               'angular_deflection_deg': HULL_ANGULAR_DEFLECTION_DEG},
-        'note': f'{_ASSUMPTION}. Meshes: convex hull per component in its own frame; pose = parent_T_component; '
-                'positioner_flange objects at theta = 0',
+        'mesh_tessellation': {'linear_deflection_mm': MESH_LINEAR_DEFLECTION_MM,
+                              'angular_deflection_deg': MESH_ANGULAR_DEFLECTION_DEG, 'weld_mm': MESH_WELD_MM},
+        'export_guard': {'contact_tolerance_mm': tolerance, 'sample_spacing_mm': GUARD_SPACING_MM,
+                         'method': 'part surface samples (all vertices + barycentric grid) inside the object '
+                                   'collision mesh (winding number), depth = distance to the mesh; theta = 0'},
+        'note': f'{_ASSUMPTION}. Meshes in the component frame; pose = parent_T_component; positioner_flange '
+                'objects at theta = 0; collision = hull (convex hull, hull_volume_ratio = hull / solid volume) '
+                'or mesh (closed tessellation)',
         'objects': objects, 'scene_sha256': canonical_sha256(objects),
     }
     (model_dir / 'scene_manifest.json').write_text(json.dumps(manifest, indent=1) + '\n')
 
-    part_node = tree[parts[0][0]]
-    component = part_node['instance_name'] or part_node['product_name']
-    del tree  # release the cell shapes before the second read
-    if '_' not in job_name:
-        raise GeometryError(f'job {job_name!r} must be <PartNo>_<PartRev>')
-    part_no, part_rev = job_name.rsplit('_', 1)
-    if repo.job_id(part_no, part_rev) != job_name:
-        raise GeometryError(f'job {job_name!r} is not a valid job id')
     job = repo.job(part_no, part_rev)
     cli.copy_step(step, job)
-    LOG.info('A11 reading part component %r', component)
-    loaded = part.load_part(job.model_step, component)
+    breptools.Clean(loaded.shape)
     record = cli.write_part_record(job, step.name, loaded, part_no, part_rev,
                                    PART_IMPORT_LINEAR_DEFLECTION_M, PART_IMPORT_ANGULAR_DEFLECTION_DEG)
     breptools.Clean(loaded.shape)
     view_summary = view.export(loaded, job.model_step, component, cmap['source']['up_axis'],
                                job.cache_dir / 'view', created_by, job.dir)
-    verts, tris, face_records = part_collision_mesh(loaded.shape, chord_near_mm, chord_far_mm)
     collision = job.cache_dir / 'collision.stl'
     hull.write_stl(collision, verts, tris)
     faces_doc = jsonio.make_header(created_by, [job.model_step, collision], job.dir)
@@ -431,13 +584,13 @@ def export_scene(step: Path, map_path: Path, repo_root: Path, job_name: str, cho
                       'scene_sha256': canonical_sha256(part_objects)})
     jsonio.write_json(job.dir / 'placement.json', placement, 'v2/placement')
 
-    roles: Dict[str, int] = {}
-    for role, _label in direct.values():
-        roles[role] = roles.get(role, 0) + 1
     near = [r for r in face_records if r['near_joint']]
     return {
         'cell_model': str(model_dir), 'job': str(job.dir), 'mapped_components_per_role': roles,
-        'objects': {o['object_id']: o['mesh']['triangles'] for o in objects},
+        'objects': {o['object_id']: {'collision': o['collision'], 'triangles': o['mesh']['triangles'],
+                                     'hull_volume_ratio': o.get('hull_volume_ratio'),
+                                     'part_max_depth_mm': o['part_max_depth_mm']} for o in objects},
+        'guard': guard,
         'part': {'component': component, 'triangles': int(len(tris)), 'faces': len(face_records),
                  'near_joint_faces': len(near), 'edges': record['edges'], 'joints': len(view_summary['joints'])},
         'world_T_base': pose_mm(fr['world_T_base']),
