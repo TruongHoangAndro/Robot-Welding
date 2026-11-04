@@ -1,0 +1,17 @@
+# WP-S S.5b input (spike record, TST-002 §9) — data for the J2 Mode B *screening* (Truong 2026-11-04, PLAN T1.4
+# step 1). Data, never source: `s5b_run` reads it. The positioner angle *limits* are not here: they come from the sim
+# cell config (awm_description/config/positioner_limits.yaml; Assumption, OI-27). The angles finally used for Mode B
+# are Engineer data entered after this screening (B-12); this file only sets the screening grid.
+seam_id: S02                    # J2 — solid (B2) to elbow (B3), closed butt joint
+seam_file: spike_seam.json      # D04 v2-shaped seam of the S.5 run (job folder; hash recorded)
+theta_step_deg: 30              # screening grid: every multiple of 30 deg inside the limits, 0 included
+psi_cases: [free, wire]         # Ψ-FREE first; Ψ-WIRE if the time budget allows
+pitch_rule: scene_valid         # CP-53 pitch refinement on scene-valid nodes only (lead decision 2026-11-04)
+pitch_min_mm: 0.05              # pitch floor (Assumption, as in S.5)
+coverage_bin_mm: 1.0            # coverage map resolution
+set_sizes: [2, 3]               # suggested covering sets of 2 and of 3 angles
+join_overlap_mm: null           # null = the seam's arc_overlap_mm (2.0, Assumption; welding engineer to confirm)
+window_start_stride: 1          # every point is a window start (exact union of windows)
+max_sets_listed: 10
+time_budget_s: 7200             # Ψ-WIRE is skipped if it would not finish inside ~2 h (lead instruction)
+b03_margin_mm: 3.0              # B-03 margin (S.6 Assumption) — recorded only; no index move is planned here

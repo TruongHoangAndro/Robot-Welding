@@ -24,6 +24,7 @@ setup(
             'scene_timing = awm_path.scene_timing:main',
             's5_run = awm_path.spike_s5:main',
             's6_run = awm_path.spike_s6:main',
+            's5b_run = awm_path.spike_s5b:main',
         ],
     },
 )
