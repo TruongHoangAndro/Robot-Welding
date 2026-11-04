@@ -608,11 +608,18 @@ ledges that rise towards the nozzle still fail. Rule (a) is unchanged. Reason: F
 standoff violation that would really happen; a surface below the contact plane cannot be reached by a flat or convex
 tip before the seam faces are. The rule stays conservative for anything that protrudes.
 
-**Decision 2 — nozzle assumption:** the official spike verdict keeps the TST-002 §3.1 baseline (Ø 20 flat tip, H-BOX);
-it is not changed to make a criterion pass. Every F4 / F9 result that depends on the tip is also reported as a
-sensitivity at Ø 20 / Ø 12 / Ø 8 so the meeting sees which conclusions are robust and which wait for I2. Reason: the
-real tip is unknown; switching the baseline to a smaller guess would hide the risk, keeping only Ø 20 would present a
-modelling assumption as a part property. The request for the real nozzle geometry (I2 / OI-15) is escalated in S.7.
+**Decision 2 — nozzle geometry is cell data; the planner judges the configured nozzle (Truong, 2026-11-04, replaces
+the lead's first wording):** the nozzle (diameter, length, tip length, s_c) is a parameter of the head model in the cell
+data (one source: D16 / D14, Admin-owned, part of the hashed context), never a constant in code. M4 plans and checks with
+the nozzle that is configured. If a seam fails because of the nozzle (F4 on `nozzle_tip` / `nozzle_body`, F9), the
+seam is rejected with the failing points, faces and the cause "nozzle", so the Engineer can change the setup (head
+angles, start point, placement) or the cell owner can fit another nozzle (e.g. Ø 12). After a nozzle change the cell
+model / context changes, every path planned with the old nozzle becomes stale, and the job is planned again; the STEP
+file does not need to be imported again (the part model D02 / D20 is unchanged). The spike verdict uses the configured
+TST-002 §3.1 baseline (Ø 20 flat tip); results at Ø 12 / Ø 8 are shown to the meeting only as information on what a
+nozzle change would give, not as the verdict. Real nozzle geometry from IPG (I2 / OI-15) stays requested.
+Gap found: the nozzle diameter is defined twice today (xacro arg `nozzle_dia_mm` in `lightweld_hbox.xacro` and
+`ContactParams.nozzle_radius_mm` in `awm_path.core.contact`) — to be read from one source (T0.1 `cell.yaml`).
 
 **DES-001 / TST-002 impact:** TST-002 Rev 0.3 F9 wording (rule (b) "rises towards the nozzle within s_c"), §11 results
 with the per-diameter table; DES-001 §5.4 note on the contact check. Code: `awm_path.core.contact` rule (b), new unit
