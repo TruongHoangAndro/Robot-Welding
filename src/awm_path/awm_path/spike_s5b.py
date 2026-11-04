@@ -115,6 +115,60 @@ def coverage_map(bins_by_theta: Mapping[float, Sequence[bool]], bin_mm: float, l
     return out
 
 
+def rotating_set_ids(cell_manifest: Mapping[str, Any], placement: Mapping[str, Any]) -> set:
+    """Object ids that turn with the positioner (parent frame ``positioner_flange``) in the cell scene manifest and
+    the job placement D19 (the part and the holders on the flange; Assumption I3 / OI-27 as in the scene files)."""
+    return {str(o['object_id']) for doc in (cell_manifest, placement) for o in doc.get('objects', [])
+            if o.get('parent_frame') == 'positioner_flange'}
+
+
+def theta_invariant_blocking(rows, psi_all: Sequence[float], head_links, rotating_ids, bin_mm: float,
+                             length_mm: float) -> Dict[str, Any]:
+    """Which seam bins no positioner angle can open (Mode B).
+
+    With work / travel angle fixed, the head pose relative to the part and to every object that turns with it
+    depends only on (s, ψ), not on θ or the IK branch. A contact between a head link and the rotating set is
+    therefore the same at every θ. ``rows`` = (s_mm, ψ_deg, kinematic reason, F4 contacts) of the candidates of all
+    screened θ. A bin is ``blocked`` when every ψ of ``psi_all`` was kinematically valid somewhere in the bin at some
+    θ and every such candidate had a head ↔ rotating-set contact (F4, 3 mm padding). ψ never kinematically valid in
+    the bin are listed (``psi_unseen``): for them the screening has no evidence and the bin is not marked blocked.
+    """
+    nb = max(1, int(np.ceil(length_mm / bin_mm - 1e-9)))
+    seen = [set() for _ in range(nb)]
+    free = [set() for _ in range(nb)]
+    pairs: Counter = Counter()
+    head, rot = set(head_links), set(rotating_ids)
+    for s_mm, psi, reason, contacts in rows:
+        if reason:
+            continue
+        b = min(nb - 1, int(float(s_mm) // bin_mm))
+        hp = []
+        for pair in (contacts or '').split(';'):
+            if not pair:
+                continue
+            a, c = pair.split('<->')
+            if (a in rot and c in head) or (c in rot and a in head):
+                hp.append(pair)
+        seen[b].add(float(psi))
+        if hp:
+            pairs.update(hp)
+        else:
+            free[b].add(float(psi))
+    psi_all = sorted(float(x) for x in psi_all)
+    bins = []
+    for b in range(nb):
+        unseen = [p for p in psi_all if p not in seen[b]]
+        bins.append({'s_from_mm': b * bin_mm, 's_to_mm': min((b + 1) * bin_mm, length_mm),
+                     'blocked': not unseen and not free[b], 'psi_unseen': unseen, 'psi_free': sorted(free[b])})
+    runs = []
+    for b in bins:
+        if b['blocked'] and runs and abs(runs[-1]['s_to_mm'] - b['s_from_mm']) < 1e-9:
+            runs[-1]['s_to_mm'] = b['s_to_mm']
+        elif b['blocked']:
+            runs.append({'s_from_mm': b['s_from_mm'], 's_to_mm': b['s_to_mm']})
+    return {'bins': bins, 'blocked_runs': runs, 'pairs': dict(sorted(pairs.items(), key=lambda kv: (-kv[1], kv[0])))}
+
+
 def _f(v: Optional[float], nd: int = 1) -> str:
     return '—' if v is None else f'{v:.{nd}f}'
 
@@ -482,6 +536,82 @@ def _cmd_run(args) -> int:
     write_md(out_dir / f'{RECORD}.md', rec)
     for case, c in results.items():
         print(f'{case}: ' + ', '.join(f'{k} angles: {v["count"]} sets' for k, v in c['cover_sets'].items()))
+    return 0
+
+
+#: Head-side links of the cell model (H-BOX / H-CAD link names, not part data): nozzle, head body, mount, conduit.
+HEAD_LINKS = ('nozzle_tip', 'nozzle_body', 'head_body', 'head_mount', 'conduit')
+CHECK_RECORD = 's5b_mode_b_rotating_set_check'
+
+
+def main_check(argv: Optional[List[str]] = None) -> int:
+    """``s5b_check``: pure post-processing of a screening record (no ROS): the seam bins that no positioner angle
+    can open because the head collides with the part or with a holder that turns with it (θ-invariant)."""
+    import csv
+    from awm_core.hashing import sha256_file
+    from awm_path.gate_g2 import _git, _rel
+
+    ap = argparse.ArgumentParser(prog='s5b_check', description=main_check.__doc__)
+    ap.add_argument('--record', required=True)
+    ap.add_argument('--repo', required=True)
+    ap.add_argument('--job', required=True)
+    ap.add_argument('--head-links', default=','.join(HEAD_LINKS))
+    ap.add_argument('--bin-mm', type=float, default=None, help='default: coverage_bin_mm of the record')
+    ap.add_argument('--out-dir', required=True)
+    args = ap.parse_args(argv)
+    rec_file, repo = Path(args.record), Path(args.repo)
+    job = repo / 'jobs' / args.job
+    rec = json.loads(rec_file.read_text())
+    cell_file, placement_file = repo / 'cell' / 'model' / 'scene_manifest.json', job / 'placement.json'
+    for name, path in (('scene_manifest.json', cell_file), ('placement.json', placement_file)):
+        want = [i['sha256'] for i in rec['inputs'] if i['name'].endswith(name)]
+        if not want or want[0] != sha256_file(path):
+            raise SystemExit(f'{path}: hash differs from the screening record')
+    rot = rotating_set_ids(json.loads(cell_file.read_text()), json.loads(placement_file.read_text()))
+    head = tuple(args.head_links.split(','))
+    bin_mm = args.bin_mm or rec['input']['coverage_bin_mm']
+    length = rec['seam']['length_mm']
+    out: Dict[str, Any] = {}
+    for case, c in rec['cases'].items():
+        rows = []
+        for r in c['thetas']:
+            f = job / r['candidates_csv']['file']
+            if sha256_file(f) != r['candidates_csv']['sha256']:
+                raise SystemExit(f'{f}: hash differs from the screening record')
+            pitch = r['pitch']['pitch_mm']
+            with gzip.open(f, 'rt', newline='') as fh:
+                for x in csv.DictReader(fh):
+                    rows.append((int(x['point']) * pitch, float(x['psi_deg']), x['reason'] or None,
+                                 x['scene_contacts'] or ''))
+        out[case] = theta_invariant_blocking(rows, c['psi_deg'], head, rot, bin_mm, length)
+        out[case]['blocked_mm'] = sum(b['s_to_mm'] - b['s_from_mm'] for b in out[case]['bins'] if b['blocked'])
+    here = Path(args.out_dir).resolve()
+    doc = {'created_by': CREATED_BY + '.check', 'created_at': jsonio.utc_now_iso(),
+           'commit': _git(['rev-parse', 'HEAD'], here), 'dirty': bool(_git(['status', '--porcelain'], here)),
+           'inputs': [{'name': _rel(p), 'sha256': sha256_file(p)} for p in (rec_file, cell_file, placement_file)],
+           'screening_commit': rec['commit'], 'head_links': list(head), 'rotating_set': sorted(rot),
+           'bin_mm': bin_mm, 'seam_length_mm': length, 'cases': out,
+           'method': theta_invariant_blocking.__doc__.strip()}
+    Path(args.out_dir).mkdir(parents=True, exist_ok=True)
+    (Path(args.out_dir) / f'{CHECK_RECORD}.json').write_text(json.dumps(doc, indent=1, allow_nan=False) + '\n')
+    L = ['# WP-S S.5b — J2 seam bins that no positioner angle can open (head ↔ rotating set)', '',
+         f'Record `{CHECK_RECORD}.json`; commit `{doc["commit"]}`, dirty: {str(doc["dirty"]).lower()}; from the '
+         f'screening record `{rec_file.name}` (commit `{rec["commit"]}`). Head links {", ".join(head)}; rotating set '
+         f'(parent frame positioner_flange, Assumption I3 / OI-27) {", ".join(sorted(rot))}; bins {bin_mm:g} mm.', '',
+         'Method: ' + ' '.join(doc['method'].split()), '']
+    for case, r in out.items():
+        L.append(f'**Ψ-{case.upper()}:** blocked at every θ: '
+                 + (', '.join(f's {x["s_from_mm"]:.0f}–{x["s_to_mm"]:.1f} mm' for x in r['blocked_runs']) or 'none')
+                 + f' ({r["blocked_mm"]:.1f} mm = {100 * r["blocked_mm"] / length:.1f} % of the seam). Pairs: '
+                 + ', '.join(f'{k} ×{v}' for k, v in list(r['pairs'].items())[:6]) + '.')
+        unseen = [b for b in r['bins'] if b['psi_unseen'] and not b['psi_free']]
+        if unseen:
+            L.append('Bins without a free ψ but with ψ never kinematically valid (no evidence, not marked): '
+                     + ', '.join(f'{b["s_from_mm"]:.0f}' for b in unseen) + '.')
+        L.append('')
+    (Path(args.out_dir) / f'{CHECK_RECORD}.md').write_text('\n'.join(L) + '\n')
+    for case, r in out.items():
+        print(case, r['blocked_runs'], f'{r["blocked_mm"]:.1f} mm')
     return 0
 
 

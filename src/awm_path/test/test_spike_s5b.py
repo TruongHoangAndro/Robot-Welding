@@ -81,3 +81,28 @@ def test_write_md_renders_a_minimal_record(tmp_path):
     text = p.read_text()
     assert 'Screening only' in text and 'suggestions' in text and 'θ 0° / 30° / 60°' in text
     assert 'no set covers 100 %' in text
+
+
+def test_rotating_set_ids_from_cell_manifest_and_placement():
+    from awm_path.spike_s5b import rotating_set_ids
+    cell = {'objects': [{'object_id': 'jig_1', 'parent_frame': 'world'},
+                        {'object_id': 'part2_1', 'parent_frame': 'positioner_flange'}]}
+    placement = {'objects': [{'object_id': 'part', 'parent_frame': 'positioner_flange'}]}
+    assert rotating_set_ids(cell, placement) == {'part', 'part2_1'}
+
+
+def test_theta_invariant_blocking_marks_bins_blocked_for_every_psi():
+    from awm_path.spike_s5b import theta_invariant_blocking
+    head, rot = {'head_body', 'nozzle_tip'}, {'part', 'holder'}
+    rows = [  # (s_mm, psi_deg, kinematic reason, scene_contacts) from all θ
+        (0.5, 0.0, None, 'part<->nozzle_tip'), (0.6, 10.0, None, 'holder<->head_body;jig<->forearm_link'),
+        (1.5, 0.0, None, 'part<->nozzle_tip'), (1.5, 10.0, None, 'jig<->head_body'),   # ψ 10 free of the set
+        (2.5, 0.0, None, 'part<->nozzle_tip'),                                         # ψ 10 never seen
+        (3.2, 0.0, 'no_ik_unreachable', ''), (3.4, 10.0, None, ''),
+    ]
+    r = theta_invariant_blocking(rows, psi_all=[0.0, 10.0], head_links=head, rotating_ids=rot, bin_mm=1.0,
+                                 length_mm=4.0)
+    assert [b['blocked'] for b in r['bins']] == [True, False, False, False]
+    assert r['bins'][2]['psi_unseen'] == [10.0]
+    assert r['blocked_runs'] == [{'s_from_mm': 0.0, 's_to_mm': 1.0}]
+    assert r['pairs'] == {'holder<->head_body': 1, 'part<->nozzle_tip': 3}
