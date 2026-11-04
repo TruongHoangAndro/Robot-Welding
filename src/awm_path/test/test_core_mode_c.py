@@ -134,3 +134,16 @@ def test_interval_bounds_and_failing_ranges():
         {'theta_from_deg': -1.0, 'theta_to_deg': -2.0, 'states': 2},
         {'theta_from_deg': -4.0, 'theta_to_deg': -4.0, 'states': 1}]
     assert failing_ranges(th, [True] * 6) == []
+
+
+def test_facing_points_keeps_points_whose_seam_z_looks_at_the_target():
+    from awm_path.core.mode_c import facing_points
+    frames = []
+    for ang in (0.0, 90.0, 180.0, 270.0):
+        a = math.radians(ang)
+        z = np.array([0.0, math.cos(a), math.sin(a)])
+        frames.append(_seam_frame(13.0 * z, np.array([1.0, 0, 0]), z))
+    target = np.array([0.0, 500.0, 500.0])
+    idx, cos = facing_points(frames, target, 0.0)
+    assert idx == [0, 1] and cos[0] > 0.0 and cos[2] < 0.0
+    assert facing_points(frames, target, 0.9)[0] == []

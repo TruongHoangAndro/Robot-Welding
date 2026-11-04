@@ -142,6 +142,17 @@ def select_pose(entries: Sequence[Tuple[int, Candidate, NodeScore]], params: Pla
             for k, r in enumerate(rows)]
 
 
+def facing_points(world_T_seams: Sequence[np.ndarray], target_mm: np.ndarray, min_cos: float
+                  ) -> Tuple[List[int], List[float]]:
+    """Indices of the seam frames whose Z (out of the material) points towards ``target_mm`` with
+    cos ≥ ``min_cos``, and the cosine of every frame (Engineer choice of the Mode C contact location, data)."""
+    cos = []
+    for f in world_T_seams:
+        f = check_rigid(f)
+        cos.append(float(f[:3, 2] @ _unit(np.asarray(target_mm, float) - f[:3, 3])))
+    return [i for i, c in enumerate(cos) if c >= min_cos], cos
+
+
 def interval_bounds(lb_mm: Sequence[Optional[float]], step_deg: float, r_max_mm: float) -> List[Optional[float]]:
     """Clearance guaranteed between consecutive checked angles: min(lb_k, lb_k+1) − r_max·Δθ / 2 (None if either
     end has no clearance level passed)."""
@@ -167,4 +178,4 @@ def failing_ranges(thetas: Sequence[float], ok: Sequence[bool]) -> List[Dict[str
 
 __all__ = ['F8_TOL_MM', 'F8_TOL_DEG', 'angular_step_max_deg', 'theta_grid', 'closing_overlap_deg',
            'radial_extent_mm', 'coaxiality', 'rot_x_deg', 'world_T_flange_at', 'part_T_tcp_at', 'travel_sign',
-           'select_pose', 'interval_bounds', 'failing_ranges']
+           'select_pose', 'facing_points', 'interval_bounds', 'failing_ranges']
