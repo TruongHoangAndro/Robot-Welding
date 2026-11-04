@@ -1,0 +1,224 @@
+{
+ "created_by": "awm_path.scene_timing",
+ "created_at": "2026-11-03T17:25:13Z",
+ "commit": "b5126a0452879bc220fef869e186f7dea81c771a",
+ "dirty": true,
+ "inputs": [
+  {
+   "name": "frames.yaml",
+   "sha256": "b09a3574096b5008f746462d1a8bd2d5d59e778a930580637b7006dcf17aace8"
+  },
+  {
+   "name": "scene_manifest.json",
+   "sha256": "41ec0399e82fdb65f571d2c58d6200252d43648f3a911020fcac9d2c9ecab7fe"
+  },
+  {
+   "name": "placement.json",
+   "sha256": "8cd8f2beec05a3baaed2ad2a34181cc2a620564c1eacd849931eeab52d6741a9"
+  },
+  {
+   "name": "topology.json",
+   "sha256": "be464b9da30652250b5c7029c3995be35d6029bd1a04c7b9df26887ce9ae17f2"
+  }
+ ],
+ "scene_backend": {
+  "scene_hash": "5a849d2a5dc577d1893900699659ee309d42b0ef2c6071a62917ed3d9a15f7c9",
+  "content": {
+   "backend": "move_group/check_state_validity (cell scene v2)",
+   "group": "laser_arm",
+   "head_model": "H-BOX",
+   "robot_description_sha256": "79391356a49e203c4fec713bb8b6e75a9859577ad500cebcd34006c94ef03721",
+   "cell": {
+    "scene_sha256": "24e8f894577c1060101ffec94950ca9edf99c72b0b91bb446b9c840148cc23fc",
+    "object_ids": [
+     "c_2500001_1",
+     "jig_1",
+     "part1_1",
+     "htpk20s5m150_a_c15_1",
+     "htpk20s5m150_a_c15_2",
+     "timing_belts_1",
+     "rotary_shaft_1",
+     "c_60cm30x_3d_1",
+     "gsacl25_8_12_1",
+     "part2_1",
+     "part3_1",
+     "htpk20s5m150_a_c15_3",
+     "htpk20s5m150_a_c15_4",
+     "timing_belts_2",
+     "part5_1"
+    ]
+   },
+   "job": {
+    "scene_sha256": "2b0661aa6a2ee749759bd0d112f086f2c5be8ada577892ad5346149eb83a3f68",
+    "source": "fixture_cad",
+    "verified": false,
+    "objects": [
+     {
+      "object_id": "part",
+      "role": "part",
+      "parent_frame": "positioner_flange",
+      "mesh_sha256": "3098efd6de4d4314b9bf4024cad9d27eadece49e60986b7c42c16e3c8efb21d6",
+      "face_ids": true
+     }
+    ]
+   },
+   "f4_padding_mm": {
+    "base_link_inertia": 3.0,
+    "conduit": 3.0,
+    "forearm_link": 3.0,
+    "head_body": 3.0,
+    "head_mount": 3.0,
+    "nozzle_body": 3.0,
+    "nozzle_tip": 0.0,
+    "shoulder_link": 3.0,
+    "upper_arm_link": 3.0,
+    "wrist_1_link": 3.0,
+    "wrist_2_link": 3.0,
+    "wrist_3_link": 3.0
+   },
+   "unpadded_links": [
+    "nozzle_tip"
+   ],
+   "clearance_links": [
+    "head_body",
+    "head_mount",
+    "conduit"
+   ],
+   "clearance_method": "validity check (move_group check_state_validity) on unpadded geometry with the clearance links inflated by exactly the clearance (planning-scene padding diff); every other link padding 0; self-collision unpadded"
+  },
+  "files": {
+   "cell": {
+    "file": "../spike_repo/cell/model/scene_manifest.json",
+    "file_sha256": "41ec0399e82fdb65f571d2c58d6200252d43648f3a911020fcac9d2c9ecab7fe"
+   },
+   "placement": {
+    "file": "../spike_repo/jobs/564082_A/placement.json",
+    "file_sha256": "8cd8f2beec05a3baaed2ad2a34181cc2a620564c1eacd849931eeab52d6741a9"
+   }
+  }
+ },
+ "kinematics_backend": "ur_analytic_ik-0.1.0.post3/ur5e",
+ "head_model": "H-BOX",
+ "psi_case": "free",
+ "theta_deg": 0.0,
+ "joint": "JE4",
+ "seam_faces": {
+  "n1": [
+   "F26"
+  ],
+  "n2": [
+   "F35"
+  ]
+ },
+ "seam_geometry": "circle through the D20 preview frames of the joint edge (approximation for timing; S.5 uses the D04 seam)",
+ "arc_deg": [
+  180.0,
+  360.0
+ ],
+ "points": 37,
+ "pitch_mm": 1.1636982787645023,
+ "candidates_csv": {
+  "file": "s4_candidates_J2_arc180-360_free.csv",
+  "sha256": "75bb46c4dcf41e2e21b8fb44b48fe54721f8049e43102e710f4eabb605099fb1"
+ },
+ "timing": {
+  "points": 37,
+  "candidates": 5868,
+  "states_checked": 4680,
+  "contact_checks": 37,
+  "validity_s": 8.22503076599969,
+  "clearance_s": 1.3733910169976298,
+  "clearance_level_s": {
+   "5": 0.7079115989981801,
+   "10": 0.6651306659987313
+  },
+  "contact_s": 7.063920631000656,
+  "total_s": 16.67317414900026,
+  "per_state_s": 0.002050944825426778,
+  "contact_per_point_s": 0.19091677381082853,
+  "sweep_s": 0.9411513450031634
+ },
+ "projection_per_seam_s": {
+  "note": "time of this run for its points; C5 budget is 30 s per seam incl. DP (S.5)",
+  "scene_and_contact_s": 16.67317414900026,
+  "sweep_s": 0.9411513450031634
+ },
+ "valid_nodes_per_point": [
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  8,
+  18,
+  30,
+  32,
+  40,
+  44,
+  42,
+  41,
+  45,
+  62,
+  59,
+  58,
+  52,
+  62,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0
+ ],
+ "contact_ok_points": [
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true
+ ]
+}

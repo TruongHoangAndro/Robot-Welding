@@ -114,3 +114,41 @@ def test_core_does_not_import_rclpy() -> None:
     code = ("import awm_path.core.kinematics, sys; "
             "assert not any(m == 'rclpy' or m.startswith(('rclpy.', 'moveit_msgs')) for m in sys.modules)")
     assert subprocess.run([sys.executable, '-c', code]).returncode == 0
+
+
+def test_fk_tcp_composition_order(kin: UrAnalyticKinematics, states: np.ndarray) -> None:
+    """S.2 follow-up R4: ``fk_tcp = fk @ tool0_T_tcp`` (tool offset applied in the tool0 frame, not the base)."""
+    shift = np.eye(4)
+    shift[:3, 3] = [0.0, 0.0, 250.0]
+    tool = _rot_x(15.0)
+    tool[:3, 3] = [5.0, -7.0, 250.0]
+    for q in states[:50]:
+        f = kin.fk(q)
+        got = fk_tcp(kin, q, shift)
+        np.testing.assert_allclose(got[:3, 3], f[:3, 3] + 250.0 * f[:3, 2], atol=1e-6, rtol=0.0)
+        np.testing.assert_allclose(got[:3, :3], f[:3, :3], atol=1e-12, rtol=0.0)
+        np.testing.assert_allclose(fk_tcp(kin, q, tool), f @ tool, atol=1e-6, rtol=0.0)
+
+
+def test_ik_at_q5_zero_documents_library_behaviour(kin: UrAnalyticKinematics) -> None:
+    """S.2 follow-up R2: exactly at q5 = 0 (wrist singularity) the library may return ``[]`` for a reachable pose.
+
+    Every returned solution must be valid. For the documented seed ``SEED + 5`` (= 20261107, 200 poses,
+    ur_analytic_ik 0.1.0.post3) the library returns ``[]`` for 5 poses; the test asserts that at least one empty
+    result occurs, so the behaviour the planner relies on (``no_ik_near_singular``) stays covered. The planner therefore reports ``[]`` inside the reach envelope as
+    ``no_ik_near_singular``, not ``no_ik_unreachable`` (``awm_path.core.sweep``).
+    """
+    rng = np.random.default_rng(SEED + 5)
+    n, empty = 200, 0
+    for _ in range(n):
+        q = rng.uniform(-180.0, 180.0, size=6)
+        q[4] = 0.0
+        target = kin.fk(q)
+        sols = kin.ik(target)
+        if not sols:
+            empty += 1
+        for sol in sols:
+            dp, dr = pose_error(kin.fk(sol), target)
+            assert dp < POS_TOL_MM and dr < ROT_TOL_RAD
+    print(f'q5 = 0: ik() == [] for {empty} / {n} reachable poses')
+    assert empty > 0, 'seeded set no longer produces an empty IK result at q5 = 0'
