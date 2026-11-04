@@ -589,3 +589,31 @@ stated in the TST-002 record; (3) the URDF `positioner_flange` and the loader mu
 world_T_positioner_axis.
 **DES-001 impact:** §5.1 D14 row ("cell statics … and permanent holders" → kinematics and robot-mounted geometry; static
 and rotating cell geometry = scene objects from A18), §5.4 rows Pismo frame / positioner, §4.2 `awm_description` row.
+
+## CP-56 F9 contact rule (b) counts only faces that rise towards the nozzle; spike verdicts reported per nozzle diameter (lead decision, 2026-11-04, delegated by Truong)
+
+**Status:** decided by the lead on 2026-11-04 (Truong asked the lead to decide both points). Applies to the TST-002
+Rev 0.3 spike and to M4 (A45) until the IPG nozzle data (I2 / OI-15) arrive.
+
+**Finding:** review of S.5 / S.6 (`ws-s4c-checks` c2fd5bc..a45ca60, M3): F9 rule (b) used the unsigned distance from the
+nozzle disc / rim samples to every non-seam face. A face that shares an edge with a seam face and slopes away from the
+nozzle (J1 chamfer F11) was flagged as soon as the rim came within s_c of that edge, although the nozzle cannot touch
+it without touching the seam faces first. J1 Mode C F9 then failed 100 % at nozzle Ø 9–9.4 mm on F11 alone. With the
+assumed Ø 20 flat tip F9 fails 82 % on genuine thread-crest near-contacts (0.014–0.08 mm).
+
+**Decision 1 — rule (b):** a non-seam face fails the contact check only if a part of it within s_c of the nozzle
+samples lies on the nozzle side of the contact plane (the plane through the planned contact point, normal to the beam
+axis), allowing the contact tolerance. Faces that only fall away from that plane do not count. Thread crests, walls and
+ledges that rise towards the nozzle still fail. Rule (a) is unchanged. Reason: F9 must reject a second contact or a
+standoff violation that would really happen; a surface below the contact plane cannot be reached by a flat or convex
+tip before the seam faces are. The rule stays conservative for anything that protrudes.
+
+**Decision 2 — nozzle assumption:** the official spike verdict keeps the TST-002 §3.1 baseline (Ø 20 flat tip, H-BOX);
+it is not changed to make a criterion pass. Every F4 / F9 result that depends on the tip is also reported as a
+sensitivity at Ø 20 / Ø 12 / Ø 8 so the meeting sees which conclusions are robust and which wait for I2. Reason: the
+real tip is unknown; switching the baseline to a smaller guess would hide the risk, keeping only Ø 20 would present a
+modelling assumption as a part property. The request for the real nozzle geometry (I2 / OI-15) is escalated in S.7.
+
+**DES-001 / TST-002 impact:** TST-002 Rev 0.3 F9 wording (rule (b) "rises towards the nozzle within s_c"), §11 results
+with the per-diameter table; DES-001 §5.4 note on the contact check. Code: `awm_path.core.contact` rule (b), new unit
+tests (chamfer sloping away passes; crest rising within s_c fails), S.6 re-run.
