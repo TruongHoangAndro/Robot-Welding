@@ -107,3 +107,55 @@ def test_longest_window_finds_the_longest_continuous_run():
     assert (w['start'], w['end'], w['layers']) == (3, 6, 4)
     all_ok = longest_window(layers, None, p)
     assert all_ok['layers'] == 10
+
+
+# --- S.5b: CP-53 pitch rule on scene-valid nodes (lead decision 2026-11-04), closed seams ---------------------
+
+def test_max_label_steps_with_scores_pairs_scene_valid_nodes_only():
+    layers = [[_c(0, 0, 'S+E+W+', [0] * 6), _c(0, 1, 'S+E+W+', [0] * 6)],
+              [_c(1, 0, 'S+E+W+', [40, 0, 0, 0, 0, 0]), _c(1, 1, 'S+E+W+', [2, 0, 0, 0, 0, 0])]]
+    assert max_label_steps(layers) == [pytest.approx(40.0)]
+    scores = [[NodeScore(False), NodeScore(True)], [NodeScore(True), NodeScore(True)]]
+    assert max_label_steps(layers, scores=scores) == [pytest.approx(2.0)]
+
+
+def test_max_label_steps_closed_adds_the_step_back_to_the_first_point():
+    layers = [[_c(0, 0, 'S+E+W+', [0] * 6)], [_c(1, 0, 'S+E+W+', [3, 0, 0, 0, 0, 0])],
+              [_c(2, 0, 'S+E+W+', [20, 0, 0, 0, 0, 0])]]
+    assert max_label_steps(layers, closed=True) == [pytest.approx(3.0), pytest.approx(17.0), pytest.approx(20.0)]
+
+
+def test_refine_pitch_scene_valid_rule_ignores_invalid_nodes_and_records_the_rule():
+    params = PlannerParams()
+
+    def sample(n):
+        # ψ 0 jumps 40 deg per step but is scene-invalid; ψ 1 moves 1 deg per step and is valid
+        layers = [[_c(i, 0, 'S+E+W+', [40.0 * i, 0, 0, 0, 0, 0]), _c(i, 1, 'S+E+W+', [1.0 * i, 0, 0, 0, 0, 0])]
+                  for i in range(n)]
+        return layers, [[NodeScore(False), NodeScore(True)] for _ in range(n)]
+
+    res = refine_pitch(10.0, 1.0, sample, params, 0.05, rule='scene_valid')
+    assert res.ok and res.iterations == 1 and res.rule == 'scene_valid'
+    assert res.scores is not None and len(res.scores) == res.points
+    assert res.as_record()['rule'] == 'scene_valid'
+    kin = refine_pitch(10.0, 1.0, lambda n: sample(n)[0], params, 0.05)
+    assert kin.rule == 'kinematic' and kin.iterations > 1 and kin.scores is None
+    with pytest.raises(ValueError):
+        refine_pitch(10.0, 1.0, sample, params, 0.05, rule='nope')
+
+
+def test_refine_pitch_closed_uses_pitch_length_over_n_and_doubles_n():
+    params = PlannerParams()
+    calls = []
+
+    def sample(n):
+        calls.append(n)
+        # periodic joint motion q1 = 20 sin(2π i / n): largest step ≈ 125.7 / n, the closing step included
+        return [[_c(i, 0, 'S+E+W+', [20.0 * math.sin(2 * math.pi * i / n), 0, 0, 0, 0, 0])] for i in range(n)]
+
+    res = refine_pitch(10.0, 1.0, sample, params, 0.05, closed=True)
+    assert calls == [4, 8, 16, 32] and res.ok and res.closed
+    assert res.pitch_mm == pytest.approx(10.0 / 32) and res.pitch_ceiling_mm == pytest.approx(2.5)
+    # an open ramp that does not return to its start fails the closing step at every pitch
+    bad = refine_pitch(10.0, 1.0, lambda n: _ramp_layers(n, 40.0 / n), params, 0.5, closed=True)
+    assert not bad.ok and bad.max_step_deg == pytest.approx(40.0 - 40.0 / bad.points)
