@@ -22,6 +22,7 @@ setup(
             'plan_path = awm_path.node:main',
             'g2_gate = awm_path.gate_g2:main',
             'scene_timing = awm_path.scene_timing:main',
+            's5_run = awm_path.spike_s5:main',
         ],
     },
 )
