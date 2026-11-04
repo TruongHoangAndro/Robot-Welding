@@ -126,7 +126,10 @@ def write_md(path: Path, rec: Mapping[str, Any]) -> None:
         f'mm / {g["flange_model_check"]["max_rot_deg"]:.2e}° at θ {g["flange_model_check"]["thetas_deg"]}.',
         f'- F9 per θ: the TCP is fixed in world; the contact check runs on part_T_tcp(θ) = (world_T_flange(θ)·'
         f'flange_T_part)⁻¹·world_T_tcp, i.e. on the seam point that is under the nozzle at that angle '
-        f'(s advances r·|θ|).', '']
+        f'(s advances r·|θ|). For a seam within F8 and a nozzle that is a body of revolution about the beam axis, '
+        f'the set of nozzle poses relative to the part over one full turn is the same for every Mode C robot pose '
+        f'on the circle and every ψ (only the θ at which each seam point is reached changes): the F9 verdict over '
+        f'the turn does not depend on the chosen pose; F4 / F5 do.', '']
     L += ['## Pose choice at θ = 0', '',
           '| ψ case | Points facing the robot / sampled | Candidates | Kinematically valid | F4 valid | Clearance ≥ 5 mm '
           '| F9 points ok | Valid nodes | Chosen (point, s, ψ, label, cost) |', '|---|---|---|---|---|---|---|---|---|']
@@ -251,7 +254,7 @@ def _cmd_run(args) -> int:
     from awm_path.core.contact import ContactParams, PartMesh
     from awm_path.core.kinematics import UrAnalyticKinematics, pose_error
     from awm_path.core.mode_c import (angular_step_max_deg, closing_overlap_deg, coaxiality, facing_points,
-                                      select_pose, theta_grid, travel_sign, world_T_flange_at)
+                                      pick_poses, select_pose, theta_grid, travel_sign, world_T_flange_at)
     from awm_path.core.scoring import SceneScoreParams, score_candidates
     from awm_path.core.scene_files import CLEARANCE_METHOD, DEFAULT_CLEARANCE_LINKS, part_object_files
     from awm_path.core.seam_input import fit_circle, frames_at
@@ -374,7 +377,7 @@ def _cmd_run(args) -> int:
                 rank_rec = [dict({k: v for k, v in r.items() if k != 'candidate'}, s_mm=s_sel[r['point']])
                             for r in ranked[:10]]
                 poses = []
-                for r in ranked[:1 + int(mc.get('alternates', 0))]:
+                for r in pick_poses(ranked, int(mc.get('alternates', 0)), bool(mc.get('alternates_distinct_points'))):
                     key = (r['point'], r['psi_index'], r['label'], tuple(round(x, 9) for x in r['q_deg']))
                     if key not in done:
                         wt = world_T_part0 @ tcp_pose(fr_part[r['point']], r['psi_deg'])
@@ -412,6 +415,7 @@ def _cmd_run(args) -> int:
             if rclpy.ok():
                 rclpy.shutdown()
 
+    out_dir.mkdir(parents=True, exist_ok=True)
     here = out_dir.resolve()
     commit, dirty = _git(['rev-parse', 'HEAD'], here), bool(_git(['status', '--porcelain'], here))
     params_rec = json.loads(json.dumps(dataclasses.asdict(params)))

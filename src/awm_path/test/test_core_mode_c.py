@@ -147,3 +147,17 @@ def test_facing_points_keeps_points_whose_seam_z_looks_at_the_target():
     idx, cos = facing_points(frames, target, 0.0)
     assert idx == [0, 1] and cos[0] > 0.0 and cos[2] < 0.0
     assert facing_points(frames, target, 0.9)[0] == []
+
+
+def test_pick_poses_rank1_plus_alternates_optionally_at_distinct_points():
+    from awm_path.core.mode_c import pick_poses
+    ranked = [{'rank': 1, 'point': 10}, {'rank': 2, 'point': 10}, {'rank': 3, 'point': 9}, {'rank': 4, 'point': 9},
+              {'rank': 5, 'point': 4}]
+    assert [r['rank'] for r in pick_poses(ranked, 2, distinct_points=False)] == [1, 2, 3]
+    assert [r['rank'] for r in pick_poses(ranked, 2, distinct_points=True)] == [1, 3, 5]
+    assert [r['rank'] for r in pick_poses(ranked, 5, distinct_points=True)] == [1, 3, 5]
+    assert pick_poses([], 2, True) == []
+
+
+def test_theta_grid_starts_at_plus_zero():
+    assert math.copysign(1.0, theta_grid(10.0, 5.0, direction=-1)[0]) == 1.0

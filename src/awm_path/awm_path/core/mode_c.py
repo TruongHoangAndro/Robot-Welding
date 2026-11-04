@@ -52,7 +52,7 @@ def theta_grid(span_deg: float, step_max_deg: float, direction: int = 1) -> np.n
     if span_deg <= 0.0 or step_max_deg <= 0.0:
         raise ValueError('span and step must be > 0')
     n = max(1, int(math.ceil(span_deg / step_max_deg - 1e-9)))
-    return direction * np.linspace(0.0, float(span_deg), n + 1)
+    return direction * np.linspace(0.0, float(span_deg), n + 1) + 0.0   # + 0.0: no -0.0 at the start
 
 
 def closing_overlap_deg(overlap_mm: float, radius_mm: float) -> float:
@@ -142,6 +142,19 @@ def select_pose(entries: Sequence[Tuple[int, Candidate, NodeScore]], params: Pla
             for k, r in enumerate(rows)]
 
 
+def pick_poses(ranked: Sequence[Dict[str, Any]], alternates: int, distinct_points: bool) -> List[Dict[str, Any]]:
+    """Rank 1 (the result) plus up to ``alternates`` next-ranked poses (diagnostics); with ``distinct_points`` each
+    alternate is the best pose at a seam point not used yet."""
+    out: List[Dict[str, Any]] = []
+    for r in ranked:
+        if len(out) > int(alternates):
+            break
+        if distinct_points and any(o['point'] == r['point'] for o in out):
+            continue
+        out.append(r)
+    return out
+
+
 def facing_points(world_T_seams: Sequence[np.ndarray], target_mm: np.ndarray, min_cos: float
                   ) -> Tuple[List[int], List[float]]:
     """Indices of the seam frames whose Z (out of the material) points towards ``target_mm`` with
@@ -178,4 +191,4 @@ def failing_ranges(thetas: Sequence[float], ok: Sequence[bool]) -> List[Dict[str
 
 __all__ = ['F8_TOL_MM', 'F8_TOL_DEG', 'angular_step_max_deg', 'theta_grid', 'closing_overlap_deg',
            'radial_extent_mm', 'coaxiality', 'rot_x_deg', 'world_T_flange_at', 'part_T_tcp_at', 'travel_sign',
-           'select_pose', 'facing_points', 'interval_bounds', 'failing_ranges']
+           'select_pose', 'pick_poses', 'facing_points', 'interval_bounds', 'failing_ranges']

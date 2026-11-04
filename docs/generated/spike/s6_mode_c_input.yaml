@@ -26,3 +26,4 @@ mode_c:
   clearance_levels_mm: [5.0, 7.5, 10.0, 15.0, 20.0, 30.0]   # report resolution of the F5 lower bound (first = weld clearance)
   contact_profile_step_deg: 0.5   # F9 fine profile (pure, ≈ 0.12 mm along the seam)
   alternates: 2                   # next-ranked poses also swept (diagnostic only; the result is rank 1)
+  alternates_distinct_points: true   # each alternate = best pose at another seam point (ψ alone changes little)
