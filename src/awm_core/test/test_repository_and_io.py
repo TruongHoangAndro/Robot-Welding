@@ -41,6 +41,14 @@ def test_init_from_template(tmp_path):
     assert isinstance(repo.jobs(), list)
 
 
+def test_jobs_skip_hidden_folders(tmp_path):
+    """Leftover `.<job>.old-<pid>` / staging folders are never listed as jobs (D10 N-a)."""
+    repo = Repository(tmp_path / 'repo')
+    (repo.jobs_dir / 'P1_A').mkdir(parents=True)
+    (repo.jobs_dir / '.P1_A.old-12').mkdir()
+    assert [j.dir.name for j in repo.jobs()] == ['P1_A']
+
+
 def _write_binary_stl(path, tris):
     with open(path, 'wb') as f:
         f.write(b'\0' * 80)
