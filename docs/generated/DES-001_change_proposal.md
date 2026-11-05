@@ -544,6 +544,10 @@ direction. Emission stops between arcs (WeldEnd / WeldStart at rest, DES-001 §6
 robot-only is rejected (reason recorded: net 360° joint turn needed, F3 / F11).
 Mode C (J1) is unaffected: the robot is at rest. (2) F1 is a ceiling: the planner refines the pitch until consecutive
 IK solutions of one label move ≤ Δq_max and records the pitch used.
+**Pitch rule refinement (lead, 2026-11-04, no objection from Truong):** the Δq_max check that drives the refinement
+counts only pairs of scene-valid nodes (F4, F5, F9 pass); kinematic-only pairs do not force a finer pitch. Planner
+parameter `rule = kinematic | scene_valid` (default `kinematic` keeps the S.5 records valid); used as `scene_valid` in
+the S.5b Mode B screening (ws-s4c-checks 3b74a34) and recorded per run (`pitch_rule`). Pitch floor 0.05 mm (Assumption).
 **Open:** weld quality at the arc restart / overlap (welding engineer; OI-11 / OI-16); whether a 360° wrist-3 turn is
 acceptable for the fiber and wire conduit (Khang Doan / Nghia Nguyen) — if yes, a later CP can relax F11.
 **F6 wording (S.3 review):** the shoulder-singularity metric is the distance |u| of the wrist centre from the plane of
@@ -589,3 +593,38 @@ stated in the TST-002 record; (3) the URDF `positioner_flange` and the loader mu
 world_T_positioner_axis.
 **DES-001 impact:** §5.1 D14 row ("cell statics … and permanent holders" → kinematics and robot-mounted geometry; static
 and rotating cell geometry = scene objects from A18), §5.4 rows Pismo frame / positioner, §4.2 `awm_description` row.
+
+## CP-56 F9 contact rule (b) counts only faces that rise towards the nozzle; spike verdicts reported per nozzle diameter (lead decision, 2026-11-04, delegated by Truong)
+
+**Status:** decided by the lead on 2026-11-04 (Truong asked the lead to decide both points). Applies to the TST-002
+Rev 0.3 spike and to M4 (A45) until the IPG nozzle data (I2 / OI-15) arrive.
+
+**Finding:** review of S.5 / S.6 (`ws-s4c-checks` c2fd5bc..a45ca60, M3): F9 rule (b) used the unsigned distance from the
+nozzle disc / rim samples to every non-seam face. A face that shares an edge with a seam face and slopes away from the
+nozzle (J1 chamfer F11) was flagged as soon as the rim came within s_c of that edge, although the nozzle cannot touch
+it without touching the seam faces first. J1 Mode C F9 then failed 100 % at nozzle Ø 9–9.4 mm on F11 alone. With the
+assumed Ø 20 flat tip F9 fails 82 % on genuine thread-crest near-contacts (0.014–0.08 mm).
+
+**Decision 1 — rule (b):** a non-seam face fails the contact check only if a part of it within s_c of the nozzle
+samples lies on the nozzle side of the contact plane (the plane through the planned contact point, normal to the beam
+axis), allowing the contact tolerance. Faces that only fall away from that plane do not count. Thread crests, walls and
+ledges that rise towards the nozzle still fail. Rule (a) is unchanged. Reason: F9 must reject a second contact or a
+standoff violation that would really happen; a surface below the contact plane cannot be reached by a flat or convex
+tip before the seam faces are. The rule stays conservative for anything that protrudes.
+
+**Decision 2 — nozzle geometry is cell data; the planner judges the configured nozzle (Truong, 2026-11-04, replaces
+the lead's first wording):** the nozzle (diameter, length, tip length, s_c) is a parameter of the head model in the cell
+data (one source: D16 / D14, Admin-owned, part of the hashed context), never a constant in code. M4 plans and checks with
+the nozzle that is configured. If a seam fails because of the nozzle (F4 on `nozzle_tip` / `nozzle_body`, F9), the
+seam is rejected with the failing points, faces and the cause "nozzle", so the Engineer can change the setup (head
+angles, start point, placement) or the cell owner can fit another nozzle (e.g. Ø 12). After a nozzle change the cell
+model / context changes, every path planned with the old nozzle becomes stale, and the job is planned again; the STEP
+file does not need to be imported again (the part model D02 / D20 is unchanged). The spike verdict uses the configured
+TST-002 §3.1 baseline (Ø 20 flat tip); results at Ø 12 / Ø 8 are shown to the meeting only as information on what a
+nozzle change would give, not as the verdict. Real nozzle geometry from IPG (I2 / OI-15) stays requested.
+Gap found: the nozzle diameter is defined twice today (xacro arg `nozzle_dia_mm` in `lightweld_hbox.xacro` and
+`ContactParams.nozzle_radius_mm` in `awm_path.core.contact`) — to be read from one source (T0.1 `cell.yaml`).
+
+**DES-001 / TST-002 impact:** TST-002 Rev 0.3 F9 wording (rule (b) "rises towards the nozzle within s_c"), §11 results
+with the per-diameter table; DES-001 §5.4 note on the contact check. Code: `awm_path.core.contact` rule (b), new unit
+tests (chamfer sloping away passes; crest rising within s_c fails), S.6 re-run.

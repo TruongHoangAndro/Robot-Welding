@@ -62,7 +62,8 @@ class Repository:
     def jobs(self) -> List['JobPaths']:
         if not self.jobs_dir.is_dir():
             return []
-        return [JobPaths(p) for p in sorted(self.jobs_dir.iterdir()) if p.is_dir()]
+        # hidden folders are leftovers of an interrupted export (staging, `.<job>.old-<pid>`), never jobs
+        return [JobPaths(p) for p in sorted(self.jobs_dir.iterdir()) if p.is_dir() and not p.name.startswith('.')]
 
     def exists(self) -> bool:
         return self.cell_dir.is_dir() and self.jobs_dir.is_dir()

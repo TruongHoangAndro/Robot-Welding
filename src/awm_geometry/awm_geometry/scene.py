@@ -33,11 +33,13 @@ from __future__ import annotations
 
 import json
 import logging
+import contextlib
+import fcntl
 import os
 import re
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import numpy as np
 from OCC.Core.BRep import BRep_Tool
@@ -334,7 +336,7 @@ def _tessellate_mm(shape: TopoDS_Shape, linear_mm: float, angular_deg: float, la
             face_no += 1
             face = topods.Face(exp.Current())
             pos, idx, _ = _face_triangles(face)
-            nodes = None  # hull mode fallback: nodes of the last retry that did not cover the face
+            nodes = None  # hull mode fallback: nodes of the latest rejected retry
             for retry_deg in RETRY_ANGULAR_DEG if pos is None else ():
                 # BRepMesh sometimes leaves a small valid face empty (cell CAD: a 6 mm2 cone); mesh it alone
                 # with the same chord and a coarser angle (accepted only if the achieved chord holds). Logged; an error
@@ -345,7 +347,7 @@ def _tessellate_mm(shape: TopoDS_Shape, linear_mm: float, angular_deg: float, la
                 if pos is not None and not _covers_face(face, pos, idx):
                     nodes, pos, idx = (pos, retry_deg), None, None  # degenerate: a zero-area mesh reports chord 0
                 elif pos is not None and deflection > linear_mm:
-                    pos = idx = None  # the chord must still hold
+                    nodes, pos, idx = (pos, retry_deg), None, None  # the chord must still hold
                 if pos is not None:
                     LOG.warning('%r: face %d meshed again alone (angular %.0f deg, chord %.2f mm, achieved '
                                 '%.3f mm)', label, face_no, retry_deg, linear_mm, deflection)
@@ -551,37 +553,73 @@ def _job_from_name(repo: Repository, job_name: str) -> Tuple[str, str]:
 STAGING_PREFIX = '.staging-export-scene-'
 
 
-def _pid_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
+LOCK_NAME = '.export-scene.lock'
 
 
-def remove_orphaned_staging(root: Path) -> List[Path]:
-    """Remove staging folders of earlier runs whose process is gone (or of this pid); return them."""
-    removed = []
-    if root.is_dir():
-        for path in root.glob(f'{STAGING_PREFIX}*'):
-            suffix = path.name[len(STAGING_PREFIX):]
-            if not suffix.isdigit():
+@contextlib.contextmanager
+def export_lock(root: Path) -> Iterator[None]:
+    """One export per repository at a time: exclusive fcntl lock on ``<root>/.export-scene.lock`` (also holds
+    between the host conda and the ``awm_dev`` container on the shared bind mount)."""
+    with open(root / LOCK_NAME, 'a+') as fh:
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise GeometryError(f'another export-scene is running on {root} (lock {LOCK_NAME})') from exc
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
+_OLD_RE = re.compile(r'\.(.+)\.old-\d+')
+_TRASH_RE = re.compile(r'\.(.+)\.trash-\d+')
+
+
+def recover_leftovers(root: Path) -> List[Path]:
+    """Clean up after a crashed export; call only while holding :func:`export_lock`.
+
+    No other export runs, so every staging folder and every ``.<name>.trash-<pid>`` folder (a placed folder being
+    undone) is orphaned and removed. An ``.<name>.old-<pid>`` folder in ``cell/`` or ``jobs/`` is removed when
+    ``<name>`` exists (a completed swap: undo never leaves a partial folder under ``<name>``), and renamed back when
+    a crash or a failed undo left ``<name>`` missing. Returns the paths removed or restored.
+    """
+    touched = []
+    for path in root.glob(f'{STAGING_PREFIX}*'):
+        shutil.rmtree(path)
+        touched.append(path)
+        LOG.warning('removed orphaned staging folder %s', path)
+    for parent in (root / 'cell', root / 'jobs'):
+        if not parent.is_dir():
+            continue
+        for trash in sorted(parent.iterdir()):
+            if _TRASH_RE.fullmatch(trash.name) and trash.is_dir():
+                shutil.rmtree(trash)
+                LOG.warning('removed leftover folder %s', trash)
+                touched.append(trash)
+        for old in sorted(parent.iterdir()):
+            match = _OLD_RE.fullmatch(old.name)
+            if not match or not old.is_dir():
                 continue
-            pid = int(suffix)
-            if pid == os.getpid() or not _pid_alive(pid):
-                shutil.rmtree(path, ignore_errors=True)
-                removed.append(path)
-                LOG.warning('removed orphaned staging folder %s', path)
-    return removed
+            final = parent / match.group(1)
+            if final.exists():
+                shutil.rmtree(old)
+                LOG.warning('removed leftover folder %s', old)
+            else:
+                os.replace(old, final)
+                LOG.warning('restored %s from %s (interrupted export)', final, old)
+            touched.append(old)
+    return touched
 
 
 def _keep_foreign_files(old_dir: Path, staged_dir: Path) -> None:
-    """Copy files of other modules (in the old job folder, not produced by this export) into the staged folder."""
+    """Copy files of other modules (in the old job folder, not produced by this export) into the staged folder;
+    ``cache/`` and hidden / temporary files belong to this module and are never carried forward."""
     if not old_dir.is_dir():
         return
     for src in old_dir.rglob('*'):
+        rel = src.relative_to(old_dir)
+        if rel.parts[0] == 'cache' or any(part.startswith('.') for part in rel.parts):
+            continue  # this module's own outputs (cache/: D02, D20, collision mesh) and temporary files
         if src.is_file():
             dst = staged_dir / src.relative_to(old_dir)
             if not dst.exists():
@@ -607,14 +645,21 @@ def swap_dirs(pairs: List[Tuple[Path, Path]]) -> None:
             step['placed'] = True
     except BaseException:
         for step in reversed(done):
-            if step['placed']:
-                shutil.rmtree(step['final'], ignore_errors=True)
-            if step['old'] is not None and step['old'].exists():
-                os.replace(step['old'], step['final'])
+            try:
+                if step['placed']:  # rename first: a half-deleted folder never sits under the final name
+                    trash = step['final'].with_name(f".{step['final'].name}.trash-{os.getpid()}")
+                    os.replace(step['final'], trash)
+                    shutil.rmtree(trash, ignore_errors=True)
+                if step['old'] is not None and step['old'].exists():
+                    os.replace(step['old'], step['final'])
+            except OSError as undo_error:  # keep the original error; the next export recovers (recover_leftovers)
+                LOG.error('could not undo the swap of %s: %s', step['final'], undo_error)
         raise
     for step in done:
         if step['old'] is not None:
             shutil.rmtree(step['old'], ignore_errors=True)
+            if step['old'].exists():
+                LOG.warning('could not remove %s; it is removed by the next export', step['old'])
 
 
 def guard_record(tolerance: float, chord_near_mm: float, chord_far_mm: float) -> Dict[str, Any]:
@@ -633,6 +678,16 @@ def guard_record(tolerance: float, chord_near_mm: float, chord_far_mm: float) ->
 
 def export_scene(step: Path, map_path: Path, repo_root: Path, job_name: str, chord_near_mm: float,
                  chord_far_mm: float, padding_mm: float, created_by: str) -> Dict[str, Any]:
+    """Run :func:`_export_scene` under the repository export lock, after recovering leftovers of crashed runs."""
+    root = Path(repo_root)
+    root.mkdir(parents=True, exist_ok=True)  # a new repository is locked too
+    with export_lock(root):
+        recover_leftovers(root)
+        return _export_scene(step, map_path, root, job_name, chord_near_mm, chord_far_mm, padding_mm, created_by)
+
+
+def _export_scene(step: Path, map_path: Path, repo_root: Path, job_name: str, chord_near_mm: float,
+                  chord_far_mm: float, padding_mm: float, created_by: str) -> Dict[str, Any]:
     """Write the cell part and the job part of the spike scene (see module docstring); return a summary.
 
     Everything is computed and checked first (map, frames, meshes, model checks, export guard); then every output
@@ -647,7 +702,6 @@ def export_scene(step: Path, map_path: Path, repo_root: Path, job_name: str, cho
         raise GeometryError('need 0 < chord-near-mm <= chord-far-mm')
     repo = Repository(repo_root)
     part_no, part_rev = _job_from_name(repo, job_name)
-    remove_orphaned_staging(repo.root)
     cmap = load_map(map_path, step)
     tolerance = float(cmap.get('contact_tolerance_mm', DEFAULT_CONTACT_TOLERANCE_MM))
     LOG.info('A18 reading assembly %s', step)

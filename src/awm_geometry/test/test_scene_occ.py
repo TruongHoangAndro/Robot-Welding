@@ -352,7 +352,9 @@ def test_stale_files_are_removed(tmp_path, occ):
 
 
 def _tree_snapshot(root):
-    return {str(p.relative_to(root)): hashing.sha256_file(p) for p in sorted(root.rglob('*')) if p.is_file()}
+    """Hashes of every output file; the export lock file (empty, repository level) is not an output."""
+    return {str(p.relative_to(root)): hashing.sha256_file(p) for p in sorted(root.rglob('*'))
+            if p.is_file() and p.name != '.export-scene.lock'}
 
 
 def test_failing_model_check_writes_nothing(tmp_path, occ, caplog):
@@ -517,17 +519,120 @@ def scene_retry_first():
     return scene.RETRY_ANGULAR_DEG[0]
 
 
-def test_orphaned_staging_folders_are_removed(tmp_path, occ):
-    """N2: staging folders of dead runs are removed at the start; one of a live process is kept."""
+def test_leftovers_of_crashed_runs_are_recovered(tmp_path, occ):
+    """T0.2 / D10 N-a, N-c: under the export lock every staging folder is orphaned and removed; an `.old-<pid>`
+    folder is removed when its final folder exists and renamed back when a crash left the final folder missing."""
     step = _cell(tmp_path)
-    repo = tmp_path / 'repo'
-    dead = repo / '.staging-export-scene-999999999'
-    alive = repo / f'.staging-export-scene-{os.getppid()}'
-    for d in (dead, alive):
-        (d / 'cell').mkdir(parents=True)
+    code, repo = _run(tmp_path, _map, step=step)
+    assert code == 0
+    staging = repo / '.staging-export-scene-12345'
+    (staging / 'cell').mkdir(parents=True)
+    stale_old = repo / 'cell' / '.model.old-777'
+    stale_old.mkdir()
+    job = repo / 'jobs' / 'TEST_A'
+    (job / 'seams.json').write_text('{"keep": 1}')
+    os.replace(job, repo / 'jobs' / '.TEST_A.old-888')  # crash between "old aside" and "staged in"
     code, _ = _run(tmp_path, _map, step=step)
     assert code == 0
-    assert not dead.exists() and alive.exists()
+    assert not staging.exists() and not stale_old.exists()
+    assert sorted(p.name for p in (repo / 'jobs').iterdir()) == ['TEST_A']
+    assert (job / 'seams.json').read_text() == '{"keep": 1}'
+
+
+def test_second_export_is_refused_while_the_lock_is_held(tmp_path, occ):
+    """T0.2 / D10 N-c: one export at a time per repository (fcntl lock, works across host / container)."""
+    import fcntl
+    from awm_geometry import scene
+
+    step = _cell(tmp_path)
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    with open(repo / scene.LOCK_NAME, 'a+') as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        code, _ = _run(tmp_path, _map, step=step)
+    assert code == 1
+    assert not (repo / 'cell').exists()
+
+
+def test_rollback_failure_keeps_the_original_error(tmp_path, occ, monkeypatch, caplog):
+    """T0.2 / D10: an error while undoing a swap is logged; the original error is the one raised."""
+    from awm_geometry import scene
+
+    final_a, staged_a = tmp_path / 'a', tmp_path / 's_a'
+    final_b, staged_b = tmp_path / 'b', tmp_path / 's_b'
+    for d in (final_a, staged_a, final_b, staged_b):
+        d.mkdir()
+    real_replace = os.replace
+
+    def failing(src, dst, *a, **k):
+        if Path(src) == staged_b:
+            raise OSError('disk full (test)')
+        if Path(dst) == final_a and '.old-' in Path(src).name:
+            raise OSError('restore failed (test)')
+        return real_replace(src, dst, *a, **k)
+    monkeypatch.setattr(scene.os, 'replace', failing)
+    with pytest.raises(OSError, match='disk full'):
+        scene.swap_dirs([(staged_a, final_a), (staged_b, final_b)])
+    assert 'restore failed' in caplog.text
+    # the placed folder was moved to trash, so `a` is missing and its old copy survives: recovery restores it
+    assert not final_a.exists() and len(list(tmp_path.glob('.a.old-*'))) == 1
+
+
+def test_recovery_restores_old_after_a_failed_undo(tmp_path, occ):
+    """Review F1: a half-deleted placed folder is never left under the final name; recovery brings the old back."""
+    from awm_geometry import scene
+
+    cell = tmp_path / 'cell'
+    (cell / '.model.old-1').mkdir(parents=True)
+    (cell / '.model.old-1' / 'scene_manifest.json').write_text('{}')
+    (cell / '.model.trash-1').mkdir()
+    (cell / '.model.trash-1' / 'half.stl').write_text('x')
+    scene.recover_leftovers(tmp_path)
+    assert sorted(p.name for p in cell.iterdir()) == ['model']
+    assert (cell / 'model' / 'scene_manifest.json').exists()
+
+
+def test_first_export_takes_the_lock(tmp_path, occ, monkeypatch):
+    """Review F2: a repository root that does not exist yet is created and locked before the export."""
+    from awm_geometry import scene
+
+    seen = []
+    real = scene.export_lock
+
+    def spy(root):
+        seen.append(root)
+        return real(root)
+    monkeypatch.setattr(scene, 'export_lock', spy)
+    code, repo = _run(tmp_path, _map, step=_cell(tmp_path))
+    assert code == 0 and seen == [repo]
+
+
+def test_hull_fallback_uses_the_latest_retry(occ, monkeypatch):
+    """Review F3: degenerate at the first retry, covering but too coarse later: the hull keeps the latest nodes."""
+    from awm_geometry import scene, testparts
+    from awm_geometry.occ_io import scale_shape
+
+    original, state = scene._face_triangles, {'face': None, 'calls': 0}
+
+    def patched(face):
+        if state['face'] is None:
+            state['face'] = face
+        if face.IsSame(state['face']):
+            state['calls'] += 1
+            if state['calls'] == 1:
+                return None, None, 0.0
+            pos, idx, _ = original(face)
+            if state['calls'] == 2:
+                return pos, np.array([[0, 0, 1]], dtype=np.int64), 0.0  # degenerate
+            return pos, idx, 99.0  # covers the face but the chord does not hold
+        return original(face)
+    monkeypatch.setattr(scene, '_face_triangles', patched)
+    shape = scale_shape(testparts.box((0, 0, 0), (0.01, 0.01, 0.01)), units.m_to_mm(1.0))
+    retried = []
+    pieces = scene._tessellate_mm(shape, 0.5, 15.0, 'table:1', retried, hull_mode=True)
+    assert retried[0]['nodes_only'] and retried[0]['angular_deflection_deg'] == scene.RETRY_ANGULAR_DEG[-1]
+    pts = np.vstack([v for v, _ in pieces])
+    assert np.isclose(pts, [0.0, 0.0, 0.0]).all(axis=1).any()  # the face's own nodes are in the point set
 
 
 def test_placement_does_not_hash_the_cell_manifest(scene):
@@ -557,7 +662,7 @@ def test_failed_swap_restores_previous_outputs(tmp_path, occ, monkeypatch, caplo
     code, _ = _run(tmp_path, _map, step=step)
     assert code == 1 and 'disk full' in caplog.text
     assert _tree_snapshot(repo) == before
-    assert sorted(p.name for p in repo.iterdir()) == ['cell', 'jobs']
+    assert sorted(p.name for p in repo.iterdir()) == ['.export-scene.lock', 'cell', 'jobs']
     assert sorted(p.name for p in (repo / 'cell').iterdir()) == ['model']
     assert sorted(p.name for p in (repo / 'jobs').iterdir()) == ['TEST_A']
 
@@ -567,8 +672,13 @@ def test_foreign_job_files_survive_a_new_export(tmp_path, occ):
     code, repo = _run(tmp_path, _map, step=step)
     seams = repo / 'jobs' / 'TEST_A' / 'seams.json'
     seams.write_text('{"keep": 1}')
+    stale = [repo / 'jobs' / 'TEST_A' / 'cache' / 'view' / '.view.glb.4242.tmp',
+             repo / 'jobs' / 'TEST_A' / 'cache' / 'old_output.bin']
+    for f in stale:
+        f.write_text('stale')
     code, repo = _run(tmp_path, _map, step=step)
     assert code == 0 and seams.read_text() == '{"keep": 1}'
+    assert not any(f.exists() for f in stale)  # D10 N-b: own outputs (cache/, dot files) are not carried forward
 
 
 def test_untessellated_cell_face_is_an_error(occ, monkeypatch):
