@@ -272,3 +272,89 @@ def test_part_mesh_from_files(tmp_path) -> None:
     faces.write_text(json.dumps(doc))
     with pytest.raises(ValueError, match='sha256'):
         PartMesh.from_files(stl, faces)
+
+
+# ---------------------------------------------------------------------------------------------- rule (b), CP-56
+
+def _chamfer_plate():
+    """Seam faces A (x < 0) and B (0 < x < 5) on z = 0; chamfer C shares the edge x = 5 with B and slopes away from
+    the nozzle (down to z = -5 at x = 15) — the J1 chamfer F11 case of CP-56 (synthetic)."""
+    return _mesh([('A', _rect([-30, -30, 0], [30, 0, 0], [0, 60, 0], 60, 60)),
+                  ('B', _rect([0, -30, 0], [5, 0, 0], [0, 60, 0], 10, 60)),
+                  ('C', _rect([5, -30, 0], [10, 0, -5], [0, 60, 0], 20, 60))])
+
+
+def _ridge_plate(height_mm):
+    """Seam faces A / B on z = 0 and a ridge R (thread crest) under the disc: two faces rising from x = 7 to
+    z = height at x = 8 and falling back at x = 9 (rising towards the nozzle)."""
+    return _mesh([('A', _rect([-30, -30, 0], [30, 0, 0], [0, 60, 0], 60, 60)),
+                  ('B', _rect([0, -30, 0], [7, 0, 0], [0, 60, 0], 14, 60)),
+                  ('R', np.concatenate([_rect([7, -30, 0], [1, 0, height_mm], [0, 60, 0], 4, 60),
+                                        _rect([8, -30, height_mm], [1, 0, -height_mm], [0, 60, 0], 4, 60)])),
+                  ('G', _rect([9, -30, 0], [21, 0, 0], [0, 60, 0], 21, 60))])
+
+
+def test_rule_b_face_sloping_away_from_the_nozzle_passes() -> None:
+    """CP-56 decision 1: a non-seam face within s_c that lies only on the far side of the contact plane (plane
+    through tcp_laser, normal to the beam axis) does not count."""
+    res = contact_check(_chamfer_plate(), _tcp(), SEAM, ContactParams())
+    assert res.ok and res.reason is None, res
+    assert res.offending == ()
+    assert [f for f, _ in res.excused] == ['C']   # within s_c, excused by rule (b) — recorded
+
+
+def test_rule_b_unsigned_reproduces_the_s4_rule() -> None:
+    """The S.4 rule (unsigned distance, records before CP-56) stays available for reproducing S.5 / S.5b records."""
+    res = contact_check(_chamfer_plate(), _tcp(), SEAM, ContactParams(rule_b='unsigned'))
+    assert res.reason == 'other_face_within_standoff'
+    assert [f for f, _ in res.offending] == ['C']
+
+
+def test_rule_b_crest_rising_towards_the_nozzle_fails() -> None:
+    res = contact_check(_ridge_plate(0.25), _tcp(), SEAM, ContactParams())
+    assert res.reason == 'other_face_within_standoff'
+    assert [f for f, _ in res.offending] == ['R']
+
+
+def test_rule_b_crest_rising_less_than_the_contact_tolerance_is_excused_and_recorded() -> None:
+    p = ContactParams()
+    res = contact_check(_ridge_plate(0.1), _tcp(), SEAM, p)
+    assert 0.1 <= p.point_tolerance_mm
+    assert res.ok, res
+    assert 'R' in [f for f, _ in res.excused]
+
+
+def test_rule_b_wall_just_inside_the_standoff_still_fails() -> None:
+    """A wall rising towards the nozzle at a lateral gap g < s_c fails although sqrt(g² + tol²) > s_c: the nozzle
+    side is sampled at the tolerance height, not only the end disc."""
+    p = ContactParams(standoff_mm=0.3, point_tolerance_mm=0.15)
+    res = contact_check(_plate(wall_x=-(10.0 + 0.29)), _tcp(), SEAM, p)
+    assert res.reason == 'other_face_within_standoff'
+    assert [f for f, _ in res.offending] == ['W']
+
+
+def test_rule_b_unknown_rule_is_an_error() -> None:
+    with pytest.raises(ValueError, match='rule_b'):
+        ContactParams(rule_b='signed?')
+
+
+def test_contact_params_record_names_the_rule() -> None:
+    assert ContactParams().as_record()['rule_b'] == 'rising'
+
+
+def test_clip_triangles_above_keeps_exactly_the_part_above_the_plane() -> None:
+    from awm_path.core.contact import clip_triangles_above
+    rng = np.random.default_rng(20261105)
+    tris = rng.uniform(-5.0, 5.0, size=(200, 3, 3))
+    origin, up, h_min = np.array([0.3, -0.2, 0.1]), np.array([0.2, 0.3, 1.0]), 0.15
+    pieces, owner = clip_triangles_above(tris, origin, up, h_min)
+    u = up / np.linalg.norm(up)
+    assert np.all((pieces - origin) @ u >= h_min - 1e-9)
+    # area above the plane per source triangle = area of its pieces (Monte Carlo on barycentric samples)
+    area = lambda t: 0.5 * np.linalg.norm(np.cross(t[..., 1, :] - t[..., 0, :], t[..., 2, :] - t[..., 0, :]), axis=-1)
+    w = rng.dirichlet([1, 1, 1], size=20000)
+    for i in range(0, 200, 7):
+        pts = w @ tris[i]
+        frac = np.mean((pts - origin) @ u > h_min)
+        got = area(pieces[owner == i]).sum() if np.any(owner == i) else 0.0
+        assert got == pytest.approx(frac * area(tris[i]), abs=0.02 * area(tris[i]) + 1e-9)

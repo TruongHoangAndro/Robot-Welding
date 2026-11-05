@@ -35,6 +35,7 @@ import numpy as np
 
 from awm_core import jsonio, units
 from awm_path.core.mode_b import circular_runs
+from awm_path.gate_g2 import add_head_cli
 from awm_path.core.s5 import PITCH_RULES
 
 CREATED_BY = 'awm_path.spike_s5b'
@@ -374,7 +375,8 @@ def _cmd_run(args) -> int:
     from awm_path.core.scene_files import CLEARANCE_METHOD, DEFAULT_CLEARANCE_LINKS, part_object_files, world_T_object
     from awm_path.core.scoring import SceneScoreParams
     from awm_path.core.sweep import PlannerParams, required_points
-    from awm_path.gate_g2 import _git, _rel, launch_args_from_frames
+    from awm_path.core.head import contact_params_for
+    from awm_path.gate_g2 import _git, _rel, launch_args_from_frames, parse_head_args
     from awm_path.spike_s5 import _rotation_rate_deg_per_mm
 
     t_run = time.perf_counter()
@@ -404,7 +406,7 @@ def _cmd_run(args) -> int:
     join_ov = seam['arc_overlap_mm'] if inp['join_overlap_mm'] is None else inp['join_overlap_mm']
     clearance_links = tuple(args.clearance_links.split(',')) if args.clearance_links else DEFAULT_CLEARANCE_LINKS
     params = PlannerParams()
-    contact_params, score_params = ContactParams(), SceneScoreParams()
+    score_params = SceneScoreParams()
     kin = UrAnalyticKinematics()
     head_tag = args.head_model.lower().replace('-', '')
     length, pts = seam['length_mm'], seam['geometry']['points']
@@ -413,7 +415,8 @@ def _cmd_run(args) -> int:
     n_max = n0
     while length / (2 * n_max) >= inp['pitch_min_mm']:
         n_max *= 2
-    launch_args = dict(launch_args_from_frames(frames_file), cell_manifest=str(cell_manifest.resolve()))
+    launch_args = dict(launch_args_from_frames(frames_file), cell_manifest=str(cell_manifest.resolve()),
+                       **parse_head_args(args.head_arg))
     results: Dict[str, Any] = {}
     not_run: List[str] = []
     equiv = {'max_flange_diff_mm': 0.0, 'max_flange_diff_deg': 0.0}
@@ -427,7 +430,7 @@ def _cmd_run(args) -> int:
             scene.load(timeout_s=180.0)
             part_obj, mesh_file, faces_file = part_object_files(scene.job)
             part = PartMesh.from_files(mesh_file, faces_file)
-            w0 = scene.world_T_links([0.0] * 6, 0.0, ['tool0', 'tcp_laser'])
+            contact_params = contact_params_for(scene.head, ContactParams(rule_b=args.f9_rule))
             t_load = time.perf_counter() - t_load
             for rep, members in classes.items():
                 ref = scene.world_T_links([0.0] * 6, rep, ['positioner_flange'])['positioner_flange']
@@ -439,7 +442,7 @@ def _cmd_run(args) -> int:
             if equiv['max_flange_diff_mm'] > 1e-6 or equiv['max_flange_diff_deg'] > 1e-6:
                 raise SystemExit(f'θ ≡ θ ± 360° does not hold in the scene: {equiv}')
             ctx = {'params': params, 'kin': kin, 'scene': scene, 'part': part, 'part_obj': part_obj, 'seam': seam,
-                   'world_T_object': world_T_object, 'tool0_T_tcp': np.linalg.inv(w0['tool0']) @ w0['tcp_laser'],
+                   'world_T_object': world_T_object, 'tool0_T_tcp': scene.head.tool0_T_tcp_mm,
                    'seam_faces': (tuple(seam['faces']['n1']), tuple(seam['faces']['n2'])),
                    'contact_params': contact_params, 'score_params': score_params, 'job_dir': job,
                    'head_tag': head_tag, 'pitch_min_mm': inp['pitch_min_mm'], 'pitch_rule': inp['pitch_rule'],
@@ -503,6 +506,7 @@ def _cmd_run(args) -> int:
         'join_overlap_mm': join_ov, 'scene_load_s': t_load, 'total_s': time.perf_counter() - t_run,
         'params': params_rec, 'params_sha256': sha256_text(json.dumps(params_rec, sort_keys=True)),
         'contact_params': contact_params.as_record(), 'score_params': dataclasses.asdict(score_params),
+        'head_args': parse_head_args(args.head_arg), 'f9_rule': args.f9_rule,
         'seam': {k: seam[k] for k in ('seam_id', 'joint_edge_id', 'edges', 'solids', 'faces', 'closed', 'length_mm',
                                       'arc_overlap_mm', 'note')},
         'cases': results,
@@ -624,6 +628,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument('--clearance-links', default=None, help='comma-separated; default TST-002 F5 set')
     ap.add_argument('--out-dir', required=True)
     ap.add_argument('--log-dir', default=None)
+    add_head_cli(ap)
     ap.add_argument('--probe-theta', type=float, default=None,
                     help='timing probe: screen only this θ class and the first ψ case (record is a probe, not the result)')
     return _cmd_run(ap.parse_args(argv))

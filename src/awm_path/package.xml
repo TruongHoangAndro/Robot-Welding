@@ -24,6 +24,7 @@
   <test_depend>awm_cad</test_depend>
   <test_depend>awm_seam</test_depend>
   <test_depend>awm_process</test_depend>
+  <test_depend>awm_description</test_depend>
   <test_depend>ur_description</test_depend>
   <test_depend>xacro</test_depend>
   <test_depend>urdfdom_py</test_depend>

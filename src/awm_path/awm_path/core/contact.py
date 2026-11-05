@@ -9,10 +9,19 @@ checked here, explicitly, on the part collision mesh with its per-triangle ``fac
   ``rim_samples`` points;
 * rule (a) **contact point on the seam**: the distance from ``tcp_laser`` to the seam faces (D04 ``faces.n1`` ∪
   ``faces.n2``) is ≤ ``point_tolerance_mm`` and no other face is closer to it (seam-edge exception as in (b));
-* rule (b) **no other face within s_c**: for every sample, every face that is not a seam face is farther than
-  ``standoff_mm`` — except where its closest point lies on the **seam edge**, i.e. within ``point_tolerance_mm`` of
-  an n1 face *and* of an n2 face. This exception covers the end (contact) faces of the two solids of a butt joint,
-  which meet the seam edge but lie inside the joint; a corner wall that meets only one seam face is not excused.
+* rule (b) **no other face rising towards the nozzle within s_c** (CP-56 decision 1, ``rule_b = 'rising'``): only
+  the part of a non-seam face that lies on the nozzle side of the **contact plane** (plane through ``tcp_laser``,
+  normal to the beam axis) by more than the contact tolerance ``point_tolerance_mm`` counts, i.e. the triangles are
+  clipped to ``h > point_tolerance_mm`` with h = height above the plane towards the nozzle (tool −Z). That part
+  fails if it is within ``standoff_mm`` of the samples — the end disc / rim in the plane and the rim lifted to
+  h = ``point_tolerance_mm`` (the nozzle side wall at the lowest height that counts, so a wall rising at a lateral
+  gap < s_c is not excused by the tolerance). Faces that only fall away from the plane (a chamfer next to a seam
+  face) do not count; they are listed in ``excused`` when they are within s_c of the disc / rim (S.4 measure).
+  Thread crests, walls and ledges that rise towards the nozzle by more than the tolerance still fail.
+  Seam-edge exception (both rules): a face is excused where its closest point lies on the **seam edge**, i.e.
+  within ``point_tolerance_mm`` of an n1 face *and* of an n2 face (end faces of the two solids of a butt joint).
+  ``rule_b = 'unsigned'`` is the S.4 rule (every non-seam face within s_c of the disc / rim, unsigned distance),
+  kept only to reproduce records made before CP-56 (S.4 … S.6 of 2026-11-03 / 04, S.5b).
 
 Penetration of the nozzle into a seam face (e.g. a tilted flat tip) is not judged here: the unpadded ``nozzle_tip``
 collision geometry in the F4 validity check catches it. A node is valid only if both checks pass.
@@ -43,6 +52,8 @@ PathLike = Union[str, Path]
 
 #: Reasons of a failed contact check (``None`` = passed).
 CONTACT_REASONS = ('contact_off_seam', 'other_face_within_standoff')
+#: Rule (b) variants: CP-56 (only faces rising towards the nozzle) and the S.4 unsigned rule (reproduction only).
+RULE_B = ('rising', 'unsigned')
 
 _CHUNK = 64
 
@@ -55,7 +66,12 @@ class ContactParams:
     * ``point_tolerance_mm`` 0.15: "within tolerance" of F9 is not given a value by TST-002; chosen here as the part
       chord near the seams (0.1 mm, B-Rep → mesh) + 0.05 mm — Assumption, recorded with every result;
     * sample density: the rim spacing (2π·10 / 360 = 0.17 mm) is below 2·s_c, so a face crossing the rim is never
-      missed; ``point_tolerance_mm`` is also the seam-edge tolerance of rule (b); ``tie_mm`` is numerical only.
+      missed; ``point_tolerance_mm`` is also the seam-edge tolerance of rule (b) and the height tolerance of the
+      contact plane (CP-56: "allowing the contact tolerance"); ``tie_mm`` is numerical only;
+    * ``rule_b``: ``'rising'`` (CP-56 decision 1, default) or ``'unsigned'`` (S.4 rule, reproduction only).
+
+    The nozzle values (radius, s_c) are cell data (CP-56 decision 2): runners build them from the robot description
+    in use with :func:`awm_path.core.head.contact_params_for`; the defaults here equal the H-BOX defaults.
     """
 
     nozzle_radius_mm: float = 10.0
@@ -65,6 +81,11 @@ class ContactParams:
     ring_samples: int = 72
     rim_samples: int = 360
     tie_mm: float = 1e-6
+    rule_b: str = 'rising'
+
+    def __post_init__(self) -> None:
+        if self.rule_b not in RULE_B:
+            raise ValueError(f'rule_b must be one of {RULE_B}, got {self.rule_b!r}')
 
     def as_record(self) -> dict:
         """Parameters as a plain dict (run records)."""
@@ -139,7 +160,10 @@ class ContactResult:
 
     * ``tcp_seam_distance_mm``: distance from ``tcp_laser`` to the seam faces (inf if none is near);
     * ``tcp_nearest_other``: (face_id, distance) of the nearest non-seam face to ``tcp_laser`` (or None);
-    * ``offending``: (face_id, min sample distance) of every non-seam face within s_c of the disc / rim, by face id;
+    * ``offending``: (face_id, min sample distance) of every non-seam face that fails rule (b), by face id;
+    * ``excused``: rule ``'rising'`` only — (face_id, min distance to the disc / rim) of the non-seam faces within
+      s_c of the disc / rim (S.4 measure, seam-edge exception applied) that rule (b) does not count (they do not
+      rise above the contact plane by more than the tolerance); empty for ``'unsigned'``;
     * ``samples`` / ``triangles``: sample count and local triangle count (for timing records).
     """
 
@@ -150,6 +174,7 @@ class ContactResult:
     offending: Tuple[Tuple[str, float], ...]
     samples: int
     triangles: int
+    excused: Tuple[Tuple[str, float], ...] = ()
 
 
 def disc_samples(params: ContactParams) -> np.ndarray:
@@ -161,6 +186,55 @@ def disc_samples(params: ContactParams) -> np.ndarray:
         pts.append(_circle(k * params.ring_spacing_mm, params.ring_samples))
     pts.append(_circle(r_max, params.rim_samples))
     return np.concatenate(pts)
+
+
+def rule_b_samples(params: ContactParams) -> np.ndarray:
+    """Rule (b) ``'rising'`` samples in the ``tcp_laser`` frame: :func:`disc_samples` plus the rim lifted to the
+    tolerance height on the nozzle side (z = −``point_tolerance_mm``; tool +Z = beam direction, the nozzle is on −Z).
+    """
+    rim = _circle(float(params.nozzle_radius_mm), params.rim_samples)
+    rim[:, 2] = -float(params.point_tolerance_mm)
+    return np.concatenate([disc_samples(params), rim])
+
+
+def clip_triangles_above(triangles: np.ndarray, origin: np.ndarray, up: np.ndarray, h_min: float
+                         ) -> Tuple[np.ndarray, np.ndarray]:
+    """Clip triangles (T, 3, 3) to the open half-space ``(x − origin)·up > h_min`` (Sutherland–Hodgman, exact).
+
+    Returns the pieces (K, 3, 3) (a clipped quad is split in two) and the index of the source triangle of each.
+    """
+    tri = np.asarray(triangles, dtype=float).reshape(-1, 3, 3)
+    up = np.asarray(up, dtype=float) / np.linalg.norm(up)
+    h = (tri - np.asarray(origin, dtype=float)) @ up - float(h_min)        # (T, 3)
+    inside = h > 0.0
+    n_in = inside.sum(axis=1)
+    src = np.arange(len(tri))
+    pieces, owners = [tri[n_in == 3]], [src[n_in == 3]]
+
+    def cut(p, hp, q, hq):
+        t = (hp / (hp - hq))[:, None]
+        return p + (q - p) * t
+
+    one = n_in == 1
+    if np.any(one):
+        k = np.argmax(inside[one], axis=1)                                 # the vertex inside
+        order = (k[:, None] + np.arange(3)[None]) % 3
+        v = np.take_along_axis(tri[one], order[..., None], axis=1)
+        hv = np.take_along_axis(h[one], order, axis=1)
+        a, b, c = v[:, 0], v[:, 1], v[:, 2]
+        pieces.append(np.stack([a, cut(a, hv[:, 0], b, hv[:, 1]), cut(a, hv[:, 0], c, hv[:, 2])], axis=1))
+        owners.append(src[one])
+    two = n_in == 2
+    if np.any(two):
+        k = np.argmin(inside[two], axis=1)                                 # the vertex outside
+        order = (k[:, None] + 1 + np.arange(3)[None]) % 3                  # (in, in, out), orientation kept
+        v = np.take_along_axis(tri[two], order[..., None], axis=1)
+        hv = np.take_along_axis(h[two], order, axis=1)
+        a, b, c = v[:, 0], v[:, 1], v[:, 2]
+        pb, pa = cut(b, hv[:, 1], c, hv[:, 2]), cut(a, hv[:, 0], c, hv[:, 2])
+        pieces += [np.stack([a, b, pb], axis=1), np.stack([a, pb, pa], axis=1)]
+        owners += [src[two], src[two]]
+    return np.concatenate(pieces).reshape(-1, 3, 3), np.concatenate(owners).astype(int)
 
 
 def _circle(radius: float, n: int) -> np.ndarray:
@@ -283,8 +357,8 @@ def contact_check(part: PartMesh, part_T_tcp: np.ndarray,
         if not off_seam and nearest_other[1] < d_seam_tcp - params.tie_mm:
             off_seam = not bool(on_seam_edge(q0[0, k:k + 1])[0])
 
-    # (b) no other face within s_c of the disc / rim, except at the seam edge
-    offending: dict = {}
+    # (b) S.4 measure: non-seam faces within s_c of the disc / rim (unsigned), except at the seam edge
+    near: dict = {}
     if len(other_tris):
         d_other, q_other = closest_points_on_triangles(samples, other_tris)
         rows, cols = np.nonzero(d_other <= params.standoff_mm)
@@ -292,11 +366,30 @@ def contact_check(part: PartMesh, part_T_tcp: np.ndarray,
             edge = on_seam_edge(q_other[rows, cols])
             for r, c in zip(rows[~edge], cols[~edge]):
                 fid = part.face_ids[int(other_face[c])]
-                offending[fid] = min(offending.get(fid, math.inf), float(d_other[r, c]))
+                near[fid] = min(near.get(fid, math.inf), float(d_other[r, c]))
+    if params.rule_b == 'unsigned':
+        offending, excused = near, {}
+    else:
+        # CP-56: only the part of a face above the contact plane (towards the nozzle) by more than the tolerance
+        offending = {}
+        up = -t[:3, 2]                                                     # nozzle side = −beam axis
+        pieces, owner = clip_triangles_above(other_tris, t[:3, 3], up, tol)
+        if len(pieces):
+            rb = rule_b_samples(params) @ t[:3, :3].T + t[:3, 3]
+            d_p, q_p = closest_points_on_triangles(rb, pieces)
+            rows, cols = np.nonzero(d_p <= params.standoff_mm)
+            if len(rows):
+                edge = on_seam_edge(q_p[rows, cols])
+                for r, c in zip(rows[~edge], cols[~edge]):
+                    fid = part.face_ids[int(other_face[owner[c]])]
+                    offending[fid] = min(offending.get(fid, math.inf), float(d_p[r, c]))
+        excused = {f: d for f, d in near.items() if f not in offending}
     offending_t = tuple(sorted(offending.items()))
     reason = 'contact_off_seam' if off_seam else ('other_face_within_standoff' if offending_t else None)
-    return ContactResult(reason is None, reason, d_seam_tcp, nearest_other, offending_t, len(samples), len(local))
+    return ContactResult(reason is None, reason, d_seam_tcp, nearest_other, offending_t, len(samples), len(local),
+                         tuple(sorted(excused.items())))
 
 
-__all__ = ['CONTACT_REASONS', 'ContactParams', 'PartMesh', 'ContactResult', 'disc_samples',
+__all__ = ['CONTACT_REASONS', 'RULE_B', 'ContactParams', 'PartMesh', 'ContactResult', 'disc_samples',
+           'rule_b_samples', 'clip_triangles_above',
            'point_triangle_distances', 'closest_points_on_triangles', 'contact_check']

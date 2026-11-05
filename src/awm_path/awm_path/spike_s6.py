@@ -33,6 +33,7 @@ import numpy as np
 
 from awm_core import jsonio, units
 from awm_path.core.mode_c import failing_ranges, interval_bounds
+from awm_path.gate_g2 import add_head_cli
 
 CREATED_BY = 'awm_path.spike_s6'
 SEAM_FILE = 's6_spike_seam.json'
@@ -59,9 +60,12 @@ def theta_summary(rows: List[Dict[str, Any]], weld_clearance_mm: float, step_deg
         if not r['f4_valid']:
             f4_pairs.update(r['f4_contacts'])
     faces: Dict[str, float] = {}
+    excused: Dict[str, float] = {}
     for r in rows:
         for fid, d in r.get('offending_faces', []):
             faces[fid] = min(faces.get(fid, math.inf), d)
+        for fid, d in r.get('excused_faces', []):
+            excused[fid] = min(excused.get(fid, math.inf), d)
     return {
         'C9_pass': all(r['ok'] for r in rows), 'states': len(rows), 'states_ok': sum(r['ok'] for r in rows),
         'min_clearance_lb_mm': None if m == -math.inf else m,
@@ -74,6 +78,7 @@ def theta_summary(rows: List[Dict[str, Any]], weld_clearance_mm: float, step_deg
                     'contact': failing_ranges(th, [r['contact_ok'] for r in rows])},
         'f4_pairs': dict(f4_pairs.most_common()),
         'contact_offending_faces_min_mm': dict(sorted(faces.items())),
+        'contact_excused_faces_min_mm': dict(sorted(excused.items())),
     }
 
 
@@ -113,7 +118,17 @@ def write_md(path: Path, rec: Mapping[str, Any]) -> None:
         f'Record `s6_results.json`; commit `{rec["commit"]}`, dirty: {str(rec["dirty"]).lower()}, created '
         f'{rec["created_at"]}. Scene hash `{rec["scene_backend"]["scene_hash"]}`; kinematics '
         f'`{rec["kinematics_backend"]}`; scene backend `{rec["scene_backend"]["content"]["backend"]}`; clearance '
-        f'links {", ".join(rec["clearance_links"])} (F5 method: {rec["clearance_method"]}).', '',
+        f'links {", ".join(rec["clearance_links"])} (F5 method: {rec["clearance_method"]}).', '']
+    cp = rec['contact_params']
+    if rec.get('head'):
+        h = rec['head']
+        L += [f'Head {rec["head_model"]}, head args {json.dumps(rec.get("head_args") or {})}: nozzle '
+              f'Ø{2.0 * h["nozzle_radius_mm"]:g} mm, s_c {h["contact_standoff_mm"]:g} mm, tool0_T_tcp '
+              f'{[round(v, 6) for v in h["tool0_T_tcp_mm"]["position_mm"]]} mm (quat '
+              f'{[round(v, 9) for v in h["tool0_T_tcp_mm"]["quat_xyzw"]]}) — read from the robot description '
+              f'`{h["robot_description_sha256"][:16]}…` and checked against /compute_fk. F9 rule (b) '
+              f'**{cp.get("rule_b", "unsigned")}**, point / plane tolerance {cp["point_tolerance_mm"]} mm.', '']
+    L += [
         f'Seam {rec["seam"]["seam_id"]} ({rec["seam"]["note"].split("|")[0].strip()}), r {g["seam_radius_mm"]:.3f} mm, '
         f'length {rec["seam"]["length_mm"]:.3f} mm, closing overlap {rec["seam"]["arc_overlap_mm"]} mm = '
         f'{g["overlap_deg"]:.2f}°; span {g["span_deg"]:.2f}°.', '',
@@ -165,7 +180,11 @@ def write_md(path: Path, rec: Mapping[str, Any]) -> None:
             L += ['', f'F9 fine profile ({fp["step_deg"]:.3f}° step, {fp["states"]} angles): {fp["failing_states"]} '
                   f'fail ({100.0 * fp["failing_states"] / fp["states"]:.1f} %), reasons {json.dumps(fp["reasons"])}; '
                   f'offending faces (min distance mm) {json.dumps({k: round(v, 3) for k, v in fp["offending_faces_min_mm"].items()})}; '
-                  f'failing ranges {len(fp["failing_ranges"])}: '
+                  + (f'excused by rule (b) (within s_c of the disc / rim, not rising above the contact plane; '
+                     f'{fp["states_with_excused_faces"]} angles) '
+                     f'{json.dumps({k: round(v, 3) for k, v in fp["excused_faces_min_mm"].items()})}; '
+                     if 'excused_faces_min_mm' in fp else '')
+                  + f'failing ranges {len(fp["failing_ranges"])}: '
                   + ', '.join(f'{r["theta_from_deg"]:.1f}…{r["theta_to_deg"]:.1f}' for r in fp['failing_ranges'][:12])
                   + (' …' if len(fp['failing_ranges']) > 12 else ''), '']
     L += ['## Not run / open', ''] + [f'- {x}' for x in rec['not_run']] + ['', '## Assumptions', ''] + [
@@ -223,7 +242,8 @@ def _theta_sweep(ctx, pose, thetas, levels, weld_mm) -> List[Dict[str, Any]]:
                      'closest_pair': closest, 'contact_ok': bool(c.ok), 'contact_reason': c.reason,
                      'tcp_seam_distance_mm': c.tcp_seam_distance_mm if math.isfinite(c.tcp_seam_distance_mm) else None,
                      'tcp_nearest_other': list(c.tcp_nearest_other) if c.tcp_nearest_other else None,
-                     'offending_faces': [list(x) for x in c.offending]})
+                     'offending_faces': [list(x) for x in c.offending],
+                     'excused_faces': [list(x) for x in c.excused]})
     return rows
 
 
@@ -234,11 +254,16 @@ def _contact_profile(ctx, pose, span_deg, direction, step_deg) -> Dict[str, Any]
     res = [contact_check(ctx['part'], part_T_tcp_at(ctx['flange0'], ctx['flange_T_part'], pose['world_T_tcp'],
                                                     float(t)), ctx['seam_faces'], ctx['contact_params']) for t in th]
     faces: Dict[str, float] = {}
+    excused: Dict[str, float] = {}
     for c in res:
         for fid, d in c.offending:
             faces[fid] = min(faces.get(fid, math.inf), d)
+        for fid, d in c.excused:
+            excused[fid] = min(excused.get(fid, math.inf), d)
     return {'step_deg': float(abs(th[1] - th[0])), 'states': len(th),
             'failing_states': sum(not c.ok for c in res),
+            'excused_faces_min_mm': dict(sorted(excused.items())),
+            'states_with_excused_faces': sum(bool(c.excused) for c in res),
             'reasons': dict(Counter(c.reason for c in res if c.reason)),
             'offending_faces_min_mm': dict(sorted(faces.items())),
             'failing_ranges': failing_ranges([float(t) for t in th], [c.ok for c in res])}
@@ -259,7 +284,8 @@ def _cmd_run(args) -> int:
     from awm_path.core.scene_files import CLEARANCE_METHOD, DEFAULT_CLEARANCE_LINKS, part_object_files
     from awm_path.core.seam_input import fit_circle, frames_at
     from awm_path.core.sweep import PlannerParams, sweep, tcp_pose, write_candidates_csv
-    from awm_path.gate_g2 import _git, _rel, launch_args_from_frames
+    from awm_path.core.head import contact_params_for
+    from awm_path.gate_g2 import _git, _rel, launch_args_from_frames, parse_head_args
     from awm_path.spike_s5 import build_seams_doc
 
     repo, out_dir, inp = Path(args.repo), Path(args.out_dir), Path(args.input)
@@ -283,7 +309,7 @@ def _cmd_run(args) -> int:
     pts, length = seam['geometry']['points'], seam['length_mm']
     fit = fit_circle([p['p_mm'] for p in pts])
     clearance_links = tuple(args.clearance_links.split(',')) if args.clearance_links else DEFAULT_CLEARANCE_LINKS
-    params, contact_params, score_params = PlannerParams(), ContactParams(), SceneScoreParams()
+    params, score_params = PlannerParams(), SceneScoreParams()
     levels = tuple(float(x) for x in mc['clearance_levels_mm'])
     weld_mm = float(mc['angular_step']['clearance_mm'])
     if levels[0] != score_params.weld_clearance_mm or weld_mm != score_params.weld_clearance_mm:
@@ -291,7 +317,8 @@ def _cmd_run(args) -> int:
                          f'{score_params.weld_clearance_mm} mm (TST-002 C9)')
     kin = UrAnalyticKinematics()
     head_tag = args.head_model.lower().replace('-', '')
-    launch_args = dict(launch_args_from_frames(frames_file), cell_manifest=str(cell_manifest.resolve()))
+    launch_args = dict(launch_args_from_frames(frames_file), cell_manifest=str(cell_manifest.resolve()),
+                       **parse_head_args(args.head_arg))
     cases: Dict[str, Any] = {}
     t_all = time.perf_counter()
     with SimLaunch(log_dir=args.log_dir, launch_file='sim_mock.launch.py', launch_args=launch_args) as sim:
@@ -304,6 +331,7 @@ def _cmd_run(args) -> int:
             scene.load(timeout_s=180.0)
             part_obj, mesh_file, faces_file = part_object_files(scene.job)
             part = PartMesh.from_files(mesh_file, faces_file)
+            contact_params = contact_params_for(scene.head, ContactParams(rule_b=args.f9_rule))
             scene.set_theta(0.0)
             w = scene.world_T_links([0.0] * 6, 0.0, ['base_link', 'tool0', 'tcp_laser', 'positioner_flange'])
             t_load = time.perf_counter() - t_load
@@ -313,7 +341,7 @@ def _cmd_run(args) -> int:
             flange_T_part = part_obj.parent_T_obj_mm
             world_T_part0 = flange0 @ flange_T_part
             base_T_world = np.linalg.inv(w['base_link'])
-            tool0_T_tcp = np.linalg.inv(w['tool0']) @ w['tcp_laser']
+            tool0_T_tcp = scene.head.tool0_T_tcp_mm     # robot description (S.5c Task 0), FK-checked
             # flange model check against /compute_fk
             chk = []
             for th in (90.0, -180.0, -368.0, 270.0):
@@ -354,7 +382,8 @@ def _cmd_run(args) -> int:
                 scored = score_candidates(layers, fr_base, base_T_part, 0.0, scene, part, ctx['seam_faces'],
                                           contact_params, score_params)
                 t_pick = time.perf_counter() - t0
-                csv_name = f's6_candidates_{seam["seam_id"]}_{case}_{head_tag}.csv'
+                csv_name = (f's6_candidates_{seam["seam_id"]}_{case}_{head_tag}'
+                            f'_noz{2.0 * contact_params.nozzle_radius_mm:g}_{args.f9_rule}.csv')
                 write_candidates_csv(str(job_dir / csv_name), layers, scored.columns)
                 entries = [(li, c, s) for li, (lay, sc) in enumerate(zip(layers, scored.scores))
                            for c, s in zip(lay, sc)]
@@ -428,6 +457,7 @@ def _cmd_run(args) -> int:
                                              'defaults (TST-002 §5.1) + the S.6 data file, recorded below',
         'job_dir': _rel(job_dir), 'scene_backend': scene.record, 'kinematics_backend': kin.name,
         'head_model': args.head_model, 'clearance_links': list(clearance_links), 'clearance_method': CLEARANCE_METHOD,
+        'head': scene.head.as_record(), 'head_args': parse_head_args(args.head_arg), 'f9_rule': args.f9_rule,
         'mode': 'C', 'scene_load_s': t_load, 'total_s': time.perf_counter() - t_all,
         'params': params_rec, 'params_sha256': sha256_text(json.dumps(params_rec, sort_keys=True)),
         'contact_params': contact_params.as_record(), 'score_params': dataclasses.asdict(score_params),
@@ -442,15 +472,20 @@ def _cmd_run(args) -> int:
                      'step_deg': span / int(math.ceil(span / step_max - 1e-9)),
                      'flange_model_check': flange_chk},
         'cases': cases,
-        'not_run': ['H-CAD head model: no head hulls / H-CAD cell model (S.5 open item)',
+        'not_run': ['H-CAD head model: S.5c Task 2 / 3 (H-CAD description not built yet)',
                     'approach / retract / air move to the Mode C pose (C4): T1.5',
                     'time parameterisation ω = travel speed / r and ramps in the overlap (A47, B-20): WPS travel speed '
                     'not given (I5); the check is geometric (quasi-static, positioner angles only)',
                     'TST-002 §11 not filled (S.7, lead)'],
         'assumptions': [
             'part, robot base and positioner axis poses from CAD component placements, no REF_* markers (OI-23)',
-            'H-BOX head (TST-002 §3.1), nozzle Ø20 x 40 mm flat disc, s_c 0.3 mm, TCP at the nozzle tip (I2 / OI-15)',
-            'F9 point tolerance 0.15 mm (TST-002 gives no value)',
+            f'{args.head_model} head (TST-002 §3.1), nozzle Ø{2.0 * contact_params.nozzle_radius_mm:g} mm flat disc, '
+            f's_c {contact_params.standoff_mm:g} mm, TCP at the nozzle tip (I2 / OI-15); nozzle, s_c and tool0_T_tcp '
+            'read from the robot description in use (S.5c Task 0, CP-56 one source)',
+            f'F9 point tolerance {contact_params.point_tolerance_mm:g} mm (TST-002 gives no value); rule (b) '
+            f'{contact_params.rule_b!r}' + (' (CP-56: only faces rising above the contact plane by more than the '
+                                            'tolerance count; the tolerance is also the plane tolerance)'
+                                            if contact_params.rule_b == 'rising' else ' (S.4 rule, reproduction)'),
             f'B-03 angular step: margin {margin} mm (= F4 padding_mm; TST-002 / DES-001 give no margin value), '
             'c = weld clearance verified at every checked angle; between checked angles only c − r_max·Δθ/2 is '
             'guaranteed',
@@ -480,6 +515,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument('--clearance-links', default=None, help='comma-separated; default TST-002 F5 set')
     ap.add_argument('--out-dir', required=True)
     ap.add_argument('--log-dir', default=None)
+    add_head_cli(ap)
     return _cmd_run(ap.parse_args(argv))
 
 
