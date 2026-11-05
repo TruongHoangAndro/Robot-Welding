@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>awm_api</name>
+  <version>0.1.0</version>
+  <description>APLSMN601 Web UI backend (DES-001 ADR-09, §7.3, §7.4): FastAPI /api/v1, roles, job repository access, planning-run runner (T2.7, B-11). No rclpy, no OCC: engineering CLIs run as subprocesses.</description>
+  <maintainer email="truongxhoang@apillis.com">Truong Hoang</maintainer>
+  <license>Proprietary</license>
+
+  <exec_depend>awm_core</exec_depend>
+  <exec_depend>awm_geometry</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

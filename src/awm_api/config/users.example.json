@@ -1,0 +1,1 @@
+{"users": [{"username": "engineer", "role": "Engineer", "password": "pbkdf2_sha256$<iterations>$<salt hex>$<hash hex> (create with python3 -m awm_api.users add)"}]}

@@ -1,0 +1,3 @@
+# Credentials never go to git (G1.4): real users files live outside the package or under these names.
+config/users.json
+*.secrets.json
