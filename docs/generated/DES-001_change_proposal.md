@@ -544,6 +544,10 @@ direction. Emission stops between arcs (WeldEnd / WeldStart at rest, DES-001 §6
 robot-only is rejected (reason recorded: net 360° joint turn needed, F3 / F11).
 Mode C (J1) is unaffected: the robot is at rest. (2) F1 is a ceiling: the planner refines the pitch until consecutive
 IK solutions of one label move ≤ Δq_max and records the pitch used.
+**Pitch rule refinement (lead, 2026-11-04, no objection from Truong):** the Δq_max check that drives the refinement
+counts only pairs of scene-valid nodes (F4, F5, F9 pass); kinematic-only pairs do not force a finer pitch. Planner
+parameter `rule = kinematic | scene_valid` (default `kinematic` keeps the S.5 records valid); used as `scene_valid` in
+the S.5b Mode B screening (ws-s4c-checks 3b74a34) and recorded per run (`pitch_rule`). Pitch floor 0.05 mm (Assumption).
 **Open:** weld quality at the arc restart / overlap (welding engineer; OI-11 / OI-16); whether a 360° wrist-3 turn is
 acceptable for the fiber and wire conduit (Khang Doan / Nghia Nguyen) — if yes, a later CP can relax F11.
 **F6 wording (S.3 review):** the shoulder-singularity metric is the distance |u| of the wrist centre from the plane of
