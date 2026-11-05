@@ -1,0 +1,133 @@
+<?xml version="1.0"?>
+<!-- H-CAD model of the IPG LightWELD 1000 head on tool0 (Goal 1 G1.1, CP-58 decision 2 "keep as CAD"; DES-001 Rev 0.5
+     §5.3, §5.4, ADR-16). Same link and joint names as the H-BOX macro (lightweld_hbox.xacro), so the SRDF / ACM do not
+     change: head_mount, head_body, nozzle_body, nozzle_tip, conduit, tcp_laser, each on tool0 by a fixed joint.
+
+     Input: the folder head_dir written by awm_geometry export-head (A18 output, cad-geometry agent), never edited here:
+       head.yaml   schema awm_head/0.1, unit mm, frame tool0: beam_axis_tool0, beam_exit_tool0_mm, nozzle_len_mm,
+                   tool0_T_tcp_mm (xyz, quat_xyzw), links.<head_body|head_mount>.mesh.file / hull.file
+       *.stl       meshes in tool0, mm (scale through units.xacro, the allowed URDF unit statement)
+     head_dir must be an absolute folder (launch / xacro arg; no path in source). A missing head.yaml, an empty or
+     relative head_dir and a head.yaml with another unit / frame / schema stop xacro with a message. Missing STL files
+     are reported by sim_mock.launch.py (awm_bringup.cell_config.check_head_dir), which also checks their SHA-256.
+
+     Geometry:
+       head_body, head_mount   visual = full CAD mesh, collision = convex hull (Goal 1: no collision verdict, CP-58;
+                               the hull only keeps MoveIt light). Link frame = tool0.
+       tcp_laser               position = beam_exit + nozzle_len_mm * beam_axis (nozzle_len_mm = arg, head.yaml rule),
+                               rotation = head.yaml tool0_T_tcp_mm quaternion (tool Z = beam direction, checked).
+                               Assumption (head.yaml, OI-23): no REF_TCP marker; nozzle is parametric (CP-56, OI-15).
+       nozzle_body, nozzle_tip cylinders Ø nozzle_dia on the beam axis from the beam exit; the tip collision stops
+                               contact_standoff_mm before tcp_laser (F9), as in H-BOX. Assumption until IPG data (I2).
+       conduit                 parametric capsule, same args and defaults as H-BOX (Assumption; not in the head CAD). -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:include filename="$(find awm_description)/urdf/units.xacro"/>
+  <xacro:include filename="$(find awm_description)/urdf/rotations.xacro"/>
+  <xacro:include filename="$(find awm_description)/urdf/head_conduit.xacro"/>
+
+  <xacro:macro name="awm_lightweld_hcad" params="
+      parent head_dir
+      nozzle_dia_mm:=20 nozzle_len_mm:=40 nozzle_tip_len_mm:=5 contact_standoff_mm:=0.3
+      conduit_dia_mm:=30 conduit_len_mm:=300
+      conduit_x_mm:=97 conduit_y_mm:=0 conduit_z_mm:=110
+      conduit_r_deg:=0 conduit_p_deg:=90 conduit_y_deg:=0">
+    <xacro:property name="mm" value="${m_per_mm}"/>
+    <xacro:property name="hdir" value="${str(head_dir).strip()}"/>
+    <xacro:if value="${not hdir}">
+      ${xacro.fatal('head_model:=hcad needs head_dir:=&lt;absolute folder with head.yaml&gt; (e.g. &lt;repo_root&gt;/cell/model/head)')}
+    </xacro:if>
+    <xacro:unless value="${hdir.startswith('/')}">
+      ${xacro.fatal('head_dir must be an absolute folder (got ' + hdir + ')')}
+    </xacro:unless>
+    <!-- open() inside load_yaml: a missing file stops xacro with "No such file or directory: .../head.yaml". -->
+    <xacro:property name="hy" value="${xacro.load_yaml(hdir + '/head.yaml')}" lazy_eval="false"/>
+    <xacro:unless value="${hy['unit'] == 'mm' and hy['frame'] == 'tool0' and hy['schema'] == 'awm_head/0.1'}">
+      ${xacro.fatal(hdir + '/head.yaml: expected unit mm, frame tool0, schema awm_head/0.1; got unit '
+                    + str(hy['unit']) + ', frame ' + str(hy['frame']) + ', schema ' + str(hy['schema']))}
+    </xacro:unless>
+
+    <!-- Beam axis (unit), beam exit and tcp_laser in tool0, mm. -->
+    <xacro:property name="ax_raw" value="${[float(v) for v in hy['beam_axis_tool0']]}"/>
+    <xacro:property name="ax_n" value="${sqrt(ax_raw[0]**2 + ax_raw[1]**2 + ax_raw[2]**2)}"/>
+    <xacro:property name="ax" value="${[v / ax_n for v in ax_raw]}"/>
+    <xacro:property name="ex" value="${[float(v) for v in hy['beam_exit_tool0_mm']]}"/>
+    <xacro:property name="noz" value="${float(nozzle_len_mm)}"/>
+    <xacro:property name="tcp" value="${[ex[i] + noz * ax[i] for i in python.range(3)]}"/>
+    <xacro:property name="tq" value="${[float(v) for v in hy['tool0_T_tcp_mm']['quat_xyzw']]}"/>
+    <xacro:awm_quat_rpy q="${tq}" name="tcp_rpy"/>
+    <!-- Z column of the tcp rotation must be the beam direction (tool Z = beam, DES-001 §5.3). -->
+    <xacro:property name="qn" value="${sqrt(tq[0]**2 + tq[1]**2 + tq[2]**2 + tq[3]**2)}"/>
+    <xacro:property name="zc" value="${[2.0 * (tq[0] * tq[2] + tq[3] * tq[1]) / qn**2,
+                                        2.0 * (tq[1] * tq[2] - tq[3] * tq[0]) / qn**2,
+                                        1.0 - 2.0 * (tq[0]**2 + tq[1]**2) / qn**2]}"/>
+    <xacro:unless value="${zc[0] * ax[0] + zc[1] * ax[1] + zc[2] * ax[2] > 1.0 - 1e-9}">
+      ${xacro.fatal(hdir + '/head.yaml: tool0_T_tcp_mm Z axis is not beam_axis_tool0')}
+    </xacro:unless>
+
+    <!-- Nozzle split along the beam (s = distance from the beam exit, mm). -->
+    <xacro:property name="body_len" value="${noz - float(nozzle_tip_len_mm)}"/>
+    <xacro:property name="tip_len" value="${float(nozzle_tip_len_mm) - float(contact_standoff_mm)}"/>
+    <xacro:property name="noz_r" value="${float(nozzle_dia_mm) / 2.0}"/>
+
+    <xacro:macro name="awm_on_tool0" params="child">
+      <joint name="tool0_to_${child}" type="fixed">
+        <parent link="${parent}"/>
+        <child link="${child}"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </joint>
+    </xacro:macro>
+
+    <xacro:macro name="awm_mesh_link" params="name rgba">
+      <xacro:property name="entry" value="${hy['links'][name]}"/>
+      <link name="${name}">
+        <visual>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry><mesh filename="file://${hdir}/${entry['mesh']['file']}" scale="${mm} ${mm} ${mm}"/></geometry>
+          <material name="${name}_color"><color rgba="${rgba}"/></material>
+        </visual>
+        <collision>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry><mesh filename="file://${hdir}/${entry['hull']['file']}" scale="${mm} ${mm} ${mm}"/></geometry>
+        </collision>
+      </link>
+      <xacro:awm_on_tool0 child="${name}"/>
+    </xacro:macro>
+
+    <!-- Cylinder of length len_s centred at s_c on the beam axis, link frame = tool0, cylinder Z = beam. -->
+    <xacro:macro name="awm_beam_cyl_link" params="name s_c len_s rgba">
+      <xacro:property name="c" value="${[ex[i] + float(s_c) * ax[i] for i in python.range(3)]}"/>
+      <link name="${name}">
+        <visual>
+          <origin xyz="${c[0] * mm} ${c[1] * mm} ${c[2] * mm}" rpy="${tcp_rpy[0]} ${tcp_rpy[1]} ${tcp_rpy[2]}"/>
+          <geometry><cylinder radius="${noz_r * mm}" length="${float(len_s) * mm}"/></geometry>
+          <material name="${name}_color"><color rgba="${rgba}"/></material>
+        </visual>
+        <collision>
+          <origin xyz="${c[0] * mm} ${c[1] * mm} ${c[2] * mm}" rpy="${tcp_rpy[0]} ${tcp_rpy[1]} ${tcp_rpy[2]}"/>
+          <geometry><cylinder radius="${noz_r * mm}" length="${float(len_s) * mm}"/></geometry>
+        </collision>
+      </link>
+      <xacro:awm_on_tool0 child="${name}"/>
+    </xacro:macro>
+
+    <xacro:awm_mesh_link name="head_mount" rgba="0.45 0.45 0.48 1"/>
+    <xacro:awm_mesh_link name="head_body" rgba="0.85 0.85 0.85 1"/>
+    <xacro:awm_beam_cyl_link name="nozzle_body" s_c="${body_len / 2.0}" len_s="${body_len}"
+                             rgba="0.72 0.45 0.20 1"/>
+    <xacro:awm_beam_cyl_link name="nozzle_tip" s_c="${body_len + tip_len / 2.0}" len_s="${tip_len}"
+                             rgba="0.80 0.20 0.20 1"/>
+
+    <xacro:awm_head_conduit parent="${parent}" dia_mm="${conduit_dia_mm}" len_mm="${conduit_len_mm}"
+      x_mm="${conduit_x_mm}" y_mm="${conduit_y_mm}" z_mm="${conduit_z_mm}"
+      r_deg="${conduit_r_deg}" p_deg="${conduit_p_deg}" y_deg="${conduit_y_deg}"/>
+
+    <!-- tcp_laser: on the beam axis at the nozzle end = contact point on the seam (DES-001 §5.3, Assumption until
+         IPG data, OI-2 / OI-23). Tool Z = beam direction. -->
+    <link name="tcp_laser"/>
+    <joint name="tool0_to_tcp_laser" type="fixed">
+      <parent link="${parent}"/>
+      <child link="tcp_laser"/>
+      <origin xyz="${tcp[0] * mm} ${tcp[1] * mm} ${tcp[2] * mm}" rpy="${tcp_rpy[0]} ${tcp_rpy[1]} ${tcp_rpy[2]}"/>
+    </joint>
+  </xacro:macro>
+</robot>
