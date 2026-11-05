@@ -32,6 +32,10 @@ TST-002 Rev 0.2 §3.1, §7 step 2; scene decisions `docs/generated/spike/scene_d
 - Nozzle stays a parametric cylinder (CP-56: nozzle is cell data; Ø 20 × 40 default, I2 / OI-15) placed on the CAD
   beam axis; `nozzle_tip` = last 5 mm, collision stops s_c 0.3 mm before `tcp_laser` (unchanged F9 geometry).
 - H-BOX stays the default; existing records (S.4–S.6, S.5b) must stay reproducible.
+- **Accuracy before schedule (Truong 2026-11-05):** the H-CAD verdict uses the **full CAD mesh** of head body and
+  mount (`head_collision:=mesh`, chord ≤ 0.5 mm, decimation only if a measured check time makes a run impossible —
+  then report the measured cost and ask); the hull run is a comparison only. CP-56 rule (b) is in the code before
+  any re-run (Task 0). The meeting of 2026-11-06 may present H-BOX results with their limits; no shortcut for the date.
 - `docs/reference/**`, `docs/LLM_Wiki/**` read-only. ROS commands only via `scripts/dx`. Never push or merge.
 
 ## Review Focus
@@ -47,6 +51,19 @@ TST-002 Rev 0.2 §3.1, §7 step 2; scene decisions `docs/generated/spike/scene_d
 5. `tool0_T_tcp` used by IK must equal the URDF chain tool0 → tcp_laser for both head models (test in planner).
 
 ---
+
+### Task 0 (planner, parallel to Task 1): CP-56 rule (b) and TCP from the robot description
+
+**Files:** Modify `src/awm_path/awm_path/core/contact.py` (+ tests), the kinematics backend TCP offset source.
+
+- [ ] Step 1: failing tests — rule (b): a non-seam face within s_c that slopes away from the nozzle (all of it on the
+  far side of the contact plane through the contact point, normal to the beam axis) does not fail; a face rising
+  towards the nozzle still fails; rule (a) unchanged (CP-56 decision 1, `docs/generated/DES-001_change_proposal.md`).
+- [ ] Step 2: failing test — the IK TCP offset equals the URDF chain tool0 → tcp_laser for the H-BOX description (and
+  is read from the description, no 481 mm constant); `nozzle_radius_mm` comes from the same description args (CP-56
+  gap: one source).
+- [ ] Step 3: implement, re-run S.6 (J1 Mode C) with rule (b) for Ø 20 / 12 / 8 (CP-56 decision 2: Ø 20 = verdict,
+  others information); commit `awm_path: CP-56 rule (b), TCP and nozzle from the robot description; S.6 re-run`.
 
 ### Task 1 (cad-geometry): head export `export-head`
 
@@ -86,8 +103,9 @@ TST-002 Rev 0.2 §3.1, §7 step 2; scene decisions `docs/generated/spike/scene_d
 **Interfaces:**
 - Consumes: `head.yaml`, meshes of Task 1.
 - Produces: xacro args `head_model:=hbox|hcad` (default `hbox`), `head_dir:=<folder>`; links `head_mount`,
-  `head_body`, `nozzle_body`, `nozzle_tip`, `conduit`, `tcp_laser` for both; collision = hull (default) or mesh by
-  arg `head_collision:=hull|mesh`.
+  `head_body`, `nozzle_body`, `nozzle_tip`, `conduit`, `tcp_laser` for both; collision by arg
+  `head_collision:=mesh|hull` (mesh = verdict, hull = comparison); 3 mm padding applied to the mesh as to every
+  padded link (check that MoveIt pads the mesh outward and record how).
 
 - [ ] Step 1: failing test — both head models render, identical link and joint name sets, `tcp_laser` pose in tool0
   equals `head.yaml` for hcad and 481 mm for hbox.
@@ -101,9 +119,10 @@ TST-002 Rev 0.2 §3.1, §7 step 2; scene decisions `docs/generated/spike/scene_d
 **Files:** Modify: `src/awm_path/awm_path/spike_s5.py`, `spike_s5b.py`, `gate_g2.py` (head model arg passed to the
 launch, `tool0_T_tcp` read from the robot description), records in `docs/generated/spike/`.
 
-- [ ] Step 1: failing test — kinematics TCP offset equals URDF tool0 → tcp_laser for both head models.
+- [ ] Step 1: extend the Task 0 TCP test to the hcad description.
 - [ ] Step 2: run G2 with hcad (record; the G2 colliding poses were designed for H-BOX — report, not a gate).
-- [ ] Step 3: run S.5 (J2 robot-only, 2 arcs) and S.5b screening with hcad, both ψ cases; records carry
-  `head_model: H-CAD`, `head.yaml` hash, collision mode.
+- [ ] Step 3: run S.5 (J2 robot-only, 2 arcs), S.5b screening and S.6 (J1 Mode C) with hcad mesh (verdict) and hcad
+  hull (comparison), both ψ cases, nozzle Ø 20 (verdict) and Ø 12 / 8 (information, CP-56); records carry
+  `head_model: H-CAD`, `head.yaml` hash, collision mode, measured check time per state.
 - [ ] Step 4: comparison table H-BOX vs H-CAD (coverage %, blocked s range, dominant pairs) in
   `docs/generated/spike/s5c_hcad_comparison.md`; commit `awm_path, docs: S.5c J2 / G2 with H-CAD head`.
