@@ -17,8 +17,14 @@ function awmViewData(): Plugin {
   };
 }
 
+/** Dev / preview servers forward /api (REST + WebSocket) to awm_api; default the local backend on port 8000. */
+const apiTarget = process.env.AWM_API_URL ?? 'http://127.0.0.1:8000';
+const apiProxy = { '/api': { target: apiTarget, ws: true, changeOrigin: false } };
+
 export default defineConfig({
   plugins: [react(), awmViewData()],
+  server: { proxy: apiProxy },
+  preview: { proxy: apiProxy },
   build: { chunkSizeWarningLimit: 2000 },
   test: { environment: 'node', include: ['tests/**/*.test.ts'] },
 });

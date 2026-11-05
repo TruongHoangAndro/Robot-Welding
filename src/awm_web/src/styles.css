@@ -48,3 +48,30 @@ tr.active td:first-child { box-shadow: inset 3px 0 var(--accent); }
 .check { display: flex; gap: 4px; align-items: center; cursor: pointer; }
 .warn { color: var(--warn); margin: 2px 0; }
 code { font-size: 11px; }
+/* G1.4: S1 / S2 */
+.banner { background: #4a2b00; border: 1px solid var(--warn); color: #ffe0b0; padding: 6px 10px; border-radius: 4px; font-weight: 600; }
+header .banner { padding: 2px 10px; }
+.page { padding: 16px; overflow: auto; flex: 1; }
+.page h2 { margin: 0 0 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-bottom: 12px; max-width: 900px; }
+.form { display: grid; grid-template-columns: 140px 1fr; gap: 6px 10px; align-items: center; }
+.form label { color: var(--muted); }
+input, select { background: #1a1d22; color: var(--text); border: 1px solid var(--line); border-radius: 3px; padding: 3px 6px; font: inherit; }
+input[type='number'] { width: 90px; }
+.progress { position: relative; height: 18px; background: #1a1d22; border: 1px solid var(--line); border-radius: 3px; margin: 4px 0; overflow: hidden; }
+.progress .bar { position: absolute; inset: 0 auto 0 0; background: #1d6f87; }
+.progress span { position: relative; padding-left: 6px; font-size: 11px; white-space: nowrap; }
+.log { max-height: 160px; overflow: auto; font-size: 11px; background: #15171b; padding: 6px; white-space: pre-wrap; }
+.run-failed .k, .run-failed .v { color: var(--err); }
+.seam { border: 1px solid var(--line); border-radius: 4px; padding: 6px; margin: 6px 0; }
+.seam.active { border-color: var(--accent); }
+.seam .grid { display: grid; grid-template-columns: 110px 1fr; gap: 3px 6px; align-items: center; }
+.seam .grid label { color: var(--muted); }
+.angles { display: flex; flex-wrap: wrap; gap: 4px; }
+.angles input { width: 70px; }
+.ok { color: #7ddc8a; }
+.err { color: var(--err); }
+.frame-label { color: #fff; font-size: 11px; background: rgba(0, 0, 0, 0.55); padding: 0 3px; border-radius: 2px; white-space: nowrap; transform: translate(6px, -14px); }
+.frame-label.arc { color: #ffe14d; }
+.statusline { font-size: 12px; }
+aside.wide { width: 380px; }

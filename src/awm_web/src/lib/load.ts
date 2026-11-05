@@ -82,10 +82,10 @@ export async function buildModel(glbBuf: ArrayBuffer, topoText: string, label: s
   return { topo, tidx, scene, faceMaterials, edgePoints, solidColour, upMatrix, displayBox, warnings, label };
 }
 
-async function fetchOk(url: string): Promise<Response> {
+async function fetchOk(url: string, headers?: Record<string, string>): Promise<Response> {
   let r: Response;
   try {
-    r = await fetch(url, { cache: 'no-store' });
+    r = await fetch(url, { cache: 'no-store', headers });
   } catch (e) {
     throw new ViewModelError(`cannot fetch ${url} (${(e as Error).message})`);
   }
@@ -96,8 +96,9 @@ async function fetchOk(url: string): Promise<Response> {
   return r;
 }
 
-export async function loadFromUrl(base: string): Promise<Model> {
-  const [g, t] = await Promise.all([fetchOk(`${base}view.glb`), fetchOk(`${base}topology.json`)]);
+/** Load view.glb + topology.json from a base URL; ``headers`` carries the awm_api bearer token when needed. */
+export async function loadFromUrl(base: string, headers?: Record<string, string>): Promise<Model> {
+  const [g, t] = await Promise.all([fetchOk(`${base}view.glb`, headers), fetchOk(`${base}topology.json`, headers)]);
   return buildModel(await g.arrayBuffer(), await t.text(), base);
 }
 
