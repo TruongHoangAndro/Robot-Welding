@@ -14,3 +14,8 @@ __pycache__/
 # awm_web (Node, built inside awm_dev)
 node_modules/
 dist/
+
+# CAD input files (customer parts, cell / head CAD) are software inputs, imported through the UI — not versioned (Truong 2026-11-05).
+# Files already tracked before this rule stay tracked until removed on purpose.
+docs/3D/*.step
+docs/3D/*.stp
