@@ -640,7 +640,7 @@ the CPU only; the IPC / dev PC has an NVIDIA GPU (dev: RTX 2000 Ada Laptop, 8 GB
 **Proposal:** add an optional GPU stage before FCL: cuRobo batched IK and sphere-based collision checking reject
 clearly colliding or unreachable (ψ, branch) states; every surviving state is still checked by MoveIt / FCL on the
 meshes, and only FCL results enter the verdict (rule 4: 100 % reachable and collision-free, no fallback). The GPU stage
-may only remove states that FCL would also reject: its sphere model must be conservative-free in that direction
+may only remove states that FCL would also reject: its sphere model must never be larger than the link geometry
 (spheres inside the link geometry, or a margin test against FCL on a validation set).
 **To check before a decision:** cuRobo licence for commercial use (lead has not verified it); CUDA in the Docker image
 (ADR-10 image) and on the IPC (DES-001 §8 "NVIDIA GPU optional" would become required for the speed-up only);
