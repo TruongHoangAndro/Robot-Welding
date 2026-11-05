@@ -647,3 +647,26 @@ may only remove states that FCL would also reject: its sphere model must never b
 agreement test GPU vs FCL on the S.5 / S.5b candidate files (no state rejected by the GPU that FCL accepts).
 **DES-001 impact if accepted:** ADR-12 (planner stack: MoveIt 2 + FCL verdict, cuRobo pre-filter), §4.3 step 3, §8
 deployment (GPU), Dockerfile.
+
+## CP-58 Goal 1 before Goal 2: weld-path coverage by robot + positioner first, collision second; seam described in the positioner frame (decided by Truong, 2026-11-05)
+
+**Decision 1 — staged goals.** Goal 1 = the robot and the 7th axis (1-axis rotary positioner, 360°, ADR-11) together
+follow a complete seam: reachable at every point, correct beam orientation, continuous joints (one IK branch,
+|Δq| ≤ Δq_max), joint limits and wrist-3 travel respected, positioner Modes C / B (no simultaneous motion during
+emission, ADR-11). Goal 1 is delivered end to end first: STEP import in the Web UI → seam picking → plan → 7-joint
+program → simulation playback (Web and mock hardware). **Collision (F4, F5, F9, clearance) is Goal 2** and is not
+evaluated in Goal 1. Rule 4 of DES-001 (a seam is accepted only if 100 % reachable *and* collision-free) is **not
+relaxed**: Goal 1 results carry `collision_checked: false`, are shown as "kinematic only — collision not checked" in
+every UI and report, and are refused by every release gate (no simulation or production release) until Goal 2 has
+checked them. The collision work done so far (S.4–S.6, S.5b, S.5c Tasks 0–1, CP-56) is kept on its branches and resumes
+as Goal 2.
+**Decision 2 — seam in the positioner frame.** After seam picking, M2 writes a derived file `seam_axis.json` next to
+`seams.json`: every seam point and its seam frame (X tangent, Z out of the material, beam = −Z) expressed in the
+`positioner_flange` frame at θ = 0 (= `positioner_axis` frame at θ = 0), plus per point the radius r from the axis, the
+axial position and the angle φ about the axis; header with the SHA-256 of `seams.json`, `placement.json` and
+`frames.yaml` (stale when any changes). D04 stays the source in the `part` frame (rule 3); `seam_axis.json` is derived
+data, never edited. Planner and program generator use it for θ: a point at θ is the θ = 0 point rotated by θ about the
+axis. **Head TCP for Goal 1:** `tool0_T_tcp` from the Fusion head CAD as modelled (Truong 2026-11-05: "keep as CAD":
+beam along tool0 −Z, nozzle 40 mm parametric, mount yaw 3.84° as modelled — Assumptions, OI-23).
+**DES-001 impact:** §4.3 note on staged goals; §5.1 D04 row (derived `seam_axis.json`); §5.2 job tree; schema
+`v2/seam_axis.schema.json`; PLAN.md order (Goal 1 slice across WP1–WP3, Goal 2 = collision tasks).
