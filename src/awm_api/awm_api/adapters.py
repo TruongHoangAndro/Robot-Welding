@@ -86,7 +86,10 @@ def build_seams(settings: Settings, job: Path, picks: Sequence[Dict[str, Any]], 
     """Picked ids + attributes → ``seams.json`` (+ ``seam_axis.json``) through the seam CLI; returns D04."""
     work_dir.mkdir(parents=True, exist_ok=True)
     picks_file = work_dir / 'picks.json'
-    picks_file.write_text(json.dumps({'seams': list(picks)}, indent=1) + '\n')
+    # The G1.2 CLI refuses request fields it does not know; ``range_mm`` (contract SeamPick, not used by S2 in
+    # Goal 1) is passed only when set, so the CLI reports it clearly instead of every save failing.
+    request = [{k: v for k, v in p.items() if not (k == 'range_mm' and v is None)} for p in picks]
+    picks_file.write_text(json.dumps({'seams': request}, indent=1) + '\n')
     argv = settings.seam_argv() + ['build', '--job', str(job), '--picks', str(picks_file)]
     if not build_axis:
         argv.append('--no-axis')

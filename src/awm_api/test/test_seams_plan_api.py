@@ -40,6 +40,8 @@ def test_put_seams_calls_cli_and_returns_document(client, repo, tmp_path, monkey
     assert call[0] == 'build' and '--no-axis' not in call
     picks = json.loads(open(call[call.index('--picks') + 1]).read())
     assert picks['seams'][1]['reversed'] is True and picks['seams'][1]['start_offset_mm'] == 5.0
+    # the G1.2 CLI refuses unknown request fields; range_mm (contract SeamPick) is sent only when set
+    assert all('range_mm' not in s for s in picks['seams'])
     assert client.get('/api/v1/jobs/P1_A/seams', headers=h).json() == doc
     d = client.get('/api/v1/jobs/P1_A', headers=h).json()
     assert d['seam_axis'] == 'ok'
