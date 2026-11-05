@@ -670,3 +670,27 @@ axis. **Head TCP for Goal 1:** `tool0_T_tcp` from the Fusion head CAD as modelle
 beam along tool0 −Z, nozzle 40 mm parametric, mount yaw 3.84° as modelled — Assumptions, OI-23).
 **DES-001 impact:** §4.3 note on staged goals; §5.1 D04 row (derived `seam_axis.json`); §5.2 job tree; schema
 `v2/seam_axis.schema.json`; PLAN.md order (Goal 1 slice across WP1–WP3, Goal 2 = collision tasks).
+
+## CP-59 Synchronised robot + positioner motion (7 axes) in Phase 1 simulation (decided by Truong, 2026-11-05; supersedes the "Phase 1 = Modes B / C only" part of ADR-11 for simulation)
+
+**Decision:** the planner treats the positioner angle θ as a 7th planned joint. For every seam point it chooses
+(θ, ψ, IK branch) so that all 7 joints move continuously while the TCP follows the seam at the WPS travel speed
+**relative to the part**; the robot and the positioner may move **together during emission** (Option A1 of DES-001
+§6.3: one joint trajectory for 7 joints). Mode C (θ moves, robot at rest) and Mode B (θ fixed per arc) remain as special
+cases selectable per seam (`positioner_mode: sync | C | B`, default `sync`). Goal 1 (CP-58) is planned and simulated
+this way.
+**Why:** Truong: "robot and 7th axis computed together to control them synchronously, for a perfect weld path"; it is
+the general case — the positioner can keep the weld point in a preferred position (e.g. beam close to vertical, seam
+Z close to world +Z) and can cover seams that Mode B with fixed angles cannot (J2, S.5b).
+**Cost term (Assumption, parameters in D16):** joint motion of all 7 joints + deviation of the seam Z from world +Z
+(weld position) + wrist-3 travel + θ travel; weights recorded with every run.
+**Conditions before real hardware (unchanged facts of §6.3, now gates, not deferrals):** (1) the UR5e has no
+external-axis support: synchronisation runs in ROS 2 (one controller manager, one 7-joint trajectory, PREEMPT_RT)
+— a timing spike must show the path error ≤ the weld tolerance (estimate 0.04 mm at 2 ms jitter, 0.2 mm at 10 ms,
+20 mm/s); (2) speed scaling of the UR must scale the positioner identically or stop the weld segment
+(`scaled_joint_trajectory_controller` behaviour with a 7th joint to be verified); (3) positioner drive and encoder
+(OI-14, OI-25). Until these pass, a synchronised program is valid in simulation only (ADR-17 scope `simulation`).
+**DES-001 impact:** ADR-11 text and status; §4.3 step 3 (θ in the state per point), step 5 (time parameterisation
+relative to the part with a moving θ); §6.2 (WeldStart / WeldEnd still at rest of robot **and** positioner; the motion
+between them may be synchronised); §6.3 Phase 1 decision; §7.1 one 7-joint trajectory controller in simulation; D07 /
+D09 schemas (θ per point / per trajectory point, `positioner_mode`).
