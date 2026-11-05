@@ -7,6 +7,9 @@ Commands (lengths in metres, except export-view: mm per the D20 contract):
                                              edges.json, part.json
   sample --job DIR --spacing-m S             A41 input: seams.json -> cache/seam_geometry.json
   make-test-part --kind K --out FILE.step [--picks FILE.json]
+  sample-joints --job DIR --request FILE.json --out FILE.json
+                                             M2 (G1.2): joint seam samples in mm (points, tangent, joint-aware
+                                             n1 / n2) for awm_seam; request / output format in joint_seam.py
   export-view --step FILE [--job DIR] [--component NAME] [--up-axis +Y] --out DIR
                                              A13 D20 view model in mm: DIR/view.glb + DIR/topology.json
                                              (contract docs/generated/contracts/D20_view_model.md)
@@ -160,6 +163,18 @@ def cmd_make_test_part(args) -> dict:
     return result
 
 
+def cmd_sample_joints(args) -> dict:
+    from awm_geometry import joint_seam
+
+    job = JobPaths(args.job)
+    request = json.loads(Path(args.request).read_text(encoding='utf-8'))
+    doc = joint_seam.sample_joints(job, request, _created_by())
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(doc) + '\n')
+    return {'out': str(out), 'seams': {s['seam_id']: len(s['points']) for s in doc['seams']}}
+
+
 def cmd_export_view(args) -> dict:
     from awm_geometry import part, view
 
@@ -231,6 +246,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--kind', required=True)
     p.add_argument('--out', required=True)
     p.add_argument('--picks')
+    p = sub.add_parser('sample-joints')
+    p.add_argument('--job', required=True)
+    p.add_argument('--request', required=True, help='sampler request JSON written by awm_seam')
+    p.add_argument('--out', required=True, help='output JSON (mm, part frame)')
     p = sub.add_parser('export-view')
     p.add_argument('--step', required=True)
     p.add_argument('--job', default=None,
@@ -266,7 +285,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 COMMANDS = {'info': cmd_info, 'import': cmd_import, 'sample': cmd_sample,
-            'make-test-part': cmd_make_test_part, 'export-view': cmd_export_view,
+            'make-test-part': cmd_make_test_part, 'sample-joints': cmd_sample_joints, 'export-view': cmd_export_view,
             'inspect-assembly': cmd_inspect_assembly, 'export-scene': cmd_export_scene,
             'export-cell-view': cmd_export_cell_view}
 
