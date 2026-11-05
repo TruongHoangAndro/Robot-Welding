@@ -16,6 +16,9 @@ Commands (lengths in metres, except export-view: mm per the D20 contract):
   export-cell-view --step FILE --components FILE.json --out DIR --up-axis AXIS
                                              S10-lite display model DIR/cell_view.glb (one node per leaf
                                              component, file frame, mm; contract S10_lite_cell_model.md)
+  export-head --step FILE --map MAP.yaml --repo DIR
+                                             A18 H-CAD head (mm, tool0 frame): cell/model/head/ meshes +
+                                             hulls + head.yaml (tool0 / tcp_laser estimate, S.5c)
   inspect-assembly --step FILE --out FILE.json [--no-cylinders]
                                              A18 input: component tree of a STEP assembly (paths,
                                              names, placements 4x4 and bboxes in mm, file frame)
@@ -202,6 +205,12 @@ def cmd_export_scene(args) -> dict:
                               padding_mm=args.padding_mm, created_by=_created_by())
 
 
+def cmd_export_head(args) -> dict:
+    from awm_geometry import head
+
+    return head.export_head(Path(args.step), Path(args.map), Path(args.repo), _created_by())
+
+
 def cmd_export_cell_view(args) -> dict:
     from awm_geometry import cell_view
 
@@ -256,6 +265,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help='part collision mesh chord elsewhere')
     p.add_argument('--padding-mm', type=float, default=3.0,
                    help='padding of the cell objects (D16 padding_mm)')
+    p = sub.add_parser('export-head')
+    p.add_argument('--step', required=True, help='head CAD STEP assembly (robot arm + mount + LightWELD head)')
+    p.add_argument('--map', required=True, help='head map cad_map_head.yaml (components, links, frame rules)')
+    p.add_argument('--repo', required=True, help='repository root (cell/model/head is written)')
     p = sub.add_parser('export-cell-view')
     p.add_argument('--step', required=True, help='cell CAD STEP assembly')
     p.add_argument('--components', required=True, help='cell_components.json of inspect-assembly')
@@ -268,7 +281,7 @@ def build_parser() -> argparse.ArgumentParser:
 COMMANDS = {'info': cmd_info, 'import': cmd_import, 'sample': cmd_sample,
             'make-test-part': cmd_make_test_part, 'export-view': cmd_export_view,
             'inspect-assembly': cmd_inspect_assembly, 'export-scene': cmd_export_scene,
-            'export-cell-view': cmd_export_cell_view}
+            'export-cell-view': cmd_export_cell_view, 'export-head': cmd_export_head}
 
 
 def main(argv: Optional[List[str]] = None) -> int:

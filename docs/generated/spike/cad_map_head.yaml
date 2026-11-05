@@ -1,0 +1,46 @@
+# Role map of the Fusion head CAD for the H-CAD head model (WP-S S.5c Task 1). Data, not source (ADR-16, CP-23).
+# Prepared by cad-geometry 2026-11-05 from inspect-assembly of docs/3D/Dau_han_robot.step (13 nodes, 29 solids).
+# No REF_* markers (OI-23): tool0 and tcp_laser are estimated from the geometry (lead proposal (a), 2026-11-05) and
+# are Assumptions until Truong confirms; each can be replaced here (frames.tool0: origin_file_mm + z_file + x_file;
+# frames.tcp: point_file_mm + axis_file, all in file mm), then recorded as method: map.
+# Not yet valid against v2/cad_map.schema.json (requires the cell frames, has no head_links / head frames):
+# awm_geometry export-head checks this file itself; schema extension requested from the contract owner.
+schema: cad_map/0.1
+source:
+  file: docs/3D/Dau_han_robot.step
+  sha256: a06e294c7f7af50da170130e24f7fbcd74049f40b1abba8bee1c98b7ee68e4bc
+  unit: mm
+  up_axis: +Y            # robot base near file y 0, arm along +Y (Fusion Y-up, as the cell CAD); not used by the
+                         # head export (all outputs in tool0)
+match: instance_name     # names are matched against the instance name of each node; never split paths on '/'
+default: deny            # any component with geometry not covered (by itself or by an ancestor) is an error
+
+roles:
+  head_cad:
+    - path: 'ASSY, Welding tool:1'
+      depth: 1                         # LightWELD head + mount, child of the posed robot 'UR5E/UR7E'
+  ignore:                              # robot geometry always from ur_description (ADR-16)
+    - 'C-1000257:1'                    # base (19 solids)
+    - 'C-1000248:1'                    # shoulder
+    - 'C-1000249:1'                    # upper arm
+    - 'C-1000250:1'                    # forearm
+    - 'C-1000251:1'                    # wrist 1
+    - 'C-2007861:1'                    # wrist 2 (78.7 x 120.5 x 119.1 mm)
+    - 'C-2007038:1'                    # wrist 3 with the ISO 9409-1-50-4-M6 flange (used for tool0 only)
+
+head_links:                            # URDF link -> instance names below the head component (default deny)
+  head_body:
+    - 'LightWELD:1'                    # surface model (COMPOUND, 0 solids) + one small solid (wire-feed part)
+  head_mount:
+    - 'Tool for LightWELD:1'           # mount, 1 solid, bolted to the flange
+
+frames:
+  tool0:
+    robot_link: 'C-2007038:1'          # flange face of wrist 3 touches the mount (coplanar faces)
+    mount: 'Tool for LightWELD:1'
+    pin_radius_mm: 3.0                 # Ø6 dowel-pin hole of the flange
+    pin_axis: '-Y'                     # ur_description ur5e wrist3 mesh: pin hole (r 25 mm) and tool connector at
+                                       # tool0 -Y (read 2026-11-05 from the mesh in awm_dev)
+  tcp:
+    beam_link: head_body
+    nozzle_len_mm: 40.0                # parametric nozzle beyond the CAD beam exit (CP-56 default Ø20 x 40; I2 / OI-15)

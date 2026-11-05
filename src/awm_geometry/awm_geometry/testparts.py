@@ -206,3 +206,53 @@ def weldment_assembly() -> List[Tuple[str, List[TopoDS_Shape]]]:
         ('dup', [box((0.200, 0.0, 0.0), (0.210, 0.010, 0.010))]),
         ('dup', [box((0.300, 0.0, 0.0), (0.310, 0.010, 0.010))]),
     ]
+
+
+def write_tree_assembly(path: Union[str, Path], root_name: str, nodes: List[Dict]) -> None:
+    """Write a nested STEP assembly (mm) for component-tree tests (A18 head export, ADR-16).
+
+    ``nodes``: list of ``{'name', 'shape' (TopoDS_Shape in mm, leaf) | 'children' (list of nodes),
+    'placement_mm' (optional 4x4 rigid transform in the parent, translation in mm)}``. Each instance is named
+    ``<name>:<k>`` (k counts equal names under one parent) and each product ``<name>``, as a Fusion export does.
+    A leaf shape may be a solid or a compound of open faces (surface model).
+    """
+    from OCC.Core.IFSelect import IFSelect_RetDone
+    from OCC.Core.Interface import Interface_Static
+    from OCC.Core.STEPCAFControl import STEPCAFControl_Writer
+    from OCC.Core.STEPControl import STEPControl_AsIs
+    from OCC.Core.TCollection import TCollection_ExtendedString
+    from OCC.Core.TDataStd import TDataStd_Name
+    from OCC.Core.TDocStd import TDocStd_Document
+    from OCC.Core.TopLoc import TopLoc_Location
+    from OCC.Core.XCAFDoc import XCAFDoc_DocumentTool
+
+    doc = TDocStd_Document('XmlOcaf')
+    tool = XCAFDoc_DocumentTool.ShapeTool(doc.Main())
+
+    def name(label, text: str) -> None:
+        TDataStd_Name.Set(label, TCollection_ExtendedString(text))
+
+    def add(parent, items: List[Dict]) -> None:
+        seen: Dict[str, int] = {}
+        for node in items:
+            if 'children' in node:
+                label = tool.NewShape()
+                add(label, node['children'])
+            else:
+                label = tool.AddShape(node['shape'], False)
+            name(label, node['name'])
+            placement = node.get('placement_mm')
+            inst = tool.AddComponent(parent, label, TopLoc_Location() if placement is None
+                                     else TopLoc_Location(_trsf(placement)))
+            seen[node['name']] = seen.get(node['name'], 0) + 1
+            name(inst, f"{node['name']}:{seen[node['name']]}")
+
+    root = tool.NewShape()
+    name(root, root_name)
+    add(root, nodes)
+    tool.UpdateAssemblies()
+    Interface_Static.SetCVal('write.step.unit', 'MM')
+    writer = STEPCAFControl_Writer()
+    writer.SetNameMode(True)
+    if not writer.Transfer(doc, STEPControl_AsIs) or writer.Write(str(path)) != IFSelect_RetDone:
+        raise GeometryError(f'cannot write STEP assembly {path}')
