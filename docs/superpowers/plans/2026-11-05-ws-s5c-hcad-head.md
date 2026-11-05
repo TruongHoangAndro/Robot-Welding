@@ -119,6 +119,11 @@ TST-002 Rev 0.2 §3.1, §7 step 2; scene decisions `docs/generated/spike/scene_d
 **Files:** Modify: `src/awm_path/awm_path/spike_s5.py`, `spike_s5b.py`, `gate_g2.py` (head model arg passed to the
 launch, `tool0_T_tcp` read from the robot description), records in `docs/generated/spike/`.
 
+- [ ] Step 0 (Truong 2026-11-05, option A — CPU parallel, accuracy unchanged): profile one S.5b θ sweep (share of
+  time in FCL checks, IK, ROS service round trips, F9); then run the sweeps in N worker processes, each with its own
+  `move_group` + scene on its own ROS_DOMAIN_ID offset, N limited by measured RAM per worker (15 GB host, keep ≥ 3 GB
+  free). Test: parallel and serial runs give identical candidate files (byte-equal CSV after sorting) on a small θ set.
+  Record N, wall time and peak RAM. GPU (cuRobo) is not used — CP-57, decision after the meeting.
 - [ ] Step 1: extend the Task 0 TCP test to the hcad description.
 - [ ] Step 2: run G2 with hcad (record; the G2 colliding poses were designed for H-BOX — report, not a gate).
 - [ ] Step 3: run S.5 (J2 robot-only, 2 arcs), S.5b screening and S.6 (J1 Mode C) with hcad mesh (verdict) and hcad

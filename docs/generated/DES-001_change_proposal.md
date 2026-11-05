@@ -628,3 +628,22 @@ Gap found: the nozzle diameter is defined twice today (xacro arg `nozzle_dia_mm`
 **DES-001 / TST-002 impact:** TST-002 Rev 0.3 F9 wording (rule (b) "rises towards the nozzle within s_c"), §11 results
 with the per-diameter table; DES-001 §5.4 note on the contact check. Code: `awm_path.core.contact` rule (b), new unit
 tests (chamfer sloping away passes; crest rising within s_c fails), S.6 re-run.
+
+## CP-57 GPU pre-filter for the ψ × IK-branch sweep (NVIDIA cuRobo) — proposed, not decided
+
+**Status:** proposal by the lead, 2026-11-05; decision by Truong Hoang / Linh Tran after the TST-002 meeting of
+2026-11-06. **Not implemented.** Until decided, speed-up is CPU only (option A, accepted by Truong 2026-11-05: sweep in
+parallel worker processes, each with its own `move_group` scene; results identical to the serial run).
+**Context:** the sweep is dominated by collision checks (S.5b: 77 min for 12 θ classes, H-BOX). The H-CAD verdict uses
+the full CAD mesh of the head (accuracy first, Truong 2026-11-05), which makes each check slower. MoveIt 2 + FCL run on
+the CPU only; the IPC / dev PC has an NVIDIA GPU (dev: RTX 2000 Ada Laptop, 8 GB).
+**Proposal:** add an optional GPU stage before FCL: cuRobo batched IK and sphere-based collision checking reject
+clearly colliding or unreachable (ψ, branch) states; every surviving state is still checked by MoveIt / FCL on the
+meshes, and only FCL results enter the verdict (rule 4: 100 % reachable and collision-free, no fallback). The GPU stage
+may only remove states that FCL would also reject: its sphere model must be conservative-free in that direction
+(spheres inside the link geometry, or a margin test against FCL on a validation set).
+**To check before a decision:** cuRobo licence for commercial use (lead has not verified it); CUDA in the Docker image
+(ADR-10 image) and on the IPC (DES-001 §8 "NVIDIA GPU optional" would become required for the speed-up only);
+agreement test GPU vs FCL on the S.5 / S.5b candidate files (no state rejected by the GPU that FCL accepts).
+**DES-001 impact if accepted:** ADR-12 (planner stack: MoveIt 2 + FCL verdict, cuRobo pre-filter), §4.3 step 3, §8
+deployment (GPU), Dockerfile.
