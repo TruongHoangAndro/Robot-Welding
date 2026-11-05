@@ -16,6 +16,6 @@ node_modules/
 dist/
 
 # CAD input files (customer parts, cell / head CAD) are software inputs, imported through the UI — not versioned (Truong 2026-11-05).
-# Files already tracked before this rule stay tracked until removed on purpose.
+# The two files tracked before this rule were untracked on 2026-11-05 (still in the history).
 docs/3D/*.step
 docs/3D/*.stp
