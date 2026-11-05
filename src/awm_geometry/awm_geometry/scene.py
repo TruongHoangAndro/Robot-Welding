@@ -7,7 +7,7 @@ frames). Outputs, all in mm:
 * ``<repo>/cell/model/<object_id>.stl`` — per mapped ``cell_static`` / ``positioner_rotating`` component, in the
   component's own frame: its convex hull (default) or, where the map's ``collision`` says ``mesh``, its closed
   tessellated mesh; ``scene_manifest.json`` lists them with pose, parent, hash, padding, collision mode. The folder
-  is rewritten on every export (stale meshes removed);
+  is rewritten on every export (stale meshes removed; the ``head/`` folder of ``export-head`` is kept);
 * ``<repo>/jobs/<job>/`` — job import of the ``part`` component (model.step, part.json, edges.json, …), D20 view
   model in ``cache/view/``, collision mesh ``cache/collision.stl`` + ``cache/collision_faces.json`` (triangle →
   face_id), ``placement.json`` (v2 D19).
@@ -74,6 +74,7 @@ MESH_LINEAR_DEFLECTION_MM = 0.5   # collision: mesh (S.4 A review: linear <= 0.5
 MESH_ANGULAR_DEFLECTION_DEG = 15.0
 MESH_WELD_MM = 1.0e-4             # coincident tessellation nodes of neighbouring faces are merged
 COLLISION_MODES = ('hull', 'mesh')
+HEAD_DIR = 'head'                 # cell/model/head: written by export-head (H-CAD), kept by export-scene
 RETRY_ANGULAR_DEG = (20.0, 30.0, 45.0, 60.0)  # face-alone retries of a face left empty (same chord)
 RETRY_MIN_AREA_FRACTION = 0.99  # a retry must cover the B-Rep face area (degenerate meshes report chord 0)
 DEFAULT_CONTACT_TOLERANCE_MM = 1.0  # cad_map default (Assumption, scene decision D8)
@@ -738,6 +739,8 @@ def _export_scene(step: Path, map_path: Path, repo_root: Path, job_name: str, ch
     stage_model = stage.cell_dir / 'model'
     stage_model.mkdir(parents=True)
     try:
+        if (model_dir / HEAD_DIR).is_dir():  # another command's output in the model folder (export-head)
+            shutil.copytree(model_dir / HEAD_DIR, stage_model / HEAD_DIR)
         for obj in objects:
             mesh = stage_model / obj['mesh']['file']
             hull.write_stl(mesh, obj.pop('_verts'), obj.pop('_tris'))
