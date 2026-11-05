@@ -2,6 +2,7 @@
 columns of candidates.csv. Fake scene, synthetic plate; no ROS."""
 
 import csv
+import dataclasses
 
 import numpy as np
 import pytest
@@ -117,3 +118,20 @@ def test_clearance_columns_follow_the_levels() -> None:
     assert res.columns['clear_7.5mm'][0] == [True, False, None, None, None]
     assert res.columns['clear_12mm'][0] == [True, None, None, None, None]
     assert res.scores[0][0].clearance_mm == 12.0
+
+
+def test_precomputed_contact_is_used_and_length_checked() -> None:
+    """S.5b: F9 depends only on the seam point in the part frame, so a precomputed result can be passed in."""
+    frames = [_frame(-10.0), _frame(25.0)]
+    plate = _plate()
+    ref = score_candidates(_layers(), frames, np.eye(4), 0.0, FakeScene(), plate, (('A',), ('B',)), ContactParams())
+    given = score_candidates(_layers(), frames, np.eye(4), 0.0, FakeScene(), plate, (('A',), ('B',)),
+                             ContactParams(), contact=ref.contact)
+    assert given.scores == ref.scores and given.timing['contact_checks'] == 0
+    forced = [dataclasses.replace(ref.contact[0], ok=False, reason='forced'), ref.contact[1]]
+    res = score_candidates(_layers(), frames, np.eye(4), 0.0, FakeScene(), plate, (('A',), ('B',)),
+                           ContactParams(), contact=forced)
+    assert not any(s.valid for s in res.scores[0]) and res.columns['contact_reason'][0][0] == 'forced'
+    with pytest.raises(ValueError):
+        score_candidates(_layers(), frames, np.eye(4), 0.0, FakeScene(), plate, (('A',), ('B',)),
+                         ContactParams(), contact=ref.contact[:1])

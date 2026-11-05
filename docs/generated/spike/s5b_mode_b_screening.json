@@ -1,0 +1,6123 @@
+{
+ "created_by": "awm_path.spike_s5b",
+ "created_at": "2026-11-04T09:53:01Z",
+ "commit": "74f49e66a92e06c1dc4d7b752f476c6038b8df5f",
+ "dirty": false,
+ "task": "WP-S S.5b J2 Mode B screening (Pivot evidence, TST-002 meeting 2026-11-06; PLAN T1.4 step 1)",
+ "inputs": [
+  {
+   "name": "docs/generated/spike/s5b_mode_b_input.yaml",
+   "sha256": "e80cfcddd60a58b9217fd9bd3a89294d13d4106f1bea685d8d0479afadc98acb"
+  },
+  {
+   "name": "../spike_repo/cell/model/frames.yaml",
+   "sha256": "b09a3574096b5008f746462d1a8bd2d5d59e778a930580637b7006dcf17aace8"
+  },
+  {
+   "name": "../spike_repo/cell/model/scene_manifest.json",
+   "sha256": "41ec0399e82fdb65f571d2c58d6200252d43648f3a911020fcac9d2c9ecab7fe"
+  },
+  {
+   "name": "../spike_repo/jobs/564082_A/placement.json",
+   "sha256": "8cd8f2beec05a3baaed2ad2a34181cc2a620564c1eacd849931eeab52d6741a9"
+  },
+  {
+   "name": "../spike_repo/jobs/564082_A/cache/collision.stl",
+   "sha256": "3098efd6de4d4314b9bf4024cad9d27eadece49e60986b7c42c16e3c8efb21d6"
+  },
+  {
+   "name": "../spike_repo/jobs/564082_A/cache/collision_faces.json",
+   "sha256": "25b18e3ea6fdfe93fe62af01f1fc5cafbced3669018a2888510f5c8691de52a5"
+  },
+  {
+   "name": "../spike_repo/jobs/564082_A/spike_seam.json",
+   "sha256": "4132fab327839e7f89c433b2cd230642c47fea71502c4d7634e8006816827fdf"
+  },
+  {
+   "name": "src/awm_description/config/positioner_limits.yaml",
+   "sha256": "b0f16d7b311dbb6968d7284fd7ef23b1cdb9df924f3bbf4719d66716a48ebf12"
+  }
+ ],
+ "input": {
+  "seam_id": "S02",
+  "seam_file": "spike_seam.json",
+  "theta_step_deg": 30.0,
+  "psi_cases": [
+   "free",
+   "wire"
+  ],
+  "pitch_rule": "scene_valid",
+  "pitch_min_mm": 0.05,
+  "coverage_bin_mm": 1.0,
+  "set_sizes": [
+   2,
+   3
+  ],
+  "join_overlap_mm": null,
+  "window_start_stride": 1,
+  "max_sets_listed": 10,
+  "time_budget_s": 7200.0,
+  "b03_margin_mm": 3.0
+ },
+ "job_dir": "../spike_repo/jobs/564082_A",
+ "scene_backend": {
+  "scene_hash": "1eda0262d77350e2f919f39294d0acc2fc7e5d314527a38407804c6a951032d3",
+  "content": {
+   "backend": "move_group/check_state_validity (cell scene v2)",
+   "group": "laser_arm",
+   "head_model": "H-BOX",
+   "robot_description_sha256": "79391356a49e203c4fec713bb8b6e75a9859577ad500cebcd34006c94ef03721",
+   "robot_description_semantic_sha256": "9a925216e082656599444663ce6633dae717fdcfc4792de2236369b7fec093d8",
+   "cell": {
+    "scene_sha256": "24e8f894577c1060101ffec94950ca9edf99c72b0b91bb446b9c840148cc23fc",
+    "object_ids": [
+     "c_2500001_1",
+     "jig_1",
+     "part1_1",
+     "htpk20s5m150_a_c15_1",
+     "htpk20s5m150_a_c15_2",
+     "timing_belts_1",
+     "rotary_shaft_1",
+     "c_60cm30x_3d_1",
+     "gsacl25_8_12_1",
+     "part2_1",
+     "part3_1",
+     "htpk20s5m150_a_c15_3",
+     "htpk20s5m150_a_c15_4",
+     "timing_belts_2",
+     "part5_1"
+    ]
+   },
+   "job": {
+    "scene_sha256": "2b0661aa6a2ee749759bd0d112f086f2c5be8ada577892ad5346149eb83a3f68",
+    "source": "fixture_cad",
+    "verified": false,
+    "objects": [
+     {
+      "object_id": "part",
+      "role": "part",
+      "parent_frame": "positioner_flange",
+      "mesh_sha256": "3098efd6de4d4314b9bf4024cad9d27eadece49e60986b7c42c16e3c8efb21d6",
+      "face_ids": true
+     }
+    ]
+   },
+   "f4_padding_mm": {
+    "base_link_inertia": 3.0,
+    "conduit": 3.0,
+    "forearm_link": 3.0,
+    "head_body": 3.0,
+    "head_mount": 3.0,
+    "nozzle_body": 3.0,
+    "nozzle_tip": 0.0,
+    "shoulder_link": 3.0,
+    "upper_arm_link": 3.0,
+    "wrist_1_link": 3.0,
+    "wrist_2_link": 3.0,
+    "wrist_3_link": 3.0
+   },
+   "unpadded_links": [
+    "nozzle_tip"
+   ],
+   "clearance_links": [
+    "head_body",
+    "head_mount",
+    "conduit"
+   ],
+   "clearance_method": "validity check (move_group check_state_validity) on unpadded geometry with the clearance links inflated by exactly the clearance (planning-scene padding diff); every other link padding 0; self-collision unpadded"
+  },
+  "files": {
+   "cell": {
+    "file": "../spike_repo/cell/model/scene_manifest.json",
+    "file_sha256": "41ec0399e82fdb65f571d2c58d6200252d43648f3a911020fcac9d2c9ecab7fe"
+   },
+   "placement": {
+    "file": "../spike_repo/jobs/564082_A/placement.json",
+    "file_sha256": "8cd8f2beec05a3baaed2ad2a34181cc2a620564c1eacd849931eeab52d6741a9"
+   }
+  }
+ },
+ "kinematics_backend": "ur_analytic_ik-0.1.0.post3/ur5e",
+ "head_model": "H-BOX",
+ "clearance_links": [
+  "head_body",
+  "head_mount",
+  "conduit"
+ ],
+ "clearance_method": "validity check (move_group check_state_validity) on unpadded geometry with the clearance links inflated by exactly the clearance (planning-scene padding diff); every other link padding 0; self-collision unpadded",
+ "mode": "B (screening)",
+ "positioner_limits": {
+  "lower_deg": -400.0,
+  "upper_deg": 400.0,
+  "max_velocity_deg_s": 30.0,
+  "max_acceleration_deg_s2": 50.0,
+  "source": "src/awm_description/config/positioner_limits.yaml"
+ },
+ "thetas_deg": [
+  -390.0,
+  -360.0,
+  -330.0,
+  -300.0,
+  -270.0,
+  -240.0,
+  -210.0,
+  -180.0,
+  -150.0,
+  -120.0,
+  -90.0,
+  -60.0,
+  -30.0,
+  0.0,
+  30.0,
+  60.0,
+  90.0,
+  120.0,
+  150.0,
+  180.0,
+  210.0,
+  240.0,
+  270.0,
+  300.0,
+  330.0,
+  360.0,
+  390.0
+ ],
+ "theta_classes": {
+  "-150": [
+   -150.0,
+   210.0
+  ],
+  "-120": [
+   -120.0,
+   240.0
+  ],
+  "-90": [
+   -90.0,
+   270.0
+  ],
+  "-60": [
+   -60.0,
+   300.0
+  ],
+  "-30": [
+   -390.0,
+   -30.0,
+   330.0
+  ],
+  "0": [
+   -360.0,
+   0.0,
+   360.0
+  ],
+  "30": [
+   -330.0,
+   30.0,
+   390.0
+  ],
+  "60": [
+   -300.0,
+   60.0
+  ],
+  "90": [
+   -270.0,
+   90.0
+  ],
+  "120": [
+   -240.0,
+   120.0
+  ],
+  "150": [
+   -210.0,
+   150.0
+  ],
+  "180": [
+   -180.0,
+   180.0
+  ]
+ },
+ "theta_equivalence": {
+  "max_flange_diff_mm": 0.0,
+  "max_flange_diff_deg": 5.724998426634331e-14
+ },
+ "pitch_rule": "scene_valid",
+ "pitch_levels": {
+  "ceiling_points": 73,
+  "finest_points": 1168
+ },
+ "join_overlap_mm": 2.0,
+ "scene_load_s": 4.761819195002317,
+ "total_s": 4615.21558613301,
+ "params": {
+  "pitch_max_mm": 3.0,
+  "dq_max_deg": 5.0,
+  "joint_limits_deg": [
+   [
+    -360.0,
+    360.0
+   ],
+   [
+    -360.0,
+    360.0
+   ],
+   [
+    -180.0,
+    180.0
+   ],
+   [
+    -360.0,
+    360.0
+   ],
+   [
+    -360.0,
+    360.0
+   ],
+   [
+    -360.0,
+    360.0
+   ]
+  ],
+  "singular_wrist_deg": 8.6,
+  "singular_elbow_deg": 5.0,
+  "singular_shoulder_mm": 50.0,
+  "wrist3_abs_deg": 270.0,
+  "wrist3_travel_deg": 180.0,
+  "psi_free": [
+   0.0,
+   10.0,
+   20.0,
+   30.0,
+   40.0,
+   50.0,
+   60.0,
+   70.0,
+   80.0,
+   90.0,
+   100.0,
+   110.0,
+   120.0,
+   130.0,
+   140.0,
+   150.0,
+   160.0,
+   170.0,
+   180.0,
+   190.0,
+   200.0,
+   210.0,
+   220.0,
+   230.0,
+   240.0,
+   250.0,
+   260.0,
+   270.0,
+   280.0,
+   290.0,
+   300.0,
+   310.0,
+   320.0,
+   330.0,
+   340.0,
+   350.0
+  ],
+  "psi_wire": [
+   -15.0,
+   -10.0,
+   -5.0,
+   0.0,
+   5.0,
+   10.0,
+   15.0
+  ],
+  "psi_nominal_deg": null,
+  "w_dq": 1.0,
+  "w_dev": 0.1,
+  "w_clear": 1.0,
+  "w_sing": 1.0,
+  "w_wrist3": 0.5,
+  "clearance_target_mm": 10.0
+ },
+ "params_sha256": "986987912daf9598f8a311e7eb59087dc63d7604e01cc2121e009b22e40a95c3",
+ "contact_params": {
+  "nozzle_radius_mm": 10.0,
+  "standoff_mm": 0.3,
+  "point_tolerance_mm": 0.15,
+  "ring_spacing_mm": 2.0,
+  "ring_samples": 72,
+  "rim_samples": 360,
+  "tie_mm": 1e-06
+ },
+ "score_params": {
+  "weld_clearance_mm": 5.0,
+  "clearance_levels_mm": [
+   5.0,
+   10.0
+  ]
+ },
+ "seam": {
+  "seam_id": "S02",
+  "joint_edge_id": "JE4",
+  "edges": [
+   "E71",
+   "E80"
+  ],
+  "solids": [
+   "B2",
+   "B3"
+  ],
+  "faces": {
+   "n1": [
+    "F26"
+   ],
+   "n2": [
+    "F35"
+   ]
+  },
+  "closed": true,
+  "length_mm": 83.78628394215141,
+  "arc_overlap_mm": 2.0,
+  "note": "J2 \u2014 solid (B2) to elbow (B3), closed butt joint, robot-only (OI-27) | geometry: circle through the D20 edge vertices, fit residual 3.06e-05 mm, 4 B-Rep preview frames checked; n1 = n2 = radial (tube butt joint)"
+ },
+ "cases": {
+  "free": {
+   "psi_deg": [
+    0.0,
+    10.0,
+    20.0,
+    30.0,
+    40.0,
+    50.0,
+    60.0,
+    70.0,
+    80.0,
+    90.0,
+    100.0,
+    110.0,
+    120.0,
+    130.0,
+    140.0,
+    150.0,
+    160.0,
+    170.0,
+    180.0,
+    190.0,
+    200.0,
+    210.0,
+    220.0,
+    230.0,
+    240.0,
+    250.0,
+    260.0,
+    270.0,
+    280.0,
+    290.0,
+    300.0,
+    310.0,
+    320.0,
+    330.0,
+    340.0,
+    350.0
+   ],
+   "thetas": [
+    {
+     "theta_deg": -150.0,
+     "equivalent_thetas_deg": [
+      -150.0,
+      210.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 1168,
+      "pitch_mm": 0.07173483214225292,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 3.1967531878046316,
+      "iterations": 5,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 16.78082191780822,
+     "valid_points": 196,
+     "valid_intervals": [
+      {
+       "s_from_mm": 66.71339389229522,
+       "s_to_mm": 80.70168616003453,
+       "points": 196
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 930,
+       "points": 190,
+       "s_from_mm": 66.71339389229522,
+       "s_to_mm": 80.27127716718101
+      },
+      {
+       "start_point": 1051,
+       "points": 75,
+       "s_from_mm": 75.39330858150781,
+       "s_to_mm": 80.70168616003453
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       66.71339389229522,
+       80.27127716718101
+      ],
+      [
+       75.39330858150781,
+       80.70168616003453
+      ]
+     ],
+     "longest_window": {
+      "start_point": 930,
+      "points": 190,
+      "s_from_mm": 66.71339389229522,
+      "s_to_mm": 80.27127716718101,
+      "length_mm": 13.557883274885802,
+      "pct": 16.181506849315067,
+      "label": "S+E-W+",
+      "metrics": {
+       "labels": [
+        "S+E-W+"
+       ],
+       "max_step_deg": 1.5727325614309464,
+       "max_step_per_joint_deg": [
+        1.0013809891392498,
+        1.5727325614309464,
+        0.49681151216233843,
+        0.4209744868878573,
+        0.7533363666981643,
+        1.5235752088046013
+       ],
+       "wrist3_travel_deg": 93.2755297019253,
+       "wrist3_abs_max_deg": 210.40285029540095,
+       "psi_deg": [
+        70.0
+       ]
+      }
+     },
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 398,
+       "IK": 571,
+       "clearance": 3
+      },
+      "dominant_class": "IK",
+      "top_pairs": {
+       "jig_1<->head_body": 90817,
+       "part<->nozzle_tip": 83592,
+       "part2_1<->head_body": 57592,
+       "part<->nozzle_body": 56520,
+       "c_2500001_1<->forearm_link": 47520,
+       "timing_belts_2<->head_body": 47320
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 299,
+        "s_from_mm": 3.1563326142591284,
+        "s_to_mm": 24.533312592650496,
+        "pairs": {
+         "part<->nozzle_tip": 83592,
+         "jig_1<->head_body": 63976,
+         "part2_1<->head_body": 57592,
+         "part<->nozzle_body": 56520,
+         "timing_belts_2<->head_body": 47320,
+         "part2_1<->nozzle_body": 36936
+        }
+       },
+       {
+        "class": "IK",
+        "points": 485,
+        "s_from_mm": 24.60504742479275,
+        "s_to_mm": 59.32470618164316,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 99,
+        "s_from_mm": 59.39644101378541,
+        "s_to_mm": 66.4264545637262,
+        "pairs": {
+         "jig_1<->head_body": 26064,
+         "timing_belts_1<->head_body": 22720,
+         "c_2500001_1<->forearm_link": 12672,
+         "c_60cm30x_3d_1<->head_body": 11456,
+         "c_2500001_1<->upper_arm_link": 10980,
+         "c_2500001_1<->conduit": 9072
+        }
+       },
+       {
+        "class": "clearance",
+        "points": 3,
+        "s_from_mm": 66.49818939586845,
+        "s_to_mm": 66.64165906015296,
+        "pairs": {
+         "jig_1<->head_body": 777,
+         "timing_belts_1<->head_body": 528,
+         "c_2500001_1<->forearm_link": 432,
+         "c_2500001_1<->upper_arm_link": 432,
+         "c_2500001_1<->conduit": 312,
+         "part<->head_body": 288
+        }
+       },
+       {
+        "class": "IK",
+        "points": 86,
+        "s_from_mm": 80.77342099217678,
+        "s_to_mm": 86.87088172426829,
+        "pairs": {}
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta-150_free_hbox.csv.gz",
+      "sha256": "2457f52a2eea67ba11a2a3894f6ca3466aed7b70a785ba9684817a27d4d094ca"
+     },
+     "timing_s": {
+      "sweep_s": 30.543006762993173,
+      "scores_s": 310.77639909100253,
+      "windows_s": 33.395812723989366,
+      "contact_new_points": 1168,
+      "total_s": 633.9920521799941
+     }
+    },
+    {
+     "theta_deg": -120.0,
+     "equivalent_thetas_deg": [
+      -120.0,
+      240.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 584,
+      "pitch_mm": 0.14346966428450583,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 2.9080014012791935,
+      "iterations": 4,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 27.397260273972602,
+     "valid_points": 160,
+     "valid_intervals": [
+      {
+       "s_from_mm": 63.70053094232059,
+       "s_to_mm": 86.51220756355701,
+       "points": 160
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 444,
+       "points": 160,
+       "s_from_mm": 63.70053094232059,
+       "s_to_mm": 86.51220756355701
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       63.70053094232059,
+       86.51220756355701
+      ]
+     ],
+     "longest_window": {
+      "start_point": 444,
+      "points": 160,
+      "s_from_mm": 63.70053094232059,
+      "s_to_mm": 86.51220756355701,
+      "length_mm": 22.811676621236426,
+      "pct": 27.226027397260275,
+      "label": "S-E+W+",
+      "metrics": {
+       "labels": [
+        "S-E+W+"
+       ],
+       "max_step_deg": 2.9080014012791935,
+       "max_step_per_joint_deg": [
+        2.9080014012791935,
+        0.8505786911772759,
+        0.6757387205068355,
+        1.0067977049966856,
+        1.7690977094845266,
+        2.8021321016284944
+       ],
+       "wrist3_travel_deg": 107.8472236094696,
+       "wrist3_abs_max_deg": 62.68869306131451,
+       "psi_deg": [
+        50.0
+       ]
+      }
+     },
+     "bins": [
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 227,
+       "IK": 195,
+       "clearance": 2
+      },
+      "dominant_class": "F4",
+      "top_pairs": {
+       "part<->nozzle_tip": 49032,
+       "jig_1<->head_body": 44808,
+       "part2_1<->head_body": 35336,
+       "part<->nozzle_body": 34920,
+       "c_2500001_1<->forearm_link": 24732,
+       "part2_1<->nozzle_body": 24696
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 176,
+        "s_from_mm": 2.8693932856901165,
+        "s_to_mm": 27.976584535478636,
+        "pairs": {
+         "part<->nozzle_tip": 49032,
+         "part2_1<->head_body": 35336,
+         "part<->nozzle_body": 34920,
+         "jig_1<->head_body": 31096,
+         "part2_1<->nozzle_body": 24696,
+         "timing_belts_2<->head_body": 22768
+        }
+       },
+       {
+        "class": "IK",
+        "points": 195,
+        "s_from_mm": 28.120054199763143,
+        "s_to_mm": 55.95316907095727,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 51,
+        "s_from_mm": 56.09663873524178,
+        "s_to_mm": 63.270121949467075,
+        "pairs": {
+         "jig_1<->head_body": 13176,
+         "timing_belts_1<->head_body": 11272,
+         "c_2500001_1<->forearm_link": 9144,
+         "c_60cm30x_3d_1<->head_body": 8504,
+         "c_2500001_1<->head_body": 8360,
+         "c_2500001_1<->head_mount": 7896
+        }
+       },
+       {
+        "class": "clearance",
+        "points": 2,
+        "s_from_mm": 63.41359161375158,
+        "s_to_mm": 63.55706127803608,
+        "pairs": {
+         "jig_1<->head_body": 536,
+         "timing_belts_1<->head_body": 384,
+         "c_2500001_1<->forearm_link": 288,
+         "c_2500001_1<->upper_arm_link": 288,
+         "c_2500001_1<->conduit": 224,
+         "htpk20s5m150_a_c15_1<->head_body": 192
+        }
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta-120_free_hbox.csv.gz",
+      "sha256": "7ad6f23372c323f218da716b4b3e33447c62c3a2d11a3c3b4fe42f00396e7e05"
+     },
+     "timing_s": {
+      "sweep_s": 24.004140672972426,
+      "scores_s": 326.4172009419999,
+      "windows_s": 37.868904357004794,
+      "contact_new_points": 0,
+      "total_s": 394.313469161003
+     }
+    },
+    {
+     "theta_deg": -90.0,
+     "equivalent_thetas_deg": [
+      -90.0,
+      270.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 146,
+      "pitch_mm": 0.5738786571380233,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 3.2381742251067323,
+      "iterations": 2,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 30.82191780821918,
+     "valid_points": 45,
+     "valid_intervals": [
+      {
+       "s_from_mm": 60.831137656630474,
+       "s_to_mm": 86.0817985707035,
+       "points": 45
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 106,
+       "points": 45,
+       "s_from_mm": 60.831137656630474,
+       "s_to_mm": 86.0817985707035
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       60.831137656630474,
+       86.0817985707035
+      ]
+     ],
+     "longest_window": {
+      "start_point": 106,
+      "points": 45,
+      "s_from_mm": 60.831137656630474,
+      "s_to_mm": 86.0817985707035,
+      "length_mm": 25.250660914073027,
+      "pct": 30.136986301369863,
+      "label": "S-E+W+",
+      "metrics": {
+       "labels": [
+        "S-E+W+"
+       ],
+       "max_step_deg": 3.236898505276656,
+       "max_step_per_joint_deg": [
+        3.236898505276656,
+        2.11313688049545,
+        0.28912948862221555,
+        0.7951314084105974,
+        2.174438543539395,
+        3.2043745367366148
+       ],
+       "wrist3_travel_deg": 83.49766954750869,
+       "wrist3_abs_max_deg": 77.77896414109951,
+       "psi_deg": [
+        10.0
+       ]
+      }
+     },
+     "bins": [
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 101
+      },
+      "dominant_class": "F4",
+      "top_pairs": {
+       "jig_1<->head_body": 22112,
+       "part<->nozzle_tip": 18432,
+       "c_2500001_1<->head_body": 18016,
+       "c_2500001_1<->upper_arm_link": 14760,
+       "c_2500001_1<->forearm_link": 13248,
+       "part2_1<->head_body": 11200
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 101,
+        "s_from_mm": 2.8693932856901165,
+        "s_to_mm": 60.25725899949245,
+        "pairs": {
+         "jig_1<->head_body": 22112,
+         "part<->nozzle_tip": 18432,
+         "c_2500001_1<->head_body": 18016,
+         "c_2500001_1<->upper_arm_link": 14760,
+         "c_2500001_1<->forearm_link": 13248,
+         "part2_1<->head_body": 11200
+        }
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta-90_free_hbox.csv.gz",
+      "sha256": "912b22ae69fb098a778365552343e0b44eacbabebd110e3f441844f04d6bcfb4"
+     },
+     "timing_s": {
+      "sweep_s": 7.797327734995633,
+      "scores_s": 125.22346092200314,
+      "windows_s": 2.955564111005515,
+      "contact_new_points": 0,
+      "total_s": 139.56293867199565
+     }
+    },
+    {
+     "theta_deg": -60.0,
+     "equivalent_thetas_deg": [
+      -60.0,
+      300.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 584,
+      "pitch_mm": 0.14346966428450583,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 2.9379425878006398,
+      "iterations": 4,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 22.431506849315067,
+     "valid_points": 131,
+     "valid_intervals": [
+      {
+       "s_from_mm": 58.24868369950937,
+       "s_to_mm": 76.89974005649512,
+       "points": 131
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 406,
+       "points": 120,
+       "s_from_mm": 58.24868369950937,
+       "s_to_mm": 75.32157374936557
+      },
+      {
+       "start_point": 413,
+       "points": 124,
+       "s_from_mm": 59.25297134950091,
+       "s_to_mm": 76.89974005649512
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       58.24868369950937,
+       75.32157374936557
+      ],
+      [
+       59.25297134950091,
+       76.89974005649512
+      ]
+     ],
+     "longest_window": {
+      "start_point": 413,
+      "points": 124,
+      "s_from_mm": 59.25297134950091,
+      "s_to_mm": 76.89974005649512,
+      "length_mm": 17.646768706994216,
+      "pct": 21.061643835616437,
+      "label": "S+E-W+",
+      "metrics": {
+       "labels": [
+        "S+E-W+"
+       ],
+       "max_step_deg": 1.3937065466087555,
+       "max_step_per_joint_deg": [
+        0.43698943729341977,
+        0.5094221712581657,
+        1.3937065466087555,
+        0.6226253015588554,
+        0.319685767771162,
+        0.5698076886154411
+       ],
+       "wrist3_travel_deg": 56.625575177288596,
+       "wrist3_abs_max_deg": 189.09737854270975,
+       "psi_deg": [
+        20.0
+       ]
+      }
+     },
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 322,
+       "IK": 131
+      },
+      "dominant_class": "F4",
+      "top_pairs": {
+       "part<->nozzle_tip": 56808,
+       "c_2500001_1<->head_body": 51456,
+       "c_2500001_1<->forearm_link": 42012,
+       "part2_1<->head_body": 40728,
+       "part<->nozzle_body": 40104,
+       "jig_1<->head_body": 36252
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 228,
+        "s_from_mm": 6.456134892802763,
+        "s_to_mm": 39.023748685385584,
+        "pairs": {
+         "part<->nozzle_tip": 56808,
+         "part2_1<->head_body": 40728,
+         "part<->nozzle_body": 40104,
+         "jig_1<->head_body": 27452,
+         "c_2500001_1<->head_body": 25872,
+         "part2_1<->nozzle_body": 25056
+        }
+       },
+       {
+        "class": "IK",
+        "points": 39,
+        "s_from_mm": 39.167218349670094,
+        "s_to_mm": 44.61906559248131,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 94,
+        "s_from_mm": 44.76253525676582,
+        "s_to_mm": 58.10521403522486,
+        "pairs": {
+         "c_2500001_1<->head_body": 25584,
+         "c_2500001_1<->forearm_link": 18108,
+         "c_2500001_1<->upper_arm_link": 15048,
+         "c_2500001_1<->head_mount": 12832,
+         "part5_1<->upper_arm_link": 11340,
+         "c_2500001_1<->wrist_2_link": 9648
+        }
+       },
+       {
+        "class": "IK",
+        "points": 92,
+        "s_from_mm": 77.04320972077963,
+        "s_to_mm": 90.09894917066967,
+        "pairs": {}
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta-60_free_hbox.csv.gz",
+      "sha256": "8ed5e178ed5f3de9dc2d08650a61c3e97b3a22ebbdc5eb5f9ce3c70a1c6e474c"
+     },
+     "timing_s": {
+      "sweep_s": 23.552708100018208,
+      "scores_s": 352.0475155580061,
+      "windows_s": 16.0971456499974,
+      "contact_new_points": 0,
+      "total_s": 397.5491124359978
+     }
+    },
+    {
+     "theta_deg": -30.0,
+     "equivalent_thetas_deg": [
+      -390.0,
+      -30.0,
+      330.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 584,
+      "pitch_mm": 0.14346966428450583,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 4.6066457643647,
+      "iterations": 4,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 18.32191780821918,
+     "valid_points": 107,
+     "valid_intervals": [
+      {
+       "s_from_mm": 51.50560947813759,
+       "s_to_mm": 66.71339389229522,
+       "points": 107
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 359,
+       "points": 106,
+       "s_from_mm": 51.50560947813759,
+       "s_to_mm": 66.5699242280107
+      },
+      {
+       "start_point": 383,
+       "points": 83,
+       "s_from_mm": 54.94888142096573,
+       "s_to_mm": 66.71339389229522
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       51.50560947813759,
+       66.5699242280107
+      ],
+      [
+       54.94888142096573,
+       66.71339389229522
+      ]
+     ],
+     "longest_window": {
+      "start_point": 359,
+      "points": 106,
+      "s_from_mm": 51.50560947813759,
+      "s_to_mm": 66.5699242280107,
+      "length_mm": 15.064314749873112,
+      "pct": 17.979452054794518,
+      "label": "S-E+W-",
+      "metrics": {
+       "labels": [
+        "S-E+W-"
+       ],
+       "max_step_deg": 4.542191129864231,
+       "max_step_per_joint_deg": [
+        0.7505303925585167,
+        2.039589770258747,
+        4.542191129864231,
+        2.248218869516109,
+        0.1883407533631356,
+        0.14282806773553602
+       ],
+       "wrist3_travel_deg": 6.51936735339703,
+       "wrist3_abs_max_deg": 159.31088811172174,
+       "psi_deg": [
+        0.0
+       ]
+      }
+     },
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 206,
+       "IK": 271
+      },
+      "dominant_class": "IK",
+      "top_pairs": {
+       "part<->nozzle_tip": 43776,
+       "c_2500001_1<->forearm_link": 33516,
+       "part2_1<->head_body": 30080,
+       "part<->nozzle_body": 29664,
+       "c_2500001_1<->wrist_2_link": 29088,
+       "c_2500001_1<->upper_arm_link": 25092
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 157,
+        "s_from_mm": 16.92942038557169,
+        "s_to_mm": 39.310688013954596,
+        "pairs": {
+         "part<->nozzle_tip": 43776,
+         "part2_1<->head_body": 30080,
+         "part<->nozzle_body": 29664,
+         "c_2500001_1<->forearm_link": 23652,
+         "part2_1<->nozzle_body": 19872,
+         "c_2500001_1<->upper_arm_link": 18144
+        }
+       },
+       {
+        "class": "IK",
+        "points": 35,
+        "s_from_mm": 39.454157678239106,
+        "s_to_mm": 44.3321262639123,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 49,
+        "s_from_mm": 44.47559592819681,
+        "s_to_mm": 51.36213981385309,
+        "pairs": {
+         "c_2500001_1<->wrist_2_link": 14112,
+         "c_2500001_1<->head_mount": 10208,
+         "c_2500001_1<->forearm_link": 9864,
+         "c_2500001_1<->wrist_3_link": 7720,
+         "c_2500001_1<->head_body": 7264,
+         "c_2500001_1<->upper_arm_link": 6948
+        }
+       },
+       {
+        "class": "IK",
+        "points": 236,
+        "s_from_mm": 66.85686355657971,
+        "s_to_mm": 100.57223466343859,
+        "pairs": {}
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta-30_free_hbox.csv.gz",
+      "sha256": "f39cf435d6a3209efde3b99ce27784c78cd5783dc051b355ae7c9dc0814d4406"
+     },
+     "timing_s": {
+      "sweep_s": 22.407141165007488,
+      "scores_s": 288.3022778519953,
+      "windows_s": 10.76954231900163,
+      "contact_new_points": 0,
+      "total_s": 327.14183005999075
+     }
+    },
+    {
+     "theta_deg": 0.0,
+     "equivalent_thetas_deg": [
+      -360.0,
+      0.0,
+      360.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 1168,
+      "pitch_mm": 0.07173483214225292,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 3.394608138682801,
+      "iterations": 5,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 20.11986301369863,
+     "valid_points": 235,
+     "valid_intervals": [
+      {
+       "s_from_mm": 48.06233753530945,
+       "s_to_mm": 64.84828825659663,
+       "points": 235
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 670,
+       "points": 234,
+       "s_from_mm": 48.06233753530945,
+       "s_to_mm": 64.77655342445438
+      },
+      {
+       "start_point": 703,
+       "points": 202,
+       "s_from_mm": 50.4295869960038,
+       "s_to_mm": 64.84828825659663
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       48.06233753530945,
+       64.77655342445438
+      ],
+      [
+       50.4295869960038,
+       64.84828825659663
+      ]
+     ],
+     "longest_window": {
+      "start_point": 670,
+      "points": 234,
+      "s_from_mm": 48.06233753530945,
+      "s_to_mm": 64.77655342445438,
+      "length_mm": 16.714215889144928,
+      "pct": 19.9486301369863,
+      "label": "S+E-W+",
+      "metrics": {
+       "labels": [
+        "S+E-W+"
+       ],
+       "max_step_deg": 2.712629034113469,
+       "max_step_per_joint_deg": [
+        0.15948691646814694,
+        1.3376198077568802,
+        2.712629034113469,
+        1.4161153389052572,
+        0.16987068068166877,
+        0.9079631779881652
+       ],
+       "wrist3_travel_deg": 34.71269484406184,
+       "wrist3_abs_max_deg": 185.04750905097856,
+       "psi_deg": [
+        350.0
+       ]
+      }
+     },
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 343,
+       "IK": 590
+      },
+      "dominant_class": "IK",
+      "top_pairs": {
+       "part<->nozzle_tip": 74664,
+       "part2_1<->head_body": 54064,
+       "part<->nozzle_body": 52992,
+       "part2_1<->nozzle_body": 33408,
+       "c_2500001_1<->upper_arm_link": 31644,
+       "c_2500001_1<->forearm_link": 31140
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 289,
+        "s_from_mm": 18.866260853412516,
+        "s_to_mm": 39.525892510381354,
+        "pairs": {
+         "part<->nozzle_tip": 74664,
+         "part2_1<->head_body": 54064,
+         "part<->nozzle_body": 52992,
+         "part2_1<->nozzle_body": 33408,
+         "part3_1<->head_body": 30656,
+         "jig_1<->head_body": 29056
+        }
+       },
+       {
+        "class": "IK",
+        "points": 64,
+        "s_from_mm": 39.59762734252361,
+        "s_to_mm": 44.11692176748554,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 54,
+        "s_from_mm": 44.1886565996278,
+        "s_to_mm": 47.9906027031672,
+        "pairs": {
+         "upper_arm_link<->head_mount": 7572,
+         "upper_arm_link<->head_body": 6830,
+         "shoulder_link<->head_mount": 3944,
+         "wrist_3_link<->upper_arm_link": 3470,
+         "shoulder_link<->head_body": 3104,
+         "upper_arm_link<->wrist_2_link": 2616
+        }
+       },
+       {
+        "class": "IK",
+        "points": 526,
+        "s_from_mm": 64.92002308873889,
+        "s_to_mm": 102.58080996342167,
+        "pairs": {}
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta+0_free_hbox.csv.gz",
+      "sha256": "7c2cc55c90cdbd573a9a4179ee9be12e83e4840c62056b8075f170fdd75fbaf2"
+     },
+     "timing_s": {
+      "sweep_s": 41.41637500500656,
+      "scores_s": 446.03211264900165,
+      "windows_s": 51.1157926809974,
+      "contact_new_points": 0,
+      "total_s": 546.4621940709912
+     }
+    },
+    {
+     "theta_deg": 30.0,
+     "equivalent_thetas_deg": [
+      -330.0,
+      30.0,
+      390.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 1168,
+      "pitch_mm": 0.07173483214225292,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 3.0353701765767322,
+      "iterations": 5,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 22.945205479452056,
+     "valid_points": 268,
+     "valid_intervals": [
+      {
+       "s_from_mm": 44.906004921050325,
+       "s_to_mm": 64.05920510303186,
+       "points": 268
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 626,
+       "points": 268,
+       "s_from_mm": 44.906004921050325,
+       "s_to_mm": 64.05920510303186
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       44.906004921050325,
+       64.05920510303186
+      ]
+     ],
+     "longest_window": {
+      "start_point": 626,
+      "points": 268,
+      "s_from_mm": 44.906004921050325,
+      "s_to_mm": 64.05920510303186,
+      "length_mm": 19.15320018198153,
+      "pct": 22.859589041095887,
+      "label": "S-E-W-",
+      "metrics": {
+       "labels": [
+        "S-E-W-"
+       ],
+       "max_step_deg": 3.0353701765767322,
+       "max_step_per_joint_deg": [
+        2.544256771504365,
+        1.3164804121312574,
+        3.0353701765767322,
+        1.5142059215408388,
+        1.7200176661632582,
+        1.6565825090824546
+       ],
+       "wrist3_travel_deg": 24.839181517541135,
+       "wrist3_abs_max_deg": 154.30835258767,
+       "psi_deg": [
+        0.0
+       ]
+      }
+     },
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 271,
+       "IK": 629
+      },
+      "dominant_class": "IK",
+      "top_pairs": {
+       "part<->nozzle_tip": 77400,
+       "part2_1<->head_body": 51112,
+       "part<->nozzle_body": 50040,
+       "part2_1<->nozzle_body": 30456,
+       "part3_1<->head_body": 28524,
+       "jig_1<->head_body": 28048
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 270,
+        "s_from_mm": 19.511874342692792,
+        "s_to_mm": 38.80854418895883,
+        "pairs": {
+         "part<->nozzle_tip": 77400,
+         "part2_1<->head_body": 51112,
+         "part<->nozzle_body": 50040,
+         "part2_1<->nozzle_body": 30456,
+         "part3_1<->head_body": 28524,
+         "jig_1<->head_body": 28016
+        }
+       },
+       {
+        "class": "IK",
+        "points": 84,
+        "s_from_mm": 38.88027902110108,
+        "s_to_mm": 44.83427008890807,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 1,
+        "s_from_mm": 64.13093993517411,
+        "s_to_mm": 64.13093993517411,
+        "pairs": {
+         "forearm_link<->head_mount": 72,
+         "forearm_link<->head_body": 60,
+         "jig_1<->head_body": 32,
+         "timing_belts_1<->head_body": 28,
+         "htpk20s5m150_a_c15_1<->head_body": 24,
+         "part<->head_body": 24
+        }
+       },
+       {
+        "class": "IK",
+        "points": 545,
+        "s_from_mm": 64.20267476731637,
+        "s_to_mm": 103.22642345270195,
+        "pairs": {}
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta+30_free_hbox.csv.gz",
+      "sha256": "62fd81484699ffb56ec14adc7c93f609bcbeb986796a739164fdbc9f98e66167"
+     },
+     "timing_s": {
+      "sweep_s": 39.098262770989095,
+      "scores_s": 425.084588667989,
+      "windows_s": 88.12577067301027,
+      "contact_new_points": 0,
+      "total_s": 559.9925181219878
+     }
+    },
+    {
+     "theta_deg": 60.0,
+     "equivalent_thetas_deg": [
+      -300.0,
+      60.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 584,
+      "pitch_mm": 0.14346966428450583,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 4.988797801416972,
+      "iterations": 4,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 29.623287671232877,
+     "valid_points": 173,
+     "valid_intervals": [
+      {
+       "s_from_mm": 39.167218349670094,
+       "s_to_mm": 63.84400060660509,
+       "points": 173
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 273,
+       "points": 173,
+       "s_from_mm": 39.167218349670094,
+       "s_to_mm": 63.84400060660509
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       39.167218349670094,
+       63.84400060660509
+      ]
+     ],
+     "longest_window": {
+      "start_point": 273,
+      "points": 173,
+      "s_from_mm": 39.167218349670094,
+      "s_to_mm": 63.84400060660509,
+      "length_mm": 24.676782256935002,
+      "pct": 29.452054794520546,
+      "label": "S-E+W-",
+      "metrics": {
+       "labels": [
+        "S-E+W-"
+       ],
+       "max_step_deg": 4.988797801416972,
+       "max_step_per_joint_deg": [
+        1.277203954621939,
+        2.8101090661540886,
+        4.988797801416972,
+        2.839554012293168,
+        1.1436253476084346,
+        1.1870289423345355
+       ],
+       "wrist3_travel_deg": 114.11486096313112,
+       "wrist3_abs_max_deg": 177.42609572109126,
+       "psi_deg": [
+        180.0
+       ]
+      }
+     },
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 135,
+       "IK": 276
+      },
+      "dominant_class": "IK",
+      "top_pairs": {
+       "part<->nozzle_tip": 38304,
+       "part2_1<->head_body": 24608,
+       "part<->nozzle_body": 24192,
+       "part2_1<->nozzle_body": 14400,
+       "part3_1<->head_body": 13584,
+       "forearm_link<->head_mount": 13216
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 135,
+        "s_from_mm": 19.798813671261804,
+        "s_to_mm": 39.023748685385584,
+        "pairs": {
+         "part<->nozzle_tip": 38304,
+         "part2_1<->head_body": 24608,
+         "part<->nozzle_body": 24192,
+         "part2_1<->nozzle_body": 14400,
+         "part3_1<->head_body": 13584,
+         "forearm_link<->head_mount": 13216
+        }
+       },
+       {
+        "class": "IK",
+        "points": 276,
+        "s_from_mm": 63.9874702708896,
+        "s_to_mm": 103.4416279491287,
+        "pairs": {}
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta+60_free_hbox.csv.gz",
+      "sha256": "16465491b6ed69e7b926189a51fe198726cfceade5773b70a607ff61c8086514"
+     },
+     "timing_s": {
+      "sweep_s": 24.37238944899582,
+      "scores_s": 237.11000772600528,
+      "windows_s": 43.38353695599653,
+      "contact_new_points": 0,
+      "total_s": 310.18016126399743
+     }
+    },
+    {
+     "theta_deg": 90.0,
+     "equivalent_thetas_deg": [
+      -270.0,
+      90.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 146,
+      "pitch_mm": 0.5738786571380233,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 3.5836631611123835,
+      "iterations": 2,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 30.136986301369863,
+     "valid_points": 44,
+     "valid_intervals": [
+      {
+       "s_from_mm": 39.59762734252361,
+       "s_to_mm": 64.27440959945861,
+       "points": 44
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 69,
+       "points": 44,
+       "s_from_mm": 39.59762734252361,
+       "s_to_mm": 64.27440959945861
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       39.59762734252361,
+       64.27440959945861
+      ]
+     ],
+     "longest_window": {
+      "start_point": 69,
+      "points": 44,
+      "s_from_mm": 39.59762734252361,
+      "s_to_mm": 64.27440959945861,
+      "length_mm": 24.676782256935002,
+      "pct": 29.452054794520546,
+      "label": "S-E-W-",
+      "metrics": {
+       "labels": [
+        "S-E-W-"
+       ],
+       "max_step_deg": 2.8937008248915426,
+       "max_step_per_joint_deg": [
+        2.40763267224348,
+        1.0851961225503293,
+        2.8937008248915426,
+        0.7704633680603604,
+        2.241908422775367,
+        2.3810002662206102
+       ],
+       "wrist3_travel_deg": 84.98610257635389,
+       "wrist3_abs_max_deg": 146.80478433789878,
+       "psi_deg": [
+        150.0
+       ]
+      }
+     },
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 102
+      },
+      "dominant_class": "F4",
+      "top_pairs": {
+       "jig_1<->head_body": 11548,
+       "part<->nozzle_tip": 9288,
+       "c_2500001_1<->head_body": 8984,
+       "c_2500001_1<->upper_arm_link": 7740,
+       "c_2500001_1<->forearm_link": 5976,
+       "part2_1<->head_body": 5672
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 102,
+        "s_from_mm": 64.84828825659663,
+        "s_to_mm": 122.810032627537,
+        "pairs": {
+         "jig_1<->head_body": 11548,
+         "part<->nozzle_tip": 9288,
+         "c_2500001_1<->head_body": 8984,
+         "c_2500001_1<->upper_arm_link": 7740,
+         "c_2500001_1<->forearm_link": 5976,
+         "part2_1<->head_body": 5672
+        }
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta+90_free_hbox.csv.gz",
+      "sha256": "ca932b1b97d91480c50be29e70db7eb83ed20fa2d028ae0d99b77abaf655ad3f"
+     },
+     "timing_s": {
+      "sweep_s": 4.437541796010919,
+      "scores_s": 60.70561154199822,
+      "windows_s": 2.184715444993344,
+      "contact_new_points": 0,
+      "total_s": 70.61023098099395
+     }
+    },
+    {
+     "theta_deg": 120.0,
+     "equivalent_thetas_deg": [
+      -240.0,
+      120.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 73,
+      "pitch_mm": 1.1477573142760467,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 0.0,
+      "iterations": 1,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 1.36986301369863,
+     "valid_points": 1,
+     "valid_intervals": [
+      {
+       "s_from_mm": 60.831137656630474,
+       "s_to_mm": 60.831137656630474,
+       "points": 1
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 53,
+       "points": 1,
+       "s_from_mm": 60.831137656630474,
+       "s_to_mm": 60.831137656630474
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       60.831137656630474,
+       60.831137656630474
+      ]
+     ],
+     "longest_window": {
+      "start_point": 53,
+      "points": 1,
+      "s_from_mm": 60.831137656630474,
+      "s_to_mm": 60.831137656630474,
+      "length_mm": 0.0,
+      "pct": 0.0,
+      "label": "S-E+W-",
+      "metrics": {
+       "labels": [
+        "S-E+W-"
+       ],
+       "max_step_deg": 0.0,
+       "max_step_per_joint_deg": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       "wrist3_travel_deg": 0.0,
+       "wrist3_abs_max_deg": 70.3076362919748,
+       "psi_deg": [
+        120.0
+       ]
+      }
+     },
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 42,
+       "IK": 30
+      },
+      "dominant_class": "F4",
+      "top_pairs": {
+       "jig_1<->head_body": 10932,
+       "c_2500001_1<->head_body": 9696,
+       "rotary_shaft_1<->head_body": 7584,
+       "c_2500001_1<->forearm_link": 6696,
+       "c_2500001_1<->upper_arm_link": 6480,
+       "timing_belts_2<->head_body": 4832
+      },
+      "runs": [
+       {
+        "class": "IK",
+        "points": 30,
+        "s_from_mm": 25.250660914073027,
+        "s_to_mm": 58.535623028078376,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 1,
+        "s_from_mm": 59.683380342354425,
+        "s_to_mm": 59.683380342354425,
+        "pairs": {
+         "jig_1<->head_body": 60,
+         "forearm_link<->head_body": 36,
+         "timing_belts_1<->head_body": 36,
+         "part<->head_body": 24,
+         "c_2500001_1<->conduit": 20,
+         "forearm_link<->head_mount": 20
+        }
+       },
+       {
+        "class": "F4",
+        "points": 41,
+        "s_from_mm": 61.97889497090652,
+        "s_to_mm": 107.88918754194839,
+        "pairs": {
+         "jig_1<->head_body": 10872,
+         "c_2500001_1<->head_body": 9696,
+         "rotary_shaft_1<->head_body": 7584,
+         "c_2500001_1<->forearm_link": 6696,
+         "c_2500001_1<->upper_arm_link": 6480,
+         "timing_belts_2<->head_body": 4832
+        }
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta+120_free_hbox.csv.gz",
+      "sha256": "0282f994133693c073c2cedefd1d46bab705ab4f457832a257e29fd31d893847"
+     },
+     "timing_s": {
+      "sweep_s": 2.4546825459983665,
+      "scores_s": 34.220416947995545,
+      "windows_s": 0.01214173500193283,
+      "contact_new_points": 0,
+      "total_s": 39.39230678000604
+     }
+    },
+    {
+     "theta_deg": 150.0,
+     "equivalent_thetas_deg": [
+      -210.0,
+      150.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 73,
+      "pitch_mm": 1.1477573142760467,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 0.0,
+      "iterations": 1,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 0.0,
+     "valid_points": 0,
+     "valid_intervals": [],
+     "windows": [],
+     "window_intervals_mm": [],
+     "longest_window": null,
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 36,
+       "IK": 37
+      },
+      "dominant_class": "IK",
+      "top_pairs": {
+       "jig_1<->head_body": 9792,
+       "c_2500001_1<->head_body": 8576,
+       "c_2500001_1<->head_mount": 6336,
+       "c_2500001_1<->forearm_link": 6084,
+       "rotary_shaft_1<->head_body": 5208,
+       "part<->nozzle_tip": 4896
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 18,
+        "s_from_mm": 3.44327194282814,
+        "s_to_mm": 22.955146285520932,
+        "pairs": {
+         "jig_1<->head_body": 4896,
+         "part<->nozzle_tip": 4896,
+         "timing_belts_2<->head_body": 4424,
+         "c_2500001_1<->head_body": 4288,
+         "c_2500001_1<->head_mount": 3168,
+         "part<->nozzle_body": 3168
+        }
+       },
+       {
+        "class": "IK",
+        "points": 32,
+        "s_from_mm": 24.10290359979698,
+        "s_to_mm": 59.683380342354425,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 18,
+        "s_from_mm": 60.831137656630474,
+        "s_to_mm": 80.34301199932327,
+        "pairs": {
+         "jig_1<->head_body": 4896,
+         "c_2500001_1<->head_body": 4288,
+         "c_2500001_1<->head_mount": 3168,
+         "c_2500001_1<->forearm_link": 3060,
+         "rotary_shaft_1<->head_body": 2888,
+         "timing_belts_1<->head_body": 2824
+        }
+       },
+       {
+        "class": "IK",
+        "points": 5,
+        "s_from_mm": 81.49076931359932,
+        "s_to_mm": 86.0817985707035,
+        "pairs": {}
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta+150_free_hbox.csv.gz",
+      "sha256": "971d400d50c1d43128d96d5cf11a2735c96a47f283dfb21a75bdc8b8182af299"
+     },
+     "timing_s": {
+      "sweep_s": 2.3815061780042015,
+      "scores_s": 32.20900764199905,
+      "windows_s": 0.001352014995063655,
+      "contact_new_points": 0,
+      "total_s": 37.31021839400637
+     }
+    },
+    {
+     "theta_deg": 180.0,
+     "equivalent_thetas_deg": [
+      -180.0,
+      180.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 584,
+      "pitch_mm": 0.14346966428450583,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 3.678225496239662,
+      "iterations": 4,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 4.965753424657534,
+     "valid_points": 29,
+     "valid_intervals": [
+      {
+       "s_from_mm": 74.89116475651204,
+       "s_to_mm": 78.90831535647821,
+       "points": 29
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 522,
+       "points": 28,
+       "s_from_mm": 74.89116475651204,
+       "s_to_mm": 78.7648456921937
+      },
+      {
+       "start_point": 535,
+       "points": 16,
+       "s_from_mm": 76.75627039221062,
+       "s_to_mm": 78.90831535647821
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       74.89116475651204,
+       78.7648456921937
+      ],
+      [
+       76.75627039221062,
+       78.90831535647821
+      ]
+     ],
+     "longest_window": {
+      "start_point": 522,
+      "points": 28,
+      "s_from_mm": 74.89116475651204,
+      "s_to_mm": 78.7648456921937,
+      "length_mm": 3.8736809356816573,
+      "pct": 4.623287671232877,
+      "label": "S-E+W-",
+      "metrics": {
+       "labels": [
+        "S-E+W-"
+       ],
+       "max_step_deg": 1.8034111216925197,
+       "max_step_per_joint_deg": [
+        1.8034111216925197,
+        0.34104579493902065,
+        0.8463420083717494,
+        0.7444553207531328,
+        1.1795354639475875,
+        0.171929691773812
+       ],
+       "wrist3_travel_deg": 2.9367232210276484,
+       "wrist3_abs_max_deg": 176.38833802614914,
+       "psi_deg": [
+        170.0
+       ]
+      }
+     },
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 272,
+       "IK": 281,
+       "clearance": 2
+      },
+      "dominant_class": "IK",
+      "top_pairs": {
+       "jig_1<->head_body": 66828,
+       "c_2500001_1<->forearm_link": 41652,
+       "part<->nozzle_tip": 38088,
+       "c_2500001_1<->upper_arm_link": 32328,
+       "c_2500001_1<->head_body": 30812,
+       "timing_belts_2<->head_body": 29624
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 152,
+        "s_from_mm": 1.8651056356985758,
+        "s_to_mm": 23.529024942658957,
+        "pairs": {
+         "jig_1<->head_body": 38288,
+         "part<->nozzle_tip": 38088,
+         "timing_belts_2<->head_body": 29624,
+         "part2_1<->head_body": 26408,
+         "part<->nozzle_body": 25992,
+         "c_2500001_1<->forearm_link": 23364
+        }
+       },
+       {
+        "class": "IK",
+        "points": 256,
+        "s_from_mm": 23.672494606943463,
+        "s_to_mm": 60.25725899949245,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 99,
+        "s_from_mm": 60.40072866377695,
+        "s_to_mm": 74.46075576365853,
+        "pairs": {
+         "jig_1<->head_body": 26592,
+         "timing_belts_1<->head_body": 17552,
+         "c_2500001_1<->forearm_link": 16308,
+         "c_2500001_1<->upper_arm_link": 12240,
+         "c_2500001_1<->head_body": 12208,
+         "c_2500001_1<->conduit": 10616
+        }
+       },
+       {
+        "class": "clearance",
+        "points": 2,
+        "s_from_mm": 74.60422542794304,
+        "s_to_mm": 74.74769509222754,
+        "pairs": {
+         "c_2500001_1<->forearm_link": 432,
+         "jig_1<->head_body": 424,
+         "c_2500001_1<->upper_arm_link": 288,
+         "c_2500001_1<->wrist_1_link": 288,
+         "part5_1<->upper_arm_link": 288,
+         "upper_arm_link<->base_link_inertia": 288
+        }
+       },
+       {
+        "class": "F4",
+        "points": 21,
+        "s_from_mm": 79.05178502076271,
+        "s_to_mm": 81.92117830645283,
+        "pairs": {
+         "upper_arm_link<->head_mount": 2380,
+         "base_link_inertia<->head_body": 1952,
+         "base_link_inertia<->head_mount": 1944,
+         "part5_1<->forearm_link": 1836,
+         "part5_1<->head_mount": 1608,
+         "upper_arm_link<->head_body": 1594
+        }
+       },
+       {
+        "class": "IK",
+        "points": 25,
+        "s_from_mm": 82.06464797073734,
+        "s_to_mm": 85.50791991356547,
+        "pairs": {}
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta+180_free_hbox.csv.gz",
+      "sha256": "51c9de06a958ab2697efb078eade0932a03ce67721923fdb1601877ac468e15f"
+     },
+     "timing_s": {
+      "sweep_s": 19.969245519998367,
+      "scores_s": 235.51361576498311,
+      "windows_s": 1.0276351130014518,
+      "contact_new_points": 0,
+      "total_s": 261.5839125890052
+     }
+    }
+   ],
+   "time_s": 3718.255840440994,
+   "coverage_map": [
+    {
+     "s_from_mm": 0.0,
+     "s_to_mm": 2.0,
+     "thetas": [
+      -120.0,
+      -90.0
+     ]
+    },
+    {
+     "s_from_mm": 2.0,
+     "s_to_mm": 40.0,
+     "thetas": []
+    },
+    {
+     "s_from_mm": 40.0,
+     "s_to_mm": 45.0,
+     "thetas": [
+      60.0,
+      90.0
+     ]
+    },
+    {
+     "s_from_mm": 45.0,
+     "s_to_mm": 49.0,
+     "thetas": [
+      30.0,
+      60.0,
+      90.0
+     ]
+    },
+    {
+     "s_from_mm": 49.0,
+     "s_to_mm": 52.0,
+     "thetas": [
+      0.0,
+      30.0,
+      60.0,
+      90.0
+     ]
+    },
+    {
+     "s_from_mm": 52.0,
+     "s_to_mm": 59.0,
+     "thetas": [
+      -30.0,
+      0.0,
+      30.0,
+      60.0,
+      90.0
+     ]
+    },
+    {
+     "s_from_mm": 59.0,
+     "s_to_mm": 61.0,
+     "thetas": [
+      -60.0,
+      -30.0,
+      0.0,
+      30.0,
+      60.0,
+      90.0
+     ]
+    },
+    {
+     "s_from_mm": 61.0,
+     "s_to_mm": 63.0,
+     "thetas": [
+      -90.0,
+      -60.0,
+      -30.0,
+      0.0,
+      30.0,
+      60.0,
+      90.0
+     ]
+    },
+    {
+     "s_from_mm": 63.0,
+     "s_to_mm": 64.0,
+     "thetas": [
+      -90.0,
+      -60.0,
+      -30.0,
+      0.0,
+      30.0,
+      90.0
+     ]
+    },
+    {
+     "s_from_mm": 64.0,
+     "s_to_mm": 66.0,
+     "thetas": [
+      -120.0,
+      -90.0,
+      -60.0,
+      -30.0
+     ]
+    },
+    {
+     "s_from_mm": 66.0,
+     "s_to_mm": 67.0,
+     "thetas": [
+      -120.0,
+      -90.0,
+      -60.0
+     ]
+    },
+    {
+     "s_from_mm": 67.0,
+     "s_to_mm": 75.0,
+     "thetas": [
+      -150.0,
+      -120.0,
+      -90.0,
+      -60.0
+     ]
+    },
+    {
+     "s_from_mm": 75.0,
+     "s_to_mm": 76.0,
+     "thetas": [
+      -150.0,
+      -120.0,
+      -90.0,
+      -60.0,
+      180.0
+     ]
+    },
+    {
+     "s_from_mm": 76.0,
+     "s_to_mm": 78.0,
+     "thetas": [
+      -150.0,
+      -120.0,
+      -90.0,
+      180.0
+     ]
+    },
+    {
+     "s_from_mm": 78.0,
+     "s_to_mm": 80.0,
+     "thetas": [
+      -150.0,
+      -120.0,
+      -90.0
+     ]
+    },
+    {
+     "s_from_mm": 80.0,
+     "s_to_mm": 83.78628394215141,
+     "thetas": [
+      -120.0,
+      -90.0
+     ]
+    }
+   ],
+   "bins_covered_any_pct": 54.76190476190476,
+   "cover_sets": {
+    "2": {
+     "count": 0,
+     "sets": [],
+     "best": {
+      "thetas": [
+       -120.0,
+       60.0
+      ],
+      "covered_mm": 47.34498921388692,
+      "covered_pct": 56.506849315068486,
+      "min_join_overlap_mm": -36.441294728264495,
+      "segments": [
+       {
+        "theta_deg": -120.0,
+        "s_from_mm": 63.70053094232059,
+        "s_to_mm": 86.51220756355701
+       },
+       {
+        "theta_deg": 60.0,
+        "s_from_mm": 39.167218349670094,
+        "s_to_mm": 63.84400060660509
+       }
+      ]
+     },
+     "time_s": 0.0018466490000719205
+    },
+    "3": {
+     "count": 0,
+     "sets": [],
+     "best": {
+      "thetas": [
+       -150.0,
+       -120.0,
+       60.0
+      ],
+      "covered_mm": 47.34498921388692,
+      "covered_pct": 56.506849315068486,
+      "min_join_overlap_mm": -36.441294728264495,
+      "segments": [
+       {
+        "theta_deg": -150.0,
+        "s_from_mm": 66.71339389229522,
+        "s_to_mm": 80.27127716718101
+       },
+       {
+        "theta_deg": -120.0,
+        "s_from_mm": 63.70053094232059,
+        "s_to_mm": 86.51220756355701
+       },
+       {
+        "theta_deg": 60.0,
+        "s_from_mm": 39.167218349670094,
+        "s_to_mm": 63.84400060660509
+       }
+      ]
+     },
+     "time_s": 0.006900883003254421
+    }
+   }
+  },
+  "wire": {
+   "psi_deg": [
+    -15.0,
+    -10.0,
+    -5.0,
+    0.0,
+    5.0,
+    10.0,
+    15.0
+   ],
+   "thetas": [
+    {
+     "theta_deg": -150.0,
+     "equivalent_thetas_deg": [
+      -150.0,
+      210.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 1168,
+      "pitch_mm": 0.07173483214225292,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 3.1967531878046316,
+      "iterations": 5,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 10.702054794520548,
+     "valid_points": 125,
+     "valid_intervals": [
+      {
+       "s_from_mm": 71.80656697439517,
+       "s_to_mm": 80.70168616003453,
+       "points": 125
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 1001,
+       "points": 119,
+       "s_from_mm": 71.80656697439517,
+       "s_to_mm": 80.27127716718101
+      },
+      {
+       "start_point": 1063,
+       "points": 63,
+       "s_from_mm": 76.25412656721485,
+       "s_to_mm": 80.70168616003454
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       71.80656697439517,
+       80.27127716718101
+      ],
+      [
+       76.25412656721485,
+       80.70168616003454
+      ]
+     ],
+     "longest_window": {
+      "start_point": 1001,
+      "points": 119,
+      "s_from_mm": 71.80656697439517,
+      "s_to_mm": 80.27127716718101,
+      "length_mm": 8.464710192785844,
+      "pct": 10.102739726027396,
+      "label": "S+E-W+",
+      "metrics": {
+       "labels": [
+        "S+E-W+"
+       ],
+       "max_step_deg": 1.5727325614309464,
+       "max_step_per_joint_deg": [
+        1.0013809891392498,
+        1.5727325614309464,
+        0.43075062399260844,
+        0.42097448688791417,
+        0.7533363666981643,
+        1.5235752088045729
+       ],
+       "wrist3_travel_deg": 73.64217636550993,
+       "wrist3_abs_max_deg": 155.40285029540092,
+       "psi_deg": [
+        15.0
+       ]
+      }
+     },
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 469,
+       "IK": 571,
+       "clearance": 3
+      },
+      "dominant_class": "IK",
+      "top_pairs": {
+       "jig_1<->head_body": 20815,
+       "part<->nozzle_tip": 16254,
+       "timing_belts_2<->head_body": 11510,
+       "part2_1<->head_body": 11494,
+       "c_2500001_1<->forearm_link": 11228,
+       "part<->nozzle_body": 10990
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 299,
+        "s_from_mm": 3.1563326142591284,
+        "s_to_mm": 24.533312592650496,
+        "pairs": {
+         "part<->nozzle_tip": 16254,
+         "jig_1<->head_body": 11638,
+         "timing_belts_2<->head_body": 11510,
+         "part2_1<->head_body": 11494,
+         "part<->nozzle_body": 10990,
+         "part2_1<->nozzle_body": 7182
+        }
+       },
+       {
+        "class": "IK",
+        "points": 485,
+        "s_from_mm": 24.60504742479275,
+        "s_to_mm": 59.32470618164316,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 170,
+        "s_from_mm": 59.39644101378541,
+        "s_to_mm": 71.51962764582616,
+        "pairs": {
+         "jig_1<->head_body": 9044,
+         "timing_belts_1<->head_body": 7412,
+         "c_2500001_1<->forearm_link": 4452,
+         "c_2500001_1<->upper_arm_link": 4123,
+         "c_60cm30x_3d_1<->head_body": 3724,
+         "forearm_link<->head_mount": 3110
+        }
+       },
+       {
+        "class": "clearance",
+        "points": 3,
+        "s_from_mm": 71.59136247796842,
+        "s_to_mm": 71.73483214225291,
+        "pairs": {
+         "jig_1<->head_body": 133,
+         "c_2500001_1<->forearm_link": 84,
+         "c_2500001_1<->upper_arm_link": 84,
+         "forearm_link<->head_body": 51,
+         "forearm_link<->head_mount": 48,
+         "upper_arm_link<->conduit": 45
+        }
+       },
+       {
+        "class": "IK",
+        "points": 86,
+        "s_from_mm": 80.77342099217678,
+        "s_to_mm": 86.87088172426829,
+        "pairs": {}
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta-150_wire_hbox.csv.gz",
+      "sha256": "bfb2964ec589958fa64b08502a68e151ee3e7ef33a0f1a7817a9261bcc609ae1"
+     },
+     "timing_s": {
+      "sweep_s": 7.528737190004904,
+      "scores_s": 83.80034408101346,
+      "windows_s": 8.573846398008754,
+      "contact_new_points": 0,
+      "total_s": 121.6832064390037
+     }
+    },
+    {
+     "theta_deg": -120.0,
+     "equivalent_thetas_deg": [
+      -120.0,
+      240.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 584,
+      "pitch_mm": 0.14346966428450583,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 2.908001401279165,
+      "iterations": 4,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 23.801369863013697,
+     "valid_points": 139,
+     "valid_intervals": [
+      {
+       "s_from_mm": 66.71339389229522,
+       "s_to_mm": 86.51220756355701,
+       "points": 139
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 465,
+       "points": 139,
+       "s_from_mm": 66.71339389229522,
+       "s_to_mm": 86.51220756355701
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       66.71339389229522,
+       86.51220756355701
+      ]
+     ],
+     "longest_window": {
+      "start_point": 465,
+      "points": 139,
+      "s_from_mm": 66.71339389229522,
+      "s_to_mm": 86.51220756355701,
+      "length_mm": 19.798813671261804,
+      "pct": 23.63013698630137,
+      "label": "S-E+W-",
+      "metrics": {
+       "labels": [
+        "S-E+W-"
+       ],
+       "max_step_deg": 2.908001401279165,
+       "max_step_per_joint_deg": [
+        2.908001401279165,
+        0.9108433342181286,
+        0.6126885194969276,
+        1.6977593477019184,
+        1.7690977094845266,
+        2.705375687802416
+       ],
+       "wrist3_travel_deg": 73.03344509353865,
+       "wrist3_abs_max_deg": 160.15853054815508,
+       "psi_deg": [
+        -15.0,
+        -10.0,
+        -5.0,
+        0.0,
+        5.0,
+        10.0,
+        15.0
+       ]
+      }
+     },
+     "bins": [
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 248,
+       "IK": 195,
+       "clearance": 2
+      },
+      "dominant_class": "F4",
+      "top_pairs": {
+       "part<->nozzle_tip": 9534,
+       "jig_1<->head_body": 9029,
+       "part2_1<->head_body": 7014,
+       "part<->nozzle_body": 6790,
+       "c_2500001_1<->forearm_link": 5362,
+       "part2_1<->nozzle_body": 4802
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 176,
+        "s_from_mm": 2.8693932856901165,
+        "s_to_mm": 27.976584535478636,
+        "pairs": {
+         "part<->nozzle_tip": 9534,
+         "part2_1<->head_body": 7014,
+         "part<->nozzle_body": 6790,
+         "jig_1<->head_body": 5206,
+         "part2_1<->nozzle_body": 4802,
+         "timing_belts_2<->head_body": 3526
+        }
+       },
+       {
+        "class": "IK",
+        "points": 195,
+        "s_from_mm": 28.120054199763143,
+        "s_to_mm": 55.95316907095727,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 72,
+        "s_from_mm": 56.09663873524178,
+        "s_to_mm": 66.2829848994417,
+        "pairs": {
+         "jig_1<->head_body": 3738,
+         "timing_belts_1<->head_body": 2682,
+         "c_60cm30x_3d_1<->head_body": 2490,
+         "c_2500001_1<->forearm_link": 2345,
+         "c_2500001_1<->head_body": 1906,
+         "c_2500001_1<->upper_arm_link": 1827
+        }
+       },
+       {
+        "class": "clearance",
+        "points": 2,
+        "s_from_mm": 66.4264545637262,
+        "s_to_mm": 66.5699242280107,
+        "pairs": {
+         "jig_1<->head_body": 85,
+         "c_2500001_1<->forearm_link": 42,
+         "c_2500001_1<->upper_arm_link": 42,
+         "forearm_link<->head_body": 42,
+         "upper_arm_link<->conduit": 33,
+         "forearm_link<->conduit": 32
+        }
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta-120_wire_hbox.csv.gz",
+      "sha256": "6e7cc01940a88f1c67b200aa1091314bde54328f3db58d4d7209fc3638a8f395"
+     },
+     "timing_s": {
+      "sweep_s": 4.261302011000225,
+      "scores_s": 59.60207096699742,
+      "windows_s": 20.382336905997363,
+      "contact_new_points": 0,
+      "total_s": 87.41851073400176
+     }
+    },
+    {
+     "theta_deg": -90.0,
+     "equivalent_thetas_deg": [
+      -90.0,
+      270.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 146,
+      "pitch_mm": 0.5738786571380233,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 3.2381742251067323,
+      "iterations": 2,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 30.82191780821918,
+     "valid_points": 45,
+     "valid_intervals": [
+      {
+       "s_from_mm": 60.831137656630474,
+       "s_to_mm": 86.0817985707035,
+       "points": 45
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 106,
+       "points": 45,
+       "s_from_mm": 60.831137656630474,
+       "s_to_mm": 86.0817985707035
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       60.831137656630474,
+       86.0817985707035
+      ]
+     ],
+     "longest_window": {
+      "start_point": 106,
+      "points": 45,
+      "s_from_mm": 60.831137656630474,
+      "s_to_mm": 86.0817985707035,
+      "length_mm": 25.250660914073027,
+      "pct": 30.136986301369863,
+      "label": "S-E+W+",
+      "metrics": {
+       "labels": [
+        "S-E+W+"
+       ],
+       "max_step_deg": 3.236898505276656,
+       "max_step_per_joint_deg": [
+        3.236898505276656,
+        2.11313688049545,
+        0.28912948862221555,
+        0.7951314084105974,
+        2.174438543539395,
+        3.189940016267254
+       ],
+       "wrist3_travel_deg": 77.09084520153263,
+       "wrist3_abs_max_deg": 72.77896414109951,
+       "psi_deg": [
+        5.0,
+        10.0,
+        15.0
+       ]
+      }
+     },
+     "bins": [
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 101
+      },
+      "dominant_class": "F4",
+      "top_pairs": {
+       "c_2500001_1<->head_body": 3640,
+       "part<->nozzle_tip": 3584,
+       "jig_1<->head_body": 3448,
+       "c_2500001_1<->upper_arm_link": 2870,
+       "c_2500001_1<->forearm_link": 2576,
+       "part2_1<->head_body": 2240
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 101,
+        "s_from_mm": 2.8693932856901165,
+        "s_to_mm": 60.25725899949245,
+        "pairs": {
+         "c_2500001_1<->head_body": 3640,
+         "part<->nozzle_tip": 3584,
+         "jig_1<->head_body": 3448,
+         "c_2500001_1<->upper_arm_link": 2870,
+         "c_2500001_1<->forearm_link": 2576,
+         "part2_1<->head_body": 2240
+        }
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta-90_wire_hbox.csv.gz",
+      "sha256": "02f846473160fd8e4b0db2b45690bfd9623707ca9efc41ce0948dccea0906b33"
+     },
+     "timing_s": {
+      "sweep_s": 1.3630256400065264,
+      "scores_s": 23.525559955000062,
+      "windows_s": 2.2341995290043997,
+      "contact_new_points": 0,
+      "total_s": 29.783346613010508
+     }
+    },
+    {
+     "theta_deg": -60.0,
+     "equivalent_thetas_deg": [
+      -60.0,
+      300.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 584,
+      "pitch_mm": 0.14346966428450583,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 2.9379425878006398,
+      "iterations": 4,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 22.431506849315067,
+     "valid_points": 131,
+     "valid_intervals": [
+      {
+       "s_from_mm": 58.24868369950937,
+       "s_to_mm": 76.89974005649512,
+       "points": 131
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 406,
+       "points": 120,
+       "s_from_mm": 58.24868369950937,
+       "s_to_mm": 75.32157374936557
+      },
+      {
+       "start_point": 418,
+       "points": 119,
+       "s_from_mm": 59.97031967092344,
+       "s_to_mm": 76.89974005649512
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       58.24868369950937,
+       75.32157374936557
+      ],
+      [
+       59.97031967092344,
+       76.89974005649512
+      ]
+     ],
+     "longest_window": {
+      "start_point": 406,
+      "points": 120,
+      "s_from_mm": 58.24868369950937,
+      "s_to_mm": 75.32157374936556,
+      "length_mm": 17.072890049856195,
+      "pct": 20.37671232876712,
+      "label": "S-E+W-",
+      "metrics": {
+       "labels": [
+        "S-E+W-"
+       ],
+       "max_step_deg": 1.7622169087102568,
+       "max_step_per_joint_deg": [
+        0.40614065383800835,
+        0.6542112897448646,
+        1.7622169087102568,
+        0.7419910113312884,
+        0.23003186620242388,
+        0.334402237070492
+       ],
+       "wrist3_travel_deg": 30.827162064191995,
+       "wrist3_abs_max_deg": 155.25300405055293,
+       "psi_deg": [
+        5.0
+       ]
+      }
+     },
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 322,
+       "IK": 131
+      },
+      "dominant_class": "F4",
+      "top_pairs": {
+       "part<->nozzle_tip": 11046,
+       "c_2500001_1<->head_body": 10448,
+       "c_2500001_1<->forearm_link": 8169,
+       "part2_1<->head_body": 8134,
+       "part<->nozzle_body": 7798,
+       "c_2500001_1<->upper_arm_link": 6916
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 228,
+        "s_from_mm": 6.456134892802763,
+        "s_to_mm": 39.023748685385584,
+        "pairs": {
+         "part<->nozzle_tip": 11046,
+         "part2_1<->head_body": 8134,
+         "part<->nozzle_body": 7798,
+         "c_2500001_1<->head_body": 5248,
+         "part2_1<->nozzle_body": 4872,
+         "c_2500001_1<->forearm_link": 4648
+        }
+       },
+       {
+        "class": "IK",
+        "points": 39,
+        "s_from_mm": 39.167218349670094,
+        "s_to_mm": 44.61906559248131,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 94,
+        "s_from_mm": 44.76253525676582,
+        "s_to_mm": 58.10521403522486,
+        "pairs": {
+         "c_2500001_1<->head_body": 5200,
+         "c_2500001_1<->forearm_link": 3521,
+         "c_2500001_1<->upper_arm_link": 2926,
+         "c_2500001_1<->head_mount": 2672,
+         "c_2500001_1<->conduit": 2352,
+         "part5_1<->upper_arm_link": 2205
+        }
+       },
+       {
+        "class": "IK",
+        "points": 92,
+        "s_from_mm": 77.04320972077963,
+        "s_to_mm": 90.09894917066967,
+        "pairs": {}
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta-60_wire_hbox.csv.gz",
+      "sha256": "4f10f822d5ed246463baa1027e524c7c863796723c4f6f98463daec1c738e0e7"
+     },
+     "timing_s": {
+      "sweep_s": 7.359146714006783,
+      "scores_s": 79.36131250602193,
+      "windows_s": 15.29079552400799,
+      "contact_new_points": 0,
+      "total_s": 105.29423576500267
+     }
+    },
+    {
+     "theta_deg": -30.0,
+     "equivalent_thetas_deg": [
+      -390.0,
+      -30.0,
+      330.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 584,
+      "pitch_mm": 0.14346966428450583,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 4.542191129864231,
+      "iterations": 4,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 18.32191780821918,
+     "valid_points": 107,
+     "valid_intervals": [
+      {
+       "s_from_mm": 51.50560947813759,
+       "s_to_mm": 66.71339389229522,
+       "points": 107
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 359,
+       "points": 106,
+       "s_from_mm": 51.50560947813759,
+       "s_to_mm": 66.5699242280107
+      },
+      {
+       "start_point": 377,
+       "points": 89,
+       "s_from_mm": 54.0880634352587,
+       "s_to_mm": 66.71339389229522
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       51.50560947813759,
+       66.5699242280107
+      ],
+      [
+       54.0880634352587,
+       66.71339389229522
+      ]
+     ],
+     "longest_window": {
+      "start_point": 359,
+      "points": 106,
+      "s_from_mm": 51.50560947813759,
+      "s_to_mm": 66.5699242280107,
+      "length_mm": 15.064314749873112,
+      "pct": 17.979452054794518,
+      "label": "S-E+W-",
+      "metrics": {
+       "labels": [
+        "S-E+W-"
+       ],
+       "max_step_deg": 4.542191129864231,
+       "max_step_per_joint_deg": [
+        0.7505303925585167,
+        2.039589770258747,
+        4.542191129864231,
+        2.248218869516109,
+        0.1883407533631356,
+        0.14282806773553602
+       ],
+       "wrist3_travel_deg": 6.519367353397001,
+       "wrist3_abs_max_deg": 144.31088811172174,
+       "psi_deg": [
+        -15.0
+       ]
+      }
+     },
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 206,
+       "IK": 271
+      },
+      "dominant_class": "IK",
+      "top_pairs": {
+       "part<->nozzle_tip": 8512,
+       "c_2500001_1<->forearm_link": 6517,
+       "part2_1<->head_body": 5992,
+       "part<->nozzle_body": 5768,
+       "c_2500001_1<->wrist_2_link": 5656,
+       "c_2500001_1<->upper_arm_link": 4879
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 157,
+        "s_from_mm": 16.92942038557169,
+        "s_to_mm": 39.310688013954596,
+        "pairs": {
+         "part<->nozzle_tip": 8512,
+         "part2_1<->head_body": 5992,
+         "part<->nozzle_body": 5768,
+         "c_2500001_1<->forearm_link": 4599,
+         "part2_1<->nozzle_body": 3864,
+         "part5_1<->conduit": 3640
+        }
+       },
+       {
+        "class": "IK",
+        "points": 35,
+        "s_from_mm": 39.454157678239106,
+        "s_to_mm": 44.3321262639123,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 49,
+        "s_from_mm": 44.47559592819681,
+        "s_to_mm": 51.36213981385309,
+        "pairs": {
+         "c_2500001_1<->wrist_2_link": 2744,
+         "c_2500001_1<->forearm_link": 1918,
+         "c_2500001_1<->head_mount": 1784,
+         "c_2500001_1<->wrist_3_link": 1496,
+         "c_2500001_1<->upper_arm_link": 1351,
+         "c_2500001_1<->wrist_1_link": 1316
+        }
+       },
+       {
+        "class": "IK",
+        "points": 236,
+        "s_from_mm": 66.85686355657971,
+        "s_to_mm": 100.57223466343859,
+        "pairs": {}
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta-30_wire_hbox.csv.gz",
+      "sha256": "b33ba0b92a3cc23ab67a1007a5334fe6dcdf54a5348fc36d4d1a99e5307e9d66"
+     },
+     "timing_s": {
+      "sweep_s": 3.8482581049902365,
+      "scores_s": 55.770037039983436,
+      "windows_s": 11.22861530299997,
+      "contact_new_points": 0,
+      "total_s": 74.04806859200471
+     }
+    },
+    {
+     "theta_deg": 0.0,
+     "equivalent_thetas_deg": [
+      -360.0,
+      0.0,
+      360.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 1168,
+      "pitch_mm": 0.07173483214225292,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 3.394608138682801,
+      "iterations": 5,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 20.11986301369863,
+     "valid_points": 235,
+     "valid_intervals": [
+      {
+       "s_from_mm": 48.06233753530945,
+       "s_to_mm": 64.84828825659663,
+       "points": 235
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 670,
+       "points": 234,
+       "s_from_mm": 48.06233753530945,
+       "s_to_mm": 64.77655342445438
+      },
+      {
+       "start_point": 706,
+       "points": 199,
+       "s_from_mm": 50.644791492430556,
+       "s_to_mm": 64.84828825659663
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       48.06233753530945,
+       64.77655342445438
+      ],
+      [
+       50.644791492430556,
+       64.84828825659663
+      ]
+     ],
+     "longest_window": {
+      "start_point": 670,
+      "points": 234,
+      "s_from_mm": 48.06233753530945,
+      "s_to_mm": 64.77655342445438,
+      "length_mm": 16.714215889144928,
+      "pct": 19.9486301369863,
+      "label": "S+E-W+",
+      "metrics": {
+       "labels": [
+        "S+E-W+"
+       ],
+       "max_step_deg": 2.712629034113469,
+       "max_step_per_joint_deg": [
+        0.15948691646814694,
+        1.3376198077568802,
+        2.712629034113469,
+        1.4161153389052288,
+        0.16987068068166877,
+        0.9079631779881936
+       ],
+       "wrist3_travel_deg": 34.71269484406187,
+       "wrist3_abs_max_deg": 185.04750905097856,
+       "psi_deg": [
+        -10.0
+       ]
+      }
+     },
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 343,
+       "IK": 590
+      },
+      "dominant_class": "IK",
+      "top_pairs": {
+       "part<->nozzle_tip": 14518,
+       "part2_1<->head_body": 10808,
+       "part<->nozzle_body": 10304,
+       "part2_1<->nozzle_body": 6496,
+       "c_2500001_1<->upper_arm_link": 6153,
+       "c_2500001_1<->forearm_link": 6055
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 289,
+        "s_from_mm": 18.866260853412516,
+        "s_to_mm": 39.525892510381354,
+        "pairs": {
+         "part<->nozzle_tip": 14518,
+         "part2_1<->head_body": 10808,
+         "part<->nozzle_body": 10304,
+         "part2_1<->nozzle_body": 6496,
+         "c_2500001_1<->upper_arm_link": 5649,
+         "c_2500001_1<->forearm_link": 5593
+        }
+       },
+       {
+        "class": "IK",
+        "points": 64,
+        "s_from_mm": 39.59762734252361,
+        "s_to_mm": 44.11692176748554,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 54,
+        "s_from_mm": 44.1886565996278,
+        "s_to_mm": 47.9906027031672,
+        "pairs": {
+         "upper_arm_link<->head_mount": 1468,
+         "upper_arm_link<->head_body": 1314,
+         "shoulder_link<->head_body": 1106,
+         "shoulder_link<->head_mount": 674,
+         "wrist_3_link<->upper_arm_link": 666,
+         "upper_arm_link<->wrist_2_link": 529
+        }
+       },
+       {
+        "class": "IK",
+        "points": 526,
+        "s_from_mm": 64.92002308873889,
+        "s_to_mm": 102.58080996342167,
+        "pairs": {}
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta+0_wire_hbox.csv.gz",
+      "sha256": "6583f31560239ea739a2bf0f8e877d89b4a34f9a53f4df995b284b85d1fb9653"
+     },
+     "timing_s": {
+      "sweep_s": 7.554971842022496,
+      "scores_s": 89.08440359900123,
+      "windows_s": 60.38899969600607,
+      "contact_new_points": 0,
+      "total_s": 160.84513693700137
+     }
+    },
+    {
+     "theta_deg": 30.0,
+     "equivalent_thetas_deg": [
+      -330.0,
+      30.0,
+      390.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 1168,
+      "pitch_mm": 0.07173483214225292,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 3.0353701765767322,
+      "iterations": 5,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 22.945205479452056,
+     "valid_points": 268,
+     "valid_intervals": [
+      {
+       "s_from_mm": 44.906004921050325,
+       "s_to_mm": 64.05920510303186,
+       "points": 268
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 626,
+       "points": 268,
+       "s_from_mm": 44.906004921050325,
+       "s_to_mm": 64.05920510303186
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       44.906004921050325,
+       64.05920510303186
+      ]
+     ],
+     "longest_window": {
+      "start_point": 626,
+      "points": 268,
+      "s_from_mm": 44.906004921050325,
+      "s_to_mm": 64.05920510303186,
+      "length_mm": 19.15320018198153,
+      "pct": 22.859589041095887,
+      "label": "S-E-W-",
+      "metrics": {
+       "labels": [
+        "S-E-W-"
+       ],
+       "max_step_deg": 3.0353701765765972,
+       "max_step_per_joint_deg": [
+        2.544256771504365,
+        1.316480412131181,
+        3.0353701765765972,
+        1.5142059215407357,
+        1.7200176661632582,
+        1.6565825090824546
+       ],
+       "wrist3_travel_deg": 24.839181517541107,
+       "wrist3_abs_max_deg": 169.30835258766996,
+       "psi_deg": [
+        -15.0
+       ]
+      }
+     },
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 271,
+       "IK": 629
+      },
+      "dominant_class": "IK",
+      "top_pairs": {
+       "part<->nozzle_tip": 15050,
+       "part2_1<->head_body": 10234,
+       "part<->nozzle_body": 9730,
+       "part2_1<->nozzle_body": 5922,
+       "forearm_link<->head_body": 4883,
+       "forearm_link<->head_mount": 4637
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 270,
+        "s_from_mm": 19.511874342692792,
+        "s_to_mm": 38.80854418895883,
+        "pairs": {
+         "part<->nozzle_tip": 15050,
+         "part2_1<->head_body": 10234,
+         "part<->nozzle_body": 9730,
+         "part2_1<->nozzle_body": 5922,
+         "forearm_link<->head_body": 4873,
+         "forearm_link<->head_mount": 4623
+        }
+       },
+       {
+        "class": "IK",
+        "points": 84,
+        "s_from_mm": 38.88027902110108,
+        "s_to_mm": 44.83427008890807,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 1,
+        "s_from_mm": 64.13093993517411,
+        "s_to_mm": 64.13093993517411,
+        "pairs": {
+         "forearm_link<->head_mount": 14,
+         "forearm_link<->head_body": 10,
+         "c_2500001_1<->conduit": 2
+        }
+       },
+       {
+        "class": "IK",
+        "points": 545,
+        "s_from_mm": 64.20267476731637,
+        "s_to_mm": 103.22642345270195,
+        "pairs": {}
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta+30_wire_hbox.csv.gz",
+      "sha256": "c3f25843697d53073bd3f586598d8cc9cdb5904cd107556cb62343f21255f88b"
+     },
+     "timing_s": {
+      "sweep_s": 8.505583832986304,
+      "scores_s": 111.65717583599326,
+      "windows_s": 95.31428803000017,
+      "contact_new_points": 0,
+      "total_s": 219.4832751070062
+     }
+    },
+    {
+     "theta_deg": 60.0,
+     "equivalent_thetas_deg": [
+      -300.0,
+      60.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 292,
+      "pitch_mm": 0.28693932856901166,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 2.554443305815198,
+      "iterations": 3,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 25.34246575342466,
+     "valid_points": 74,
+     "valid_intervals": [
+      {
+       "s_from_mm": 39.310688013954596,
+       "s_to_mm": 60.25725899949245,
+       "points": 74
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 137,
+       "points": 74,
+       "s_from_mm": 39.310688013954596,
+       "s_to_mm": 60.25725899949245
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       39.310688013954596,
+       60.25725899949245
+      ]
+     ],
+     "longest_window": {
+      "start_point": 137,
+      "points": 74,
+      "s_from_mm": 39.310688013954596,
+      "s_to_mm": 60.25725899949245,
+      "length_mm": 20.94657098553785,
+      "pct": 24.999999999999996,
+      "label": "S-E+W+",
+      "metrics": {
+       "labels": [
+        "S-E+W+"
+       ],
+       "max_step_deg": 2.554085765015884,
+       "max_step_per_joint_deg": [
+        2.554085765015884,
+        1.669844550868552,
+        1.6785752208680975,
+        1.401480769512034,
+        2.286672368977065,
+        2.373670090399429
+       ],
+       "wrist3_travel_deg": 103.848097170898,
+       "wrist3_abs_max_deg": 161.32443377331654,
+       "psi_deg": [
+        -15.0
+       ]
+      }
+     },
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 79,
+       "IK": 138,
+       "clearance": 1
+      },
+      "dominant_class": "IK",
+      "top_pairs": {
+       "part<->nozzle_tip": 3738,
+       "part2_1<->head_body": 2450,
+       "part<->nozzle_body": 2338,
+       "forearm_link<->head_mount": 1547,
+       "forearm_link<->head_body": 1526,
+       "part2_1<->nozzle_body": 1386
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 68,
+        "s_from_mm": 19.798813671261804,
+        "s_to_mm": 39.023748685385584,
+        "pairs": {
+         "part<->nozzle_tip": 3738,
+         "part2_1<->head_body": 2450,
+         "part<->nozzle_body": 2338,
+         "part2_1<->nozzle_body": 1386,
+         "forearm_link<->head_mount": 1302,
+         "forearm_link<->head_body": 1241
+        }
+       },
+       {
+        "class": "clearance",
+        "points": 1,
+        "s_from_mm": 60.54419832806146,
+        "s_to_mm": 60.54419832806146,
+        "pairs": {
+         "c_2500001_1<->conduit": 53,
+         "forearm_link<->head_body": 22,
+         "forearm_link<->head_mount": 21,
+         "wrist_3_link<->forearm_link": 14,
+         "forearm_link<->conduit": 6
+        }
+       },
+       {
+        "class": "F4",
+        "points": 11,
+        "s_from_mm": 60.831137656630474,
+        "s_to_mm": 63.70053094232059,
+        "pairs": {
+         "c_2500001_1<->conduit": 560,
+         "forearm_link<->head_body": 263,
+         "forearm_link<->head_mount": 224,
+         "wrist_3_link<->forearm_link": 65,
+         "forearm_link<->conduit": 52
+        }
+       },
+       {
+        "class": "IK",
+        "points": 138,
+        "s_from_mm": 63.9874702708896,
+        "s_to_mm": 103.2981582848442,
+        "pairs": {}
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta+60_wire_hbox.csv.gz",
+      "sha256": "ec89cb28328b7c46469d574bcbbba6f3b2e5b73bb96192ab0e46c8895e083da5"
+     },
+     "timing_s": {
+      "sweep_s": 2.107774142976268,
+      "scores_s": 27.590710797012434,
+      "windows_s": 6.427339037007187,
+      "contact_new_points": 0,
+      "total_s": 39.011791044002166
+     }
+    },
+    {
+     "theta_deg": 90.0,
+     "equivalent_thetas_deg": [
+      -270.0,
+      90.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 146,
+      "pitch_mm": 0.5738786571380233,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 2.832216681905166,
+      "iterations": 2,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 21.91780821917808,
+     "valid_points": 32,
+     "valid_intervals": [
+      {
+       "s_from_mm": 39.59762734252361,
+       "s_to_mm": 57.387865713802334,
+       "points": 32
+      }
+     ],
+     "windows": [
+      {
+       "start_point": 69,
+       "points": 32,
+       "s_from_mm": 39.59762734252361,
+       "s_to_mm": 57.38786571380233
+      }
+     ],
+     "window_intervals_mm": [
+      [
+       39.59762734252361,
+       57.38786571380233
+      ]
+     ],
+     "longest_window": {
+      "start_point": 69,
+      "points": 32,
+      "s_from_mm": 39.59762734252361,
+      "s_to_mm": 57.387865713802334,
+      "length_mm": 17.790238371278722,
+      "pct": 21.232876712328768,
+      "label": "S-E-W-",
+      "metrics": {
+       "labels": [
+        "S-E-W-"
+       ],
+       "max_step_deg": 2.40763267224348,
+       "max_step_per_joint_deg": [
+        2.40763267224348,
+        1.0851961225503293,
+        1.2801912922554237,
+        0.7704633680604049,
+        2.241908422775367,
+        2.381000266220596
+       ],
+       "wrist3_travel_deg": 65.34157997933644,
+       "wrist3_abs_max_deg": 83.53679564143766,
+       "psi_deg": [
+        -15.0
+       ]
+      }
+     },
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 114
+      },
+      "dominant_class": "F4",
+      "top_pairs": {
+       "jig_1<->head_body": 2242,
+       "c_2500001_1<->head_body": 1820,
+       "part<->nozzle_tip": 1806,
+       "c_2500001_1<->upper_arm_link": 1505,
+       "c_2500001_1<->forearm_link": 1162,
+       "part2_1<->head_body": 1134
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 114,
+        "s_from_mm": 57.96174437094036,
+        "s_to_mm": 122.810032627537,
+        "pairs": {
+         "jig_1<->head_body": 2242,
+         "c_2500001_1<->head_body": 1820,
+         "part<->nozzle_tip": 1806,
+         "c_2500001_1<->upper_arm_link": 1505,
+         "c_2500001_1<->forearm_link": 1162,
+         "part2_1<->head_body": 1134
+        }
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta+90_wire_hbox.csv.gz",
+      "sha256": "7ecc0eec38fba5d9e79d8e22644354ac7f7bb24a49ac4b7af89fb3c0f8dc3625"
+     },
+     "timing_s": {
+      "sweep_s": 0.9461447420180775,
+      "scores_s": 14.667064980996656,
+      "windows_s": 1.0244924139988143,
+      "contact_new_points": 0,
+      "total_s": 19.210045073006768
+     }
+    },
+    {
+     "theta_deg": 120.0,
+     "equivalent_thetas_deg": [
+      -240.0,
+      120.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 73,
+      "pitch_mm": 1.1477573142760467,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 0.0,
+      "iterations": 1,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 0.0,
+     "valid_points": 0,
+     "valid_intervals": [],
+     "windows": [],
+     "window_intervals_mm": [],
+     "longest_window": null,
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 43,
+       "IK": 30
+      },
+      "dominant_class": "F4",
+      "top_pairs": {
+       "jig_1<->head_body": 2156,
+       "c_2500001_1<->head_body": 1944,
+       "rotary_shaft_1<->head_body": 1872,
+       "c_2500001_1<->forearm_link": 1302,
+       "c_2500001_1<->upper_arm_link": 1260,
+       "timing_belts_2<->head_body": 1216
+      },
+      "runs": [
+       {
+        "class": "IK",
+        "points": 30,
+        "s_from_mm": 25.250660914073027,
+        "s_to_mm": 58.535623028078376,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 43,
+        "s_from_mm": 59.683380342354425,
+        "s_to_mm": 107.88918754194839,
+        "pairs": {
+         "jig_1<->head_body": 2156,
+         "c_2500001_1<->head_body": 1944,
+         "rotary_shaft_1<->head_body": 1872,
+         "c_2500001_1<->forearm_link": 1302,
+         "c_2500001_1<->upper_arm_link": 1260,
+         "timing_belts_2<->head_body": 1216
+        }
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta+120_wire_hbox.csv.gz",
+      "sha256": "7867e47b83eeb81c53a2a6871d758a8bdfffaa87c0d2dd3553d747429a200d88"
+     },
+     "timing_s": {
+      "sweep_s": 0.6284127830003854,
+      "scores_s": 7.945157385998755,
+      "windows_s": 0.0012484740000218153,
+      "contact_new_points": 0,
+      "total_s": 11.039359304995742
+     }
+    },
+    {
+     "theta_deg": 150.0,
+     "equivalent_thetas_deg": [
+      -210.0,
+      150.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 73,
+      "pitch_mm": 1.1477573142760467,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 0.0,
+      "iterations": 1,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 0.0,
+     "valid_points": 0,
+     "valid_intervals": [],
+     "windows": [],
+     "window_intervals_mm": [],
+     "longest_window": null,
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 36,
+       "IK": 37
+      },
+      "dominant_class": "IK",
+      "top_pairs": {
+       "jig_1<->head_body": 1904,
+       "c_2500001_1<->head_body": 1488,
+       "c_2500001_1<->forearm_link": 1183,
+       "c_2500001_1<->head_mount": 1168,
+       "part<->nozzle_tip": 952,
+       "timing_belts_2<->head_body": 952
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 18,
+        "s_from_mm": 3.44327194282814,
+        "s_to_mm": 22.955146285520932,
+        "pairs": {
+         "jig_1<->head_body": 952,
+         "part<->nozzle_tip": 952,
+         "timing_belts_2<->head_body": 952,
+         "c_2500001_1<->head_body": 744,
+         "part2_1<->head_body": 616,
+         "part<->nozzle_body": 616
+        }
+       },
+       {
+        "class": "IK",
+        "points": 32,
+        "s_from_mm": 24.10290359979698,
+        "s_to_mm": 59.683380342354425,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 18,
+        "s_from_mm": 60.831137656630474,
+        "s_to_mm": 80.34301199932327,
+        "pairs": {
+         "jig_1<->head_body": 952,
+         "c_2500001_1<->head_body": 744,
+         "timing_belts_1<->head_body": 672,
+         "c_2500001_1<->forearm_link": 595,
+         "c_2500001_1<->head_mount": 584,
+         "c_2500001_1<->upper_arm_link": 441
+        }
+       },
+       {
+        "class": "IK",
+        "points": 5,
+        "s_from_mm": 81.49076931359932,
+        "s_to_mm": 86.0817985707035,
+        "pairs": {}
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta+150_wire_hbox.csv.gz",
+      "sha256": "4d4211923a035518a7d982290669263edd68aee1d648e91957e9bf07b90cd89f"
+     },
+     "timing_s": {
+      "sweep_s": 0.5132210279989522,
+      "scores_s": 7.255324533995008,
+      "windows_s": 0.0010192180052399635,
+      "contact_new_points": 0,
+      "total_s": 10.222905171001912
+     }
+    },
+    {
+     "theta_deg": 180.0,
+     "equivalent_thetas_deg": [
+      -180.0,
+      180.0
+     ],
+     "pitch": {
+      "ok": true,
+      "points": 73,
+      "pitch_mm": 1.1477573142760467,
+      "pitch_ceiling_mm": 1.1477573142760467,
+      "max_label_step_deg": 0.0,
+      "iterations": 1,
+      "rule": "scene_valid",
+      "closed": true,
+      "rotation_rate_deg_per_mm": 4.2966460013866525
+     },
+     "valid_node_pct": 0.0,
+     "valid_points": 0,
+     "valid_intervals": [],
+     "windows": [],
+     "window_intervals_mm": [],
+     "longest_window": null,
+     "bins": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+     ],
+     "failures": {
+      "class_counts": {
+       "F4": 38,
+       "IK": 35
+      },
+      "dominant_class": "F4",
+      "top_pairs": {
+       "jig_1<->head_body": 1636,
+       "c_2500001_1<->forearm_link": 1141,
+       "part<->nozzle_tip": 924,
+       "c_2500001_1<->upper_arm_link": 875,
+       "timing_belts_2<->head_body": 868,
+       "part2_1<->head_body": 644
+      },
+      "runs": [
+       {
+        "class": "F4",
+        "points": 19,
+        "s_from_mm": 2.2955146285520933,
+        "s_to_mm": 22.955146285520932,
+        "pairs": {
+         "part<->nozzle_tip": 924,
+         "jig_1<->head_body": 920,
+         "timing_belts_2<->head_body": 868,
+         "part2_1<->head_body": 644,
+         "part<->nozzle_body": 644,
+         "c_2500001_1<->forearm_link": 574
+        }
+       },
+       {
+        "class": "IK",
+        "points": 32,
+        "s_from_mm": 24.10290359979698,
+        "s_to_mm": 59.683380342354425,
+        "pairs": {}
+       },
+       {
+        "class": "F4",
+        "points": 19,
+        "s_from_mm": 60.831137656630474,
+        "s_to_mm": 81.49076931359932,
+        "pairs": {
+         "jig_1<->head_body": 716,
+         "c_2500001_1<->forearm_link": 567,
+         "timing_belts_1<->head_body": 532,
+         "c_2500001_1<->upper_arm_link": 434,
+         "base_link_inertia<->conduit": 356,
+         "part5_1<->upper_arm_link": 273
+        }
+       },
+       {
+        "class": "IK",
+        "points": 3,
+        "s_from_mm": 82.63852662787536,
+        "s_to_mm": 84.93404125642745,
+        "pairs": {}
+       }
+      ]
+     },
+     "candidates_csv": {
+      "file": "s5b_candidates_S02_theta+180_wire_hbox.csv.gz",
+      "sha256": "2b077976af5756aaa93137d4555f6768bbebc652527e0f004284eac7011d1ce9"
+     },
+     "timing_s": {
+      "sweep_s": 0.5113542750041233,
+      "scores_s": 6.483971287001623,
+      "windows_s": 0.0004828749952139333,
+      "contact_new_points": 0,
+      "total_s": 9.45034635400225
+     }
+    }
+   ],
+   "time_s": 887.526590649999,
+   "coverage_map": [
+    {
+     "s_from_mm": 0.0,
+     "s_to_mm": 2.0,
+     "thetas": [
+      -120.0,
+      -90.0
+     ]
+    },
+    {
+     "s_from_mm": 2.0,
+     "s_to_mm": 40.0,
+     "thetas": []
+    },
+    {
+     "s_from_mm": 40.0,
+     "s_to_mm": 45.0,
+     "thetas": [
+      60.0,
+      90.0
+     ]
+    },
+    {
+     "s_from_mm": 45.0,
+     "s_to_mm": 49.0,
+     "thetas": [
+      30.0,
+      60.0,
+      90.0
+     ]
+    },
+    {
+     "s_from_mm": 49.0,
+     "s_to_mm": 52.0,
+     "thetas": [
+      0.0,
+      30.0,
+      60.0,
+      90.0
+     ]
+    },
+    {
+     "s_from_mm": 52.0,
+     "s_to_mm": 57.0,
+     "thetas": [
+      -30.0,
+      0.0,
+      30.0,
+      60.0,
+      90.0
+     ]
+    },
+    {
+     "s_from_mm": 57.0,
+     "s_to_mm": 59.0,
+     "thetas": [
+      -30.0,
+      0.0,
+      30.0,
+      60.0
+     ]
+    },
+    {
+     "s_from_mm": 59.0,
+     "s_to_mm": 60.0,
+     "thetas": [
+      -60.0,
+      -30.0,
+      0.0,
+      30.0,
+      60.0
+     ]
+    },
+    {
+     "s_from_mm": 60.0,
+     "s_to_mm": 61.0,
+     "thetas": [
+      -60.0,
+      -30.0,
+      0.0,
+      30.0
+     ]
+    },
+    {
+     "s_from_mm": 61.0,
+     "s_to_mm": 64.0,
+     "thetas": [
+      -90.0,
+      -60.0,
+      -30.0,
+      0.0,
+      30.0
+     ]
+    },
+    {
+     "s_from_mm": 64.0,
+     "s_to_mm": 66.0,
+     "thetas": [
+      -90.0,
+      -60.0,
+      -30.0
+     ]
+    },
+    {
+     "s_from_mm": 66.0,
+     "s_to_mm": 67.0,
+     "thetas": [
+      -90.0,
+      -60.0
+     ]
+    },
+    {
+     "s_from_mm": 67.0,
+     "s_to_mm": 72.0,
+     "thetas": [
+      -120.0,
+      -90.0,
+      -60.0
+     ]
+    },
+    {
+     "s_from_mm": 72.0,
+     "s_to_mm": 76.0,
+     "thetas": [
+      -150.0,
+      -120.0,
+      -90.0,
+      -60.0
+     ]
+    },
+    {
+     "s_from_mm": 76.0,
+     "s_to_mm": 80.0,
+     "thetas": [
+      -150.0,
+      -120.0,
+      -90.0
+     ]
+    },
+    {
+     "s_from_mm": 80.0,
+     "s_to_mm": 83.78628394215141,
+     "thetas": [
+      -120.0,
+      -90.0
+     ]
+    }
+   ],
+   "bins_covered_any_pct": 54.76190476190476,
+   "cover_sets": {
+    "2": {
+     "count": 0,
+     "sets": [],
+     "best": {
+      "thetas": [
+       -90.0,
+       60.0
+      ],
+      "covered_mm": 46.19723189961088,
+      "covered_pct": 55.13698630136986,
+      "min_join_overlap_mm": -37.01517338540252,
+      "segments": [
+       {
+        "theta_deg": -90.0,
+        "s_from_mm": 60.831137656630474,
+        "s_to_mm": 86.0817985707035
+       },
+       {
+        "theta_deg": 60.0,
+        "s_from_mm": 39.310688013954596,
+        "s_to_mm": 60.25725899949245
+       }
+      ]
+     },
+     "time_s": 0.0011595910036703572
+    },
+    "3": {
+     "count": 0,
+     "sets": [],
+     "best": {
+      "thetas": [
+       -120.0,
+       -60.0,
+       60.0
+      ],
+      "covered_mm": 47.201519549602416,
+      "covered_pct": 56.335616438356155,
+      "min_join_overlap_mm": -36.584764392549005,
+      "segments": [
+       {
+        "theta_deg": -120.0,
+        "s_from_mm": 66.71339389229522,
+        "s_to_mm": 86.51220756355701
+       },
+       {
+        "theta_deg": -60.0,
+        "s_from_mm": 58.24868369950937,
+        "s_to_mm": 75.32157374936557
+       },
+       {
+        "theta_deg": 60.0,
+        "s_from_mm": 39.310688013954596,
+        "s_to_mm": 60.25725899949245
+       }
+      ]
+     },
+     "time_s": 0.004381824997835793
+    }
+   }
+  }
+ },
+ "not_run": [
+  "final Mode B run with the angles chosen by the Engineer (next run, after Truong picks 2\u20133 angles)",
+  "index moves between angles, approach / retract / air moves (C4): not part of the screening",
+  "H-CAD head model: no head hulls / H-CAD cell model (open item, as in S.5)"
+ ],
+ "assumptions": [
+  "positioner limits -400\u2026400\u00b0 from the sim cell config (awm_description positioner_limits.yaml), not the real drive / cables / belts (OI-14, OI-27)",
+  "\u03b8 \u2261 \u03b8 \u00b1 360\u00b0: the scene is periodic in \u03b8 (checked by flange FK); cable wrap of the real positioner not modelled (OI-27)",
+  "all holders on positioner_flange, i.e. they rotate with the part (I3 / OI-27 open)",
+  "part and robot base poses from CAD component placements, no REF_* markers (OI-23, scene decisions D1\u2013D3)",
+  "H-BOX head (TST-002 \u00a73.1), nozzle \u00d820 x 40 mm, s_c 0.3 mm, TCP at the nozzle tip, conduit at the head side (scene decision D7)",
+  "F9 point tolerance 0.15 mm (TST-002 gives no value); F6 elbow 5\u00b0 / shoulder 50 mm",
+  "\u03a8-WIRE window centre 0\u00b0 (= seam X, wire-leading direction unknown, I5 / E-05) \u00b1 15\u00b0 in 5\u00b0 steps",
+  "join overlap 2.0 mm between Mode B segments = seam arc_overlap_mm (T0.5 example value; welding engineer to confirm, OI-11 / OI-16)",
+  "pitch floor 0.05 mm; CP-53 pitch rule on scene-valid nodes (lead decision 2026-11-04)",
+  "F11 wrist-3 travel \u00b1180\u00b0 applied per window (each Mode B segment is one weld segment, emission stops between segments, DES-001 \u00a76.2)",
+  "B-03 margin 3.0 mm (S.6 Assumption; = F4 padding) \u2014 recorded, not used: no positioner index move is planned in the screening",
+  "covering sets use one continuous window per angle (one weld segment per angle); joins need the overlap",
+  "seam geometry: circle through the D20 edge vertices, n1 = n2 = radial (tube butt joint), S.5 record"
+ ]
+}

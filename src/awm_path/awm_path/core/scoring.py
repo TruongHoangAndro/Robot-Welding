@@ -69,17 +69,28 @@ class ScoredLayers:
 def score_candidates(layers: Sequence[Sequence[Candidate]], frames_base_mm: Sequence[np.ndarray],
                      base_T_part_mm: np.ndarray, theta_deg: float, scene, part: PartMesh,
                      seam_faces: Tuple[Sequence[str], Sequence[str]], contact_params: ContactParams,
-                     params: SceneScoreParams = SceneScoreParams()) -> ScoredLayers:
-    """Score every candidate. ``frames_base_mm`` are the seam frames ``base_link_T_seam`` of the sweep."""
+                     params: SceneScoreParams = SceneScoreParams(),
+                     contact: Optional[Sequence[ContactResult]] = None) -> ScoredLayers:
+    """Score every candidate. ``frames_base_mm`` are the seam frames ``base_link_T_seam`` of the sweep.
+
+    ``contact``: precomputed F9 results, one per point (S.5b). F9 depends only on the seam point in the part frame
+    (TCP on the seam frame at ψ 0), not on the positioner angle, ψ or the IK branch, so the caller may reuse them.
+    """
     if len(frames_base_mm) != len(layers):
         raise ValueError('one seam frame per candidate layer is required')
+    if contact is not None and len(contact) != len(layers):
+        raise ValueError('one precomputed contact result per candidate layer is required')
     t_start = time.perf_counter()
     part_T_base = np.linalg.inv(np.asarray(base_T_part_mm, dtype=float))
 
     # F9 contact, once per point
     t0 = time.perf_counter()
-    contact = [contact_check(part, part_T_base @ tcp_pose(f, 0.0), seam_faces, contact_params)
-               for f in frames_base_mm]
+    n_contact = 0
+    if contact is None:
+        contact = [contact_check(part, part_T_base @ tcp_pose(f, 0.0), seam_faces, contact_params)
+                   for f in frames_base_mm]
+        n_contact = len(contact)
+    contact = list(contact)
     t_contact = time.perf_counter() - t0
 
     index: List[Tuple[int, int]] = [(li, ci) for li, layer in enumerate(layers) for ci, c in enumerate(layer)
@@ -145,10 +156,10 @@ def score_candidates(layers: Sequence[Sequence[Candidate]], frames_base_mm: Sequ
     total = time.perf_counter() - t_start
     n = len(index)
     timing = {'points': len(layers), 'candidates': sum(len(l) for l in layers), 'states_checked': n,
-              'contact_checks': len(contact), 'validity_s': t_valid, 'clearance_s': t_clear,
+              'contact_checks': n_contact, 'validity_s': t_valid, 'clearance_s': t_clear,
               'clearance_level_s': {f'{k:g}': v for k, v in level_times.items()}, 'contact_s': t_contact,
               'total_s': total, 'per_state_s': (t_valid + t_clear) / n if n else 0.0,
-              'contact_per_point_s': t_contact / len(contact) if contact else 0.0}
+              'contact_per_point_s': t_contact / n_contact if n_contact else 0.0}
     return ScoredLayers(scores, cols, contact, timing)
 
 

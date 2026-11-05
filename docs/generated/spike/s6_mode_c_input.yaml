@@ -1,0 +1,29 @@
+# WP-S S.6 input (spike record, TST-002 §9) — Engineer-entered data for the J1 Mode C clearance check (C9, reported).
+# Data, never source: `s6_run` turns the seam entry plus the D20 view model of the job into s6_spike_seam.json
+# (D04 v2 shape) and reads the Mode C choices below. The seam geometry comes from the exact joint edge.
+part_no: '564082'
+part_rev: A
+seams:
+  - seam_id: S01
+    note: 'J1 — pipe nipple (B1) to solid (B2), closed butt joint, Mode C (coaxial with the positioner axis)'
+    joint_edge_id: JE2            # D20 topology.json; edge_a E46 (B1), edge_b E79 (B2)
+    faces: {n1: [F13], n2: [F28]} # exterior faces of B1 / B2 at the joint (as in the G2 poses, g2_poses.yaml)
+    joint_type: butt
+    reversed: false               # travel = parameter direction of edge_a (D20 preview frame 0)
+    sequence: 1
+    arcs: 1                       # Mode C: one weld segment, the positioner turns
+    arc_overlap_mm: 2.0           # closing overlap. Assumption: T0.5 example value; welding engineer to confirm (OI-11 / OI-16)
+    geometry_spacing_mm: 0.05
+mode_c:
+  seam_id: S01
+  psi_cases: [free, wire]         # both TST-002 ψ cases (I5 open)
+  contact_points:                 # where the head sits (fixed in world) at θ = 0
+    step_deg: 10.0                # seam points sampled every 10° of the J1 circle
+    facing_min_cos: 0.0           # keep points whose seam Z points towards the robot base origin
+  angular_step:                   # B-03 / F10: Δθ ≤ 2·(c − margin) / r_max
+    clearance_mm: 5.0             # c = weld clearance (D16 weld_clearance_mm, TST-002 C9)
+    margin_mm: 3.0                # Assumption: = F4 padding_mm; no value in TST-002 / DES-001 (lead / Truong to confirm)
+  clearance_levels_mm: [5.0, 7.5, 10.0, 15.0, 20.0, 30.0]   # report resolution of the F5 lower bound (first = weld clearance)
+  contact_profile_step_deg: 0.5   # F9 fine profile (pure, ≈ 0.12 mm along the seam)
+  alternates: 2                   # next-ranked poses also swept (diagnostic only; the result is rank 1)
+  alternates_distinct_points: true   # each alternate = best pose at another seam point (ψ alone changes little)

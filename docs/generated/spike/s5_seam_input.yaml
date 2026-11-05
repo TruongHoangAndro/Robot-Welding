@@ -1,0 +1,16 @@
+# WP-S S.5 seam input (spike record, TST-002 §9) — Engineer-entered seam attributes for the J2 run.
+# Data, never source: the runner `s5_run seam` turns this plus the D20 view model of the job into spike_seam.json
+# (D04 v2 shape). The seam geometry itself comes from the exact joint edge (awm_path.core.seam_input).
+part_no: '564082'
+part_rev: A
+seams:
+  - seam_id: S02
+    note: 'J2 — solid (B2) to elbow (B3), closed butt joint, robot-only (OI-27)'
+    joint_edge_id: JE4            # D20 topology.json; edge_a E71 (B2), edge_b E80 (B3)
+    faces: {n1: [F26], n2: [F35]} # exterior faces of B2 / B3 at the joint (as in the S.4 timing run)
+    joint_type: butt
+    reversed: false               # travel = parameter direction of edge_a (D20 preview frame 0)
+    sequence: 2
+    arcs: 2                       # CP-53, Truong 2026-11-03: J2 = 2 arcs
+    arc_overlap_mm: 2.0           # Assumption: value of the T0.5 seams example; welding engineer to confirm (OI-11 / OI-16)
+    geometry_spacing_mm: 0.05     # D04 geometry point spacing (interpolation sag < 3e-5 mm at r 13.3 mm)

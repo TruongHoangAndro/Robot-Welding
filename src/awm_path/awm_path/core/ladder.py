@@ -102,6 +102,12 @@ def _node_cost(c: Candidate, s: NodeScore, params: PlannerParams) -> float:
     return cost
 
 
+def node_cost(c: Candidate, s: NodeScore, params: PlannerParams) -> float:
+    """Node cost of the ladder (public; S.6 ranks single Mode C poses with it): ψ deviation + low clearance +
+    singularity penalty, as in the module docstring."""
+    return _node_cost(c, s, params)
+
+
 def _build_layer(cands: Sequence[Candidate], scores: Sequence[NodeScore], params: PlannerParams,
                  counts: Counter) -> _Layer:
     rows = []
