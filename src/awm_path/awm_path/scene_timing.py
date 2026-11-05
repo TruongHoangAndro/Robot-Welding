@@ -23,6 +23,7 @@ from typing import List, Mapping, Optional, Sequence
 import numpy as np
 
 from awm_core import units
+from awm_path.gate_g2 import add_head_cli
 
 
 def _circumcentre(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> np.ndarray:
@@ -80,6 +81,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument('--out-json', required=True)
     ap.add_argument('--out-csv', required=True)
     ap.add_argument('--log-dir', default=None)
+    add_head_cli(ap)
     args = ap.parse_args(argv)
 
     import rclpy
@@ -87,11 +89,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     from awm_core.hashing import sha256_file
     from awm_path.backends.move_group import MoveGroupCellScene
     from awm_path.core.contact import ContactParams, PartMesh
+    from awm_path.core.head import contact_params_for
     from awm_path.core.kinematics import UrAnalyticKinematics
     from awm_path.core.scene_files import part_object_files, world_T_object
     from awm_path.core.scoring import SceneScoreParams, score_candidates
     from awm_path.core.sweep import PlannerParams, required_points, sweep, write_candidates_csv
-    from awm_path.gate_g2 import _git, launch_args_from_frames
+    from awm_path.gate_g2 import _git, launch_args_from_frames, parse_head_args
 
     repo = Path(args.repo)
     job = repo / 'jobs' / args.job
@@ -113,7 +116,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     psi = params.psi_free if args.psi_case == 'free' else params.psi_wire
     seam_faces = (tuple(args.n1.split(',')), tuple(args.n2.split(',')))
     kin = UrAnalyticKinematics()
-    launch_args = dict(launch_args_from_frames(frames_file), cell_manifest=str(cell_manifest.resolve()))
+    launch_args = dict(launch_args_from_frames(frames_file), cell_manifest=str(cell_manifest.resolve()),
+                       **parse_head_args(args.head_arg))
     with SimLaunch(log_dir=args.log_dir, launch_file='sim_mock.launch.py', launch_args=launch_args) as sim:
         rclpy.init()
         node = rclpy.create_node('awm_scene_timing')
@@ -124,7 +128,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             part = PartMesh.from_files(mesh_file, faces_file)     # mesh hash checked against the placement
             w = scene.world_T_links([0.0] * 6, args.theta_deg, ['base_link', 'tool0', 'tcp_laser',
                                                                  'positioner_flange'])
-            tool0_T_tcp = np.linalg.inv(w['tool0']) @ w['tcp_laser']
+            tool0_T_tcp = scene.head.tool0_T_tcp_mm     # robot description (S.5c Task 0), FK-checked
             base_T_part = np.linalg.inv(w['base_link']) @ world_T_object(part_obj, w['positioner_flange'])
             frames_base = [base_T_part @ f for f in part_frames]
             t0 = time.perf_counter()
@@ -132,7 +136,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             t_sweep = time.perf_counter() - t0
             scene.set_theta(args.theta_deg)
             scored = score_candidates(layers, frames_base, base_T_part, args.theta_deg, scene, part, seam_faces,
-                                      ContactParams(), SceneScoreParams())
+                                      contact_params_for(scene.head, ContactParams(rule_b=args.f9_rule)),
+                                      SceneScoreParams())
         except Exception:
             print(sim.log_tail(60), file=sys.stderr)
             raise
@@ -151,6 +156,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                                                                          topo_file, mesh_file, faces_file)],
         'scene_backend': scene.record, 'kinematics_backend': kin.name, 'head_model': args.head_model,
         'psi_case': args.psi_case, 'theta_deg': args.theta_deg, 'joint': args.joint,
+        'head_args': parse_head_args(args.head_arg), 'f9_rule': args.f9_rule,
         'seam_faces': {'n1': list(seam_faces[0]), 'n2': list(seam_faces[1])},
         'seam_geometry': ('circle through the D20 preview frames of the joint edge (approximation for timing; '
                           'S.5 uses the D04 seam)'),

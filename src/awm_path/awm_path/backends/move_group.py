@@ -99,6 +99,7 @@ class MoveGroupCellScene:
         node.create_subscription(String, '/robot_description_semantic', self._on_semantic, latched)
         self.padding_dirty = False
         self.job = None
+        self.head = None
         self.record = None
         self.scene_hash = None
         self._f4 = None
@@ -156,6 +157,23 @@ class MoveGroupCellScene:
             out[name] = make_transform(units.m_to_mm(np.array([p.x, p.y, p.z])), quat_to_matrix([o.x, o.y, o.z, o.w]))
         return out
 
+    @property
+    def robot_description(self) -> str:
+        """URDF of the running graph (``/robot_description``, latched); available after :meth:`load`."""
+        if self._robot_description is None:
+            raise MoveItServiceError('/robot_description not received yet (call load() first)')
+        return self._robot_description
+
+    def head_geometry(self):
+        """Head values of the description in use (S.5c Task 0, CP-56 one source): ``tool0_T_tcp`` from the URDF
+        chain tool0 -> tcp_laser, nozzle radius and s_c from the ``nozzle_tip`` cylinder; cross-checked with
+        ``/compute_fk`` (raises ``ValueError`` on a mismatch)."""
+        from awm_path.core.head import check_against_fk, head_from_urdf
+        head = head_from_urdf(self.robot_description)
+        w = self.world_T_links([0.0] * 6, 0.0, [head.tool_link, head.tcp_link])
+        check_against_fk(head, np.linalg.inv(w[head.tool_link]) @ w[head.tcp_link])
+        return head
+
     def _world_T_flange(self, theta_deg: float) -> np.ndarray:
         return self.world_T_links([0.0] * 6, theta_deg, ['positioner_flange'])['positioner_flange']
 
@@ -192,9 +210,11 @@ class MoveGroupCellScene:
                                 robot_description_semantic=self._robot_description_semantic, cell=cell, job=job,
                                 f4_padding_mm=self._f4, clearance_links=self.clearance_links)
         self.scene_hash = scene_hash(content)
+        self.head = self.head_geometry()
         self.record = {
             'scene_hash': self.scene_hash,
             'content': content,
+            'head': self.head.as_record(),
             'files': {'cell': {'file': str(cell.path), 'file_sha256': cell.file_sha256},
                       'placement': {'file': str(job.path), 'file_sha256': job.file_sha256}},
         }

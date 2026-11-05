@@ -126,3 +126,26 @@ def test_launch_args_from_frames(tmp_path):
     # direction in world (0, 1, 0) expressed in the axis frame rotated +90 deg about Z -> (1, 0, 0)
     axis = [float(v) for v in args['positioner_axis_xyz'].split()]
     assert np.allclose(axis, [1.0, 0.0, 0.0], atol=1e-12)
+
+
+def test_parse_head_args() -> None:
+    from awm_path.gate_g2 import parse_head_args
+    assert parse_head_args(['nozzle_dia_mm=12', 'contact_standoff_mm=0.3']) == {
+        'nozzle_dia_mm': '12', 'contact_standoff_mm': '0.3'}
+    assert parse_head_args(None) == {}
+    for bad in (['nozzle_dia_mm'], ['nozzle_dia_mm=/etc'], ['a=1', 'a=2'], ['X=1']):
+        with pytest.raises(ValueError):
+            parse_head_args(bad)
+
+
+def test_run_gate_uses_the_given_tool0_T_tcp() -> None:
+    """S.5c Task 0: the runner passes tool0_T_tcp of the robot description; identity = the FK default here, and a
+    different offset changes the solved states (it is really used)."""
+    poses, seams = load_pose_specs(_doc())
+    a = run_gate(FakeScene(), FakeKin(), poses, seams, _plate(), _part(), ContactParams())
+    b = run_gate(FakeScene(), FakeKin(), poses, seams, _plate(), _part(), ContactParams(), tool0_T_tcp=np.eye(4))
+    assert [r.details['q_deg'] for r in a] == [r.details['q_deg'] for r in b]
+    off = np.eye(4)
+    off[2, 3] = 7.0
+    c = run_gate(FakeScene(), FakeKin(), poses, seams, _plate(), _part(), ContactParams(), tool0_T_tcp=off)
+    assert [r.details['q_deg'] for r in a] != [r.details['q_deg'] for r in c]

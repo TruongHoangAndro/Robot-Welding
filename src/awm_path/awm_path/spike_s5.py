@@ -33,6 +33,7 @@ import numpy as np
 
 from awm_core import jsonio, units
 from awm_path.core.seam_input import arc_ranges, circle_joint_geometry, frames_at, read_glb_edge_polyline
+from awm_path.gate_g2 import add_head_cli
 
 CREATED_BY = 'awm_path.spike_s5'
 SPIKE_SEAM_FILE = 'spike_seam.json'
@@ -295,7 +296,8 @@ def _cmd_run(args) -> int:
     from awm_path.core.scene_files import CLEARANCE_METHOD, DEFAULT_CLEARANCE_LINKS, part_object_files, world_T_object
     from awm_path.core.scoring import SceneScoreParams
     from awm_path.core.sweep import PlannerParams
-    from awm_path.gate_g2 import _git, _rel, launch_args_from_frames
+    from awm_path.core.head import contact_params_for
+    from awm_path.gate_g2 import _git, _rel, launch_args_from_frames, parse_head_args
 
     repo, out_dir = Path(args.repo), Path(args.out_dir)
     job = repo / 'jobs' / args.job
@@ -312,10 +314,11 @@ def _cmd_run(args) -> int:
     cases = [c.strip() for c in args.psi_cases.split(',') if c.strip()]
     clearance_links = tuple(args.clearance_links.split(',')) if args.clearance_links else DEFAULT_CLEARANCE_LINKS
     params = PlannerParams()
-    contact_params, score_params = ContactParams(), SceneScoreParams()
+    score_params = SceneScoreParams()
     kin = UrAnalyticKinematics()
     head_tag = args.head_model.lower().replace('-', '')
-    launch_args = dict(launch_args_from_frames(frames_file), cell_manifest=str(cell_manifest.resolve()))
+    launch_args = dict(launch_args_from_frames(frames_file), cell_manifest=str(cell_manifest.resolve()),
+                       **parse_head_args(args.head_arg))
     results: Dict[str, Any] = {}
     with SimLaunch(log_dir=args.log_dir, launch_file='sim_mock.launch.py', launch_args=launch_args) as sim:
         rclpy.init()
@@ -327,12 +330,13 @@ def _cmd_run(args) -> int:
             scene.load(timeout_s=180.0)
             part_obj, mesh_file, faces_file = part_object_files(scene.job)
             part = PartMesh.from_files(mesh_file, faces_file)
+            contact_params = contact_params_for(scene.head, ContactParams(rule_b=args.f9_rule))
             scene.set_theta(args.theta_deg)
             w = scene.world_T_links([0.0] * 6, args.theta_deg, ['base_link', 'tool0', 'tcp_laser',
                                                                  'positioner_flange'])
             t_load = time.perf_counter() - t_load
             ctx = {'params': params, 'kin': kin, 'scene': scene, 'part': part, 'theta_deg': args.theta_deg,
-                   'tool0_T_tcp': np.linalg.inv(w['tool0']) @ w['tcp_laser'],
+                   'tool0_T_tcp': scene.head.tool0_T_tcp_mm,
                    'base_T_part': np.linalg.inv(w['base_link']) @ world_T_object(part_obj, w['positioner_flange']),
                    'seam_faces': (tuple(seam['faces']['n1']), tuple(seam['faces']['n2'])),
                    'contact_params': contact_params, 'score_params': score_params, 'job_dir': job,
@@ -389,6 +393,7 @@ def _cmd_run(args) -> int:
         'theta_deg': args.theta_deg, 'mode': 'robot-only', 'scene_load_s': t_load,
         'params': params_rec, 'params_sha256': sha256_text(json.dumps(params_rec, sort_keys=True)),
         'pitch_min_mm': args.pitch_min_mm, 'contact_params': contact_params.as_record(),
+        'head_args': parse_head_args(args.head_arg), 'f9_rule': args.f9_rule,
         'score_params': dataclasses.asdict(score_params),
         'seam': {k: seam[k] for k in ('seam_id', 'joint_edge_id', 'edges', 'solids', 'faces', 'closed', 'length_mm',
                                       'arcs', 'arc_overlap_mm', 'note')},
@@ -442,6 +447,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument('--pitch-min-mm', type=float, default=0.05)
     p.add_argument('--out-dir', required=True)
     p.add_argument('--log-dir', default=None)
+    add_head_cli(p)
     args = ap.parse_args(argv)
     return _cmd_seam(args) if args.cmd == 'seam' else _cmd_run(args)
 

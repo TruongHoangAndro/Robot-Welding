@@ -100,6 +100,20 @@ def _q_beside_cube(b):
     return sols[0]
 
 
+def test_head_from_the_running_description(backend) -> None:
+    """S.5c Task 0: tool0_T_tcp and the F9 nozzle come from /robot_description of the running graph and equal
+    /compute_fk (IK offset = URDF chain tool0 -> tcp_laser); the record carries them with the description hash."""
+    from awm_core.hashing import sha256_text
+    b = backend[0]
+    w = b.world_T_links(HOME_DEG, 0.0, ['tool0', 'tcp_laser'])
+    fk = np.linalg.inv(w['tool0']) @ w['tcp_laser']
+    assert np.allclose(b.head.tool0_T_tcp_mm, fk, atol=1e-6)
+    assert b.head.nozzle_radius_mm == pytest.approx(10.0)      # sim_mock default args (TST-002 §3.1 Ø 20)
+    assert b.head.contact_standoff_mm == pytest.approx(0.3)
+    assert b.record['head']['robot_description_sha256'] == sha256_text(b.robot_description)
+    assert b.record['content']['robot_description_sha256'] == sha256_text(b.robot_description)
+
+
 def test_record_and_scene_hash(backend) -> None:
     b, _, cell, job = backend
     rec = b.record

@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -28,6 +29,7 @@ import yaml
 from awm_core.frames import make_transform, quat_to_matrix
 from awm_core.hashing import sha256_file
 from awm_path.core.contact import ContactParams, PartMesh, contact_check, point_triangle_distances
+from awm_path.core.head import contact_params_for
 from awm_path.core.gate import GatePose, GateResult, gate_summary, load_pose_specs, resolve_pose
 from awm_path.core.kinematics import fk_tcp
 from awm_path.core.scene_files import JobObject, part_object_files, world_T_object
@@ -65,13 +67,16 @@ def _nearest_face(part: PartMesh, point: np.ndarray) -> Optional[Tuple[str, floa
 
 def run_gate(scene, kin, poses: Sequence[GatePose], seams: Mapping[str, Tuple[Tuple[str, ...], Tuple[str, ...]]],
              part: PartMesh, part_object: JobObject, contact_params: ContactParams,
-             clearance_mm: float = WELD_CLEARANCE_MM) -> List[GateResult]:
+             clearance_mm: float = WELD_CLEARANCE_MM, tool0_T_tcp: Optional[np.ndarray] = None
+             ) -> List[GateResult]:
     """Evaluate every pose. ``scene`` provides ``world_T_links``, ``check`` and ``check_clearance`` (mm / deg);
-    ``part_object`` is the D19 part object (its parent frame is respected, ``scene_files.world_T_object``)."""
+    ``part_object`` is the D19 part object (its parent frame is respected, ``scene_files.world_T_object``).
+    ``tool0_T_tcp``: from the robot description (``scene.head``, S.5c Task 0); default = FK of the scene."""
     zeros = [0.0] * 6
     w = scene.world_T_links(zeros, 0.0, ['base_link', 'tool0', 'tcp_laser'])
     world_T_base = w['base_link']
-    tool0_T_tcp = np.linalg.inv(w['tool0']) @ w['tcp_laser']
+    if tool0_T_tcp is None:
+        tool0_T_tcp = np.linalg.inv(w['tool0']) @ w['tcp_laser']
     results: List[GateResult] = []
     for pose in poses:
         t0 = time.perf_counter()
@@ -111,7 +116,35 @@ def _contact_dict(c) -> Optional[Dict[str, Any]]:
     d = c.tcp_seam_distance_mm
     return {'ok': c.ok, 'reason': c.reason, 'tcp_seam_distance_mm': d if np.isfinite(d) else None,
             'tcp_nearest_other': list(c.tcp_nearest_other) if c.tcp_nearest_other else None,
-            'offending': [list(x) for x in c.offending], 'samples': c.samples, 'triangles': c.triangles}
+            'offending': [list(x) for x in c.offending], 'excused': [list(x) for x in c.excused],
+            'samples': c.samples, 'triangles': c.triangles}
+
+
+_HEAD_ARG = re.compile(r'^[a-z][a-z0-9_]*=[-+0-9.eE ]+$')
+
+
+def parse_head_args(items: Optional[Sequence[str]]) -> Dict[str, str]:
+    """``KEY=VALUE`` head description args (mm / deg numbers, e.g. ``nozzle_dia_mm=12``) for ``sim_mock``.
+
+    The values reach the planner only through the robot description they produce (S.5c Task 0: one source)."""
+    out: Dict[str, str] = {}
+    for it in items or ():
+        if not _HEAD_ARG.match(it):
+            raise ValueError(f'head arg {it!r}: expected key=<number(s)>')
+        k, v = it.split('=', 1)
+        if k in out:
+            raise ValueError(f'head arg {k!r} given twice')
+        out[k] = v.strip()
+    return out
+
+
+def add_head_cli(ap: argparse.ArgumentParser) -> None:
+    """Common runner options: head description args and the F9 rule (b) variant (records keep both)."""
+    ap.add_argument('--head-arg', action='append', default=[], metavar='KEY=VALUE',
+                    help='xacro arg of the head description passed to sim_mock (repeatable), e.g. nozzle_dia_mm=12')
+    ap.add_argument('--f9-rule', choices=('rising', 'unsigned'), default='rising',
+                    help="F9 rule (b): 'rising' = CP-56 (default); 'unsigned' = S.4 rule, only to reproduce records "
+                         'made before CP-56')
 
 
 def _caught_by(r: GateResult) -> str:
@@ -183,6 +216,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument('--out-dir', required=True, help='folder for g2_log.json / g2_log.md')
     ap.add_argument('--head-model', default='H-BOX', help='head model name recorded with the result')
     ap.add_argument('--log-dir', default=None, help='folder for the launch log (default: a temp folder)')
+    add_head_cli(ap)
     args = ap.parse_args(argv)
 
     import rclpy
@@ -197,8 +231,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     placement = job / 'placement.json'
     pose_doc = yaml.safe_load(poses_file.read_text())
     poses, seams = load_pose_specs(pose_doc)
-    launch_args = dict(launch_args_from_frames(frames), cell_manifest=str(cell_manifest.resolve()))
-    contact_params = ContactParams()
+    launch_args = dict(launch_args_from_frames(frames), cell_manifest=str(cell_manifest.resolve()),
+                       **parse_head_args(args.head_arg))
     kin = UrAnalyticKinematics()
     with SimLaunch(log_dir=args.log_dir, launch_file='sim_mock.launch.py', launch_args=launch_args) as sim:
         rclpy.init()
@@ -208,8 +242,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             scene.load(timeout_s=180.0)
             part_obj, mesh_file, faces_file = part_object_files(scene.job)
             part = PartMesh.from_files(mesh_file, faces_file)
+            contact_params = contact_params_for(scene.head, ContactParams(rule_b=args.f9_rule))
             t0 = time.perf_counter()
-            results = run_gate(scene, kin, poses, seams, part, part_obj, contact_params)
+            results = run_gate(scene, kin, poses, seams, part, part_obj, contact_params,
+                               tool0_T_tcp=scene.head.tool0_T_tcp_mm)
             wall = time.perf_counter() - t0
         except Exception:
             print(sim.log_tail(60), file=sys.stderr)
@@ -226,11 +262,14 @@ def main(argv: Optional[List[str]] = None) -> int:
                                                                           placement, mesh_file, faces_file)],
         'scene_backend': scene.record, 'kinematics_backend': kin.name, 'head_model': args.head_model,
         'psi_case': 'n/a (scene sanity)', 'contact_params': contact_params.as_record(),
+        'head_args': parse_head_args(args.head_arg), 'f9_rule': args.f9_rule,
         'weld_clearance_mm': WELD_CLEARANCE_MM, 'launch_args': {k: v for k, v in launch_args.items()
                                                                if k != 'cell_manifest'},
         'wall_time_s': wall, 'assumptions': [
             'part and base poses from CAD component placements, no REF_* markers (OI-23)',
-            'H-BOX head, nozzle Ø20 x 40 mm, s_c 0.3 mm, TCP at the nozzle tip (TST-002 §3.1)',
+            f'{args.head_model} head; nozzle Ø{2.0 * contact_params.nozzle_radius_mm:g} mm, s_c '
+            f'{contact_params.standoff_mm:g} mm and tool0_T_tcp from the robot description (S.5c Task 0); TCP at the '
+            'nozzle tip (TST-002 §3.1, I2 / OI-15)',
             'contact point tolerance 0.15 mm (F9 gives no value)'],
     }
     out = Path(args.out_dir)
