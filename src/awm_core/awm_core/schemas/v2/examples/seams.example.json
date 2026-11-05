@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.0",
+  "schema_version": "2.1",
   "created_by": "lead (hand-made contract example T0.5; format only, values not kinematically checked)",
   "created_at": "2026-11-03T09:00:00+07:00",
   "inputs": [
@@ -42,6 +42,9 @@
       "leg_mm": null,
       "arcs": 1,
       "arc_overlap_mm": 2.0,
+      "positioner_mode": "C",
+      "positioner_angles_deg": null,
+      "start_offset_mm": 0.0,
       "fingerprint": "circle:r0.0133:c0.0000,0.0000,0.0000",
       "geometry": {
         "spacing_mm": 10.473285,

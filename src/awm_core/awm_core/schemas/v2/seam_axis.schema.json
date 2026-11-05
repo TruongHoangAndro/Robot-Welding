@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v2/seam_axis.schema.json",
+  "title": "seam_axis",
+  "description": "Derived seam geometry in the positioner frame (CP-58 decision 2): every D04 seam point and its seam frame in positioner_flange at theta = 0 (= positioner_axis at theta = 0; axis = +X through the origin), mm / deg. A point at theta is the theta = 0 point rotated by theta about +X. Never edited; stale when seams.json, placement.json or frames.yaml changes (inputs carry their SHA-256).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "frame",
+    "theta_deg",
+    "axis",
+    "flange_T_part",
+    "seams"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "frame": {
+      "const": "positioner_flange"
+    },
+    "theta_deg": {
+      "const": 0
+    },
+    "axis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "point_mm",
+        "direction"
+      ],
+      "properties": {
+        "point_mm": {
+          "$ref": "common.schema.json#/$defs/vec3"
+        },
+        "direction": {
+          "$ref": "common.schema.json#/$defs/unit_vec3"
+        }
+      },
+      "description": "positioner axis in the flange frame: origin, +X"
+    },
+    "flange_T_part": {
+      "$ref": "common.schema.json#/$defs/pose_mm"
+    },
+    "seams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "seam_id",
+          "joint_edge_id",
+          "closed",
+          "reversed",
+          "length_mm",
+          "spacing_mm",
+          "positioner_mode",
+          "positioner_angles_deg",
+          "arcs",
+          "coaxial",
+          "summary",
+          "points"
+        ],
+        "properties": {
+          "seam_id": {
+            "$ref": "common.schema.json#/$defs/seam_id"
+          },
+          "joint_edge_id": {
+            "oneOf": [
+              {
+                "$ref": "common.schema.json#/$defs/joint_edge_id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "reversed": {
+            "type": "boolean"
+          },
+          "length_mm": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "spacing_mm": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "positioner_mode": {
+            "type": "string",
+            "enum": [
+              "sync",
+              "C",
+              "B"
+            ]
+          },
+          "positioner_angles_deg": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arcs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "index",
+                "of",
+                "s_start_mm",
+                "s_end_mm"
+              ],
+              "properties": {
+                "index": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "of": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "s_start_mm": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "s_end_mm": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "positioner_angle_deg": {
+                  "oneOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "description": "arc k of n (CP-53): equal lengths from the seam start, each extended by arc_overlap_mm at its end (not the last arc of an open seam); on a closed seam s_end_mm may exceed length_mm (wraps over the start)"
+            },
+            "minItems": 1
+          },
+          "coaxial": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "is_coaxial",
+              "r_spread_mm",
+              "axis_angle_deg",
+              "tol_r_spread_mm",
+              "tol_axis_angle_deg"
+            ],
+            "properties": {
+              "is_coaxial": {
+                "type": "boolean"
+              },
+              "r_spread_mm": {
+                "type": "number",
+                "minimum": 0
+              },
+              "axis_angle_deg": {
+                "type": "number",
+                "minimum": 0,
+                "description": "max angle between the seam tangent and the plane normal to the axis (0 for a circle coaxial with the axis)"
+              },
+              "tol_r_spread_mm": {
+                "type": "number",
+                "minimum": 0
+              },
+              "tol_axis_angle_deg": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "description": "coaxial test (Mode C candidate); tolerances are parameters with Assumption defaults"
+          },
+          "summary": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "points",
+              "r_min_mm",
+              "r_max_mm",
+              "axial_min_mm",
+              "axial_max_mm",
+              "phi_start_deg",
+              "phi_end_deg"
+            ],
+            "properties": {
+              "points": {
+                "type": "integer",
+                "minimum": 2
+              },
+              "r_min_mm": {
+                "type": "number"
+              },
+              "r_max_mm": {
+                "type": "number"
+              },
+              "axial_min_mm": {
+                "type": "number"
+              },
+              "axial_max_mm": {
+                "type": "number"
+              },
+              "phi_start_deg": {
+                "type": "number"
+              },
+              "phi_end_deg": {
+                "type": "number"
+              }
+            }
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "s_mm",
+                "p_mm",
+                "quat_xyzw",
+                "r_mm",
+                "axial_mm",
+                "phi_deg"
+              ],
+              "properties": {
+                "s_mm": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "p_mm": {
+                  "$ref": "common.schema.json#/$defs/vec3"
+                },
+                "quat_xyzw": {
+                  "$ref": "common.schema.json#/$defs/quat_xyzw"
+                },
+                "r_mm": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "axial_mm": {
+                  "type": "number"
+                },
+                "phi_deg": {
+                  "type": "number",
+                  "description": "angle about the axis (+X of the flange frame) from +Y towards +Z, unwrapped along the seam (continuous), first point in (-180, 180]"
+                }
+              },
+              "description": "seam point in positioner_flange at theta = 0: position, seam frame (X travel, Z out of the material, beam = -Z) as quaternion, r = distance from the axis, axial = x, phi = atan2(z, y)"
+            },
+            "minItems": 2
+          }
+        }
+      }
+    }
+  }
+}
