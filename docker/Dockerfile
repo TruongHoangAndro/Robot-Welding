@@ -20,6 +20,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && python3 -m venv --system-site-packages /opt/awm_venv \
     && /opt/awm_venv/bin/pip install --no-cache-dir ur-analytic-ik==0.1.0.post3
 
+# awm_api (G1.4, DES-001 ADR-09): FastAPI backend, uvicorn server, httpx for the FastAPI test client. Same venv;
+# awm_api never imports rclpy or OCC (B-11, ADR-15).
+RUN /opt/awm_venv/bin/pip install --no-cache-dir fastapi==0.162.0 uvicorn==0.54.0 websockets==17.4 \
+        httpx==0.28.1 python-multipart==0.0.33
+
 # The demo entrypoint forces ROS_DOMAIN_ID=0 and starts demo supervisors; awm_dev does not use it.
 ENTRYPOINT []
 CMD ["sleep", "infinity"]
