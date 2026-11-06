@@ -42,7 +42,10 @@ def test_occ_suite_passes_in_conda_env(tmp_path):
         str(HERE / 'test_view_occ.py'), str(HERE / 'test_parity_occ.py'),
         str(HERE / 'test_assembly_tree_occ.py'), str(HERE / 'test_scene_occ.py'),
         str(HERE / 'test_cell_view_occ.py'), str(HERE / 'test_head_occ.py'),
-        str(HERE / 'test_joint_seam_occ.py')]
+        str(HERE / 'test_joint_seam_occ.py'), str(HERE / 'test_assembly_view_occ.py'),
+        str(HERE / 'test_circle_pick_occ.py'), str(HERE / 'test_roles_map.py'),
+        str(HERE / 'test_cell_import_occ.py'), str(HERE / 'test_job_placement_occ.py'),
+        str(HERE / 'test_head_teach_occ.py')]
     proc = subprocess.run(argv, cwd=str(HERE), env=occ_bridge.geometry_env(),
                           capture_output=True, text=True, timeout=900, check=False)
     # OCCT writes its own (late-flushed) banners to stdout: look for pytest's summary line.

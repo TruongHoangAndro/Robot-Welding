@@ -36,7 +36,7 @@ def pick():
             'axis_file': [1.0, 0.0, 0.0], 'radius_mm': 60.0, 'reversed': False, 'method': 'pick'}
 
 
-def test_compiled_map_has_no_nested_entries(tree, roles, pick):
+def test_compiled_map_has_no_nested_entries(tree, roles, pick, occ):
     from awm_geometry import scene
     from awm_geometry.roles_map import compile_cad_map
 
@@ -53,7 +53,7 @@ def test_compiled_map_has_no_nested_entries(tree, roles, pick):
     assert cmap['source'] == {'file': 'cell.step', 'sha256': 'a' * 64, 'unit': 'mm', 'up_axis': '+Y'}
 
 
-def test_unassigned_component_becomes_static_and_excluded_listed(tree, roles, pick):
+def test_unassigned_component_becomes_static_and_excluded_listed(tree, roles, pick, occ):
     from awm_geometry.roles_map import compile_cad_map
 
     _cmap, report = compile_cad_map(tree, roles, pick)
@@ -61,7 +61,7 @@ def test_unassigned_component_becomes_static_and_excluded_listed(tree, roles, pi
     assert report['excluded'] == ['Part:1', 'Bolt:1']
 
 
-def test_invalid_roles_refused(tree, roles, pick):
+def test_invalid_roles_refused(tree, roles, pick, occ):
     from awm_geometry.roles_map import compile_cad_map
     from awm_geometry.scene import MapError
 
@@ -70,7 +70,7 @@ def test_invalid_roles_refused(tree, roles, pick):
         compile_cad_map(tree, roles, pick)
 
 
-def test_ambiguous_robot_name_refused(tree, roles, pick):
+def test_ambiguous_robot_name_refused(tree, roles, pick, occ):
     from awm_geometry.roles_map import compile_cad_map
     from awm_geometry.scene import MapError
 
