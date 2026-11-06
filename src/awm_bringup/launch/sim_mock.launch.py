@@ -4,11 +4,12 @@
         [base_xyz_mm:="x y z"] [base_quat_xyzw:="x y z w"]
         [positioner_xyz_mm:="x y z"] [positioner_quat_xyzw:="x y z w"] [positioner_axis_xyz:="x y z"]
         [padding_mm:=3.0] [<any H-BOX xacro arg>:=<mm or deg>]
+        [head_model:=hbox|hcad] [head_dir:=<absolute folder with head.yaml, e.g. <repo_root>/cell/model/head>]
 
 Positioner limits: only awm_description/config/positioner_limits.yaml (URDF and MoveIt). The rotating set follows
 positioner_joint; checkers use awm_bringup.scene_sync (set_positioner_and_wait, check_positioner).
 
-UR5e + H-BOX head + positioner_joint on ros2_control mock hardware (one controller manager, two components:
+UR5e + LightWELD head + positioner_joint on ros2_control mock hardware (one controller manager, two components:
 joint_trajectory_controller for the arm, positioner_trajectory_controller for positioner_joint), MoveIt
 move_group, and cell_scene_loader (cell manifest -> world objects, 3 mm padding on every link except nozzle_tip,
 TST-002 F4). Mock hardware only: this launch never connects to a robot or a drive.
@@ -16,6 +17,10 @@ TST-002 F4). Mock hardware only: this launch never connects to a robot or a driv
 All pose / size arguments are mm, degrees and unit quaternions (ADR-14). Empty H-BOX args keep the xacro defaults
 (TST-002 §3.1). Defaults of the poses are identity (Assumption until A3 frames.yaml, OI-23). The v1 MIG launch
 ``sim.launch.py`` is unchanged.
+
+Head model (Goal 1 G1.1): ``head_model:=hbox`` (default, parametric envelope) or ``hcad`` (Fusion head CAD meshes and
+tcp_laser from ``<head_dir>/head.yaml``, A18 export). For hcad the folder is checked first (head.yaml, mesh files and
+their SHA-256: awm_bringup.cell_config.check_head_dir); nozzle_* and conduit_* args apply to both models.
 """
 
 from launch import LaunchDescription
@@ -25,7 +30,7 @@ from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from moveit_configs_utils import MoveItConfigsBuilder
 
-from awm_bringup.cell_config import load_positioner_limits, positioner_moveit_limits
+from awm_bringup.cell_config import check_head_dir, load_positioner_limits, positioner_moveit_limits
 from awm_core import units
 
 POSE_ARGS = {
@@ -49,6 +54,13 @@ def _launch_setup(context, *args, **kwargs):
     headless = arg('headless').lower() in ('true', '1')
     mappings = {name: arg(name) for name in POSE_ARGS}
     mappings.update({name: arg(name) for name in XACRO_ARGS if arg(name).strip()})
+    head_model = arg('head_model').strip()
+    if head_model not in ('hbox', 'hcad'):
+        raise ValueError(f'head_model must be hbox or hcad, got {head_model!r}')
+    mappings['head_model'] = head_model
+    if head_model == 'hcad':
+        check_head_dir(arg('head_dir'))  # clear error before xacro / MoveIt (missing or changed files)
+        mappings['head_dir'] = arg('head_dir').strip()
     padding_mm = float(arg('padding_mm'))
     manifest = arg('cell_manifest') or (FindPackageShare('awm_bringup').perform(context)
                                         + '/config/cell_scene_nominal.yaml')
@@ -107,10 +119,15 @@ def generate_launch_description():
         DeclareLaunchArgument('cell_manifest', default_value='',
                               description='cell scene manifest (mm); empty = config/cell_scene_nominal.yaml '
                                           '(Pismo box only, Assumption)'),
+        DeclareLaunchArgument('head_model', default_value='hbox',
+                              description='hbox (parametric H-BOX, default) or hcad (Fusion head CAD, needs head_dir)'),
+        DeclareLaunchArgument('head_dir', default_value='',
+                              description='hcad only: absolute folder with head.yaml + STL meshes '
+                                          '(A18 export, e.g. <repo_root>/cell/model/head)'),
         DeclareLaunchArgument('padding_mm', default_value='3.0',
                               description='padding on every robot link except nozzle_tip (TST-002 F4, D16)'),
     ]
     decls += [DeclareLaunchArgument(n, default_value=d, description=t) for n, (d, t) in POSE_ARGS.items()]
-    decls += [DeclareLaunchArgument(n, default_value='', description='H-BOX xacro arg; empty = default')
+    decls += [DeclareLaunchArgument(n, default_value='', description='head xacro arg (H-BOX; nozzle / conduit also H-CAD); empty = default')
               for n in XACRO_ARGS]
     return LaunchDescription(decls + [OpaqueFunction(function=_launch_setup)])
