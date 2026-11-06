@@ -332,7 +332,7 @@ def check_path(path_doc: Mapping) -> None:
         pl = arc.get('planning', {})
         if pl.get('speed_within_limits') is False:
             slow.append(f'{_arc_name(arc)}: travel speed {arc["travel_speed_mm_s"]} mm/s needs joint speeds above the '
-                        f'limits; max_travel_speed_mm_s = {pl.get("max_travel_speed_mm_s"):.2f}')
+                        f'limits; max_travel_speed_mm_s = {float(pl.get("max_travel_speed_mm_s", float("nan"))):.2f}')
     if slow:
         raise ProgramRefused('; '.join(slow) + ' — the travel speed is an Engineer input: re-plan with a travel speed '
                              '≤ the maximum (the software never slows a weld down and never raises a limit)')
