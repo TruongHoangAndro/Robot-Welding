@@ -362,7 +362,47 @@ def test_golden_job_from_cell_cad(tmp_path, occ):
     assert np.linalg.norm(np.cross(c_w - axis_p, axis_d)) <= 0.05
     if _status(check, 4) == 'red':
         # Found 2026-11-06: designed contacts of the real cell (jig bearing seats around holder Part1 / pulley :1,
-        # timing-belt hulls around the pulleys, 4.5-5.1 mm deep). How check 4 treats them is Truong's decision;
-        # kept visible as xfail until then (plan Task 5 step 6: no tolerance change without Truong).
-        pytest.xfail('check 4 red on the golden cell (designed contacts: '
-                     + next(c['note'] for c in check['checks'] if c['id'] == 4) + ') - decision pending')
+        # timing-belt hulls around the pulleys, 4.5-5.1 mm deep). Decided by Truong 2026-11-07: check 4 stays red
+        # until the cell CAD separates the bearings / belts into their own components (role exclude or rotary).
+        pytest.xfail('check 4 red on the golden cell, kept red until the CAD is fixed (Truong 2026-11-07): '
+                     + next(c['note'] for c in check['checks'] if c['id'] == 4))
+
+
+def test_job_only_components_reach_the_scene(cell_repo, tmp_path, occ):
+    """Review I2 / I3: a rotary leaf added under a matched fixture and a static support that the cell does not have
+    become placement objects (per-leaf hulls); components the cell already has are not duplicated."""
+    from awm_geometry import testparts
+
+    c = testparts.JOB_AXIS_POINT_MM
+    nodes = testparts.job_assembly_nodes()
+    fixture = next(n for n in nodes if n['name'] == 'Fixture')
+    fixture['children'].append({'name': 'Extra', 'shape': testparts.box_mm((20.0, c[1] + 35.0, c[2] - 5.0),
+                                                                          (25.0, c[1] + 45.0, c[2] + 5.0))})
+    nodes.append({'name': 'Support', 'shape': testparts.box_mm((40.0, c[1] - 200.0, 0.0), (60.0, c[1] - 150.0, 50.0))})
+    step = tmp_path / 'extra.step'
+    testparts.write_tree_assembly(step, 'job', nodes)
+    _job, check, placement = import_job(cell_repo, 'EXTRA_A', step)
+    assert check['status'] == 'green', check
+    objs = {o['object_id']: o for o in placement['objects']}
+    assert objs['extra_1']['role'] == 'rotary_fixture' and objs['extra_1']['parent_frame'] == 'positioner_flange'
+    assert objs['support_1']['role'] == 'fixture' and objs['support_1']['parent_frame'] == 'world'
+    assert not {'holder_1', 'base_1', 'disc_1', 'fixture_1'} & set(objs)          # already in the cell model
+    jsonio.validate(placement, 'v2/placement')
+
+
+def test_unmapped_solid_is_refused(cell_repo, job_assembly_step, monkeypatch):
+    """Review I4: a solid whose component link was lost in healing must not vanish from the part mesh / check 4."""
+    from awm_geometry import job_placement, part
+    from awm_geometry.occ_io import GeometryError
+
+    import_job(cell_repo, 'LOST_A', job_assembly_step)
+    real = part.load_part
+
+    def lossy(*a, **k):
+        lp = real(*a, **k)
+        lp.solid_components[0] = None
+        return lp
+
+    monkeypatch.setattr(job_placement.part, 'load_part', lossy)
+    with pytest.raises(GeometryError, match='component'):
+        job_placement.run(cell_repo, 'LOST_A', 'test')

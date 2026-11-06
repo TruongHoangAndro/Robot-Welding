@@ -166,6 +166,10 @@ def run(repo_root: Path, job_name: str, created_by: str, chord_near_mm: float = 
 
     # --- meshes: part (D20 face ids) and the rotating set -----------------------------------------------------
     loaded = part.load_part(step, components=True)
+    lost = [f'B{b}' for b, ci in enumerate(loaded.solid_components or [], 1) if ci is None]
+    if lost:
+        raise GeometryError(f'solid(s) {", ".join(lost)} lost their component link in check / heal: their role is '
+                            'unknown, so they would be missing from the part mesh and the cross-check')
     part_solids = {b for b, ci in enumerate(loaded.solid_components or [], 1)
                    if ci is not None and eff[ci] == 'part'}
     if not part_solids:
@@ -173,14 +177,16 @@ def run(repo_root: Path, job_name: str, created_by: str, chord_near_mm: float = 
     verts, tris, face_records = scene.part_collision_mesh(loaded.shape, chord_near_mm, chord_far_mm, part_solids)
     a_T_f = frames.invert(f_T_aj)
     rotating = {'part': _samples(verts, tris, a_T_f)}
-    cell_names = set(cell_side['axis_T']) | set(cell_side['duplicates'])
-    own_rotary = []
     for i in cad_roles.nodes_with_role(tree, eff, 'rotary_fixture'):
         v, t = _pieces(tree[i], rel[i])
         if len(t):
             rotating[rel[i]] = _samples(v, t, a_T_f)
-        if tree[i]['instance_name'] not in cell_names:
-            own_rotary.append((i, v))
+    # job-only components (instance name not in the cell CAD) go into the scene, one hull per leaf: rotary ones on
+    # the flange, static ones (also unassigned) in world (review I2 / I3, spec §3: unassigned = static obstacle)
+    cell_names = {n['instance_name'] for n in cell_tree if n['parent'] is not None}
+    job_only = [(i, eff[i]) for i in range(len(tree)) if tree[i]['parent'] is not None and not tree[i]['is_assembly']
+           and tree[i].get('bbox_mm') is not None and eff[i] in ('rotary_fixture', 'static')
+           and tree[i]['instance_name'] not in cell_names]
     a_T_w = frames.invert(_pose_mm(fr['world_T_positioner_axis']))
     every = np.vstack(list(rotating.values()))
     statics = _statics(root, manifest, a_T_w, float(every[:, 0].min()), float(every[:, 0].max()),
@@ -231,15 +237,24 @@ def run(repo_root: Path, job_name: str, created_by: str, chord_near_mm: float = 
                 'mesh': {'file': 'cache/collision.stl', 'sha256': sha256_file(collision), 'face_ids': True},
                 'padding_mm': scene.PART_PADDING_MM}]
     obj_dir = job.cache_dir / OBJECTS_DIR
-    for i, v_file in own_rotary:
+    world_T_file = _pose_mm(fr['world_T_positioner_axis']) @ a_T_f  # static: no turn phi (they do not rotate)
+    ids = {'part'}
+    for i, role in job_only:
+        v_file, _t = _pieces(tree[i], rel[i])
         place = np.asarray(tree[i]['placement_mm'], dtype=float)
         local = (v_file - place[:3, 3]) @ place[:3, :3]
         hv, ht = hull.convex_hull(local)
         oid = scene.object_id(tree[i]['instance_name'] or tree[i]['product_name'])
+        if oid in ids:
+            oid = f'{oid}_{i}'
+        ids.add(oid)
         mesh = obj_dir / f'{oid}.stl'
+        obj_dir.mkdir(parents=True, exist_ok=True)
         hull.write_stl(mesh, hv, ht)
-        objects.append({'object_id': oid, 'role': 'rotary_fixture', 'parent_frame': 'positioner_flange',
-                        'pose_mm': scene.pose_mm(flange_T_file @ place),
+        rotary = role == 'rotary_fixture'
+        objects.append({'object_id': oid, 'role': 'rotary_fixture' if rotary else 'fixture',
+                        'parent_frame': 'positioner_flange' if rotary else 'world',
+                        'pose_mm': scene.pose_mm((flange_T_file if rotary else world_T_file) @ place),
                         'mesh': {'file': f'cache/{OBJECTS_DIR}/{oid}.stl', 'sha256': sha256_file(mesh),
                                  'face_ids': False}, 'padding_mm': float(padding_mm)})
     placement = jsonio.make_header(created_by, inputs + [collision, faces_json], job.dir)
