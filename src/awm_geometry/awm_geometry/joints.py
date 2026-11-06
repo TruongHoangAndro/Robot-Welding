@@ -168,12 +168,20 @@ def _tangent_at(curve: BRepAdaptor_Curve, p: np.ndarray) -> np.ndarray:
     return t / np.linalg.norm(t)
 
 
+def exterior_faces(joint: JointEdge, solids: Sequence[TopoDS_Solid], p: Sequence[float],
+                   probe: float, tol: float) -> Tuple[TopoDS_Face, TopoDS_Face]:
+    """Exterior faces (of solid A, of solid B) next to the joint at point ``p``."""
+    point = np.asarray(p, float)
+    fa = _exterior_face(joint.faces_a, joint.edge_a, solids[joint.solid_b], point, probe, tol)
+    fb = _exterior_face(joint.faces_b, joint.edge_b, solids[joint.solid_a], point, probe, tol)
+    return fa, fb
+
+
 def joint_normals(joint: JointEdge, solids: Sequence[TopoDS_Solid], p: Sequence[float],
                   probe: float, tol: float) -> Tuple[np.ndarray, np.ndarray]:
     """Outward normals (n1 of solid A, n2 of solid B) of the exterior faces at joint point ``p``."""
     point = np.asarray(p, float)
-    fa = _exterior_face(joint.faces_a, joint.edge_a, solids[joint.solid_b], point, probe, tol)
-    fb = _exterior_face(joint.faces_b, joint.edge_b, solids[joint.solid_a], point, probe, tol)
+    fa, fb = exterior_faces(joint, solids, point, probe, tol)
     return face_normal_at(fa, point), face_normal_at(fb, point)
 
 
