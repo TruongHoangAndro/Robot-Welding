@@ -65,6 +65,55 @@ def cmd_export_view(a) -> None:
                                                    'up_axis_arg': a.up_axis}))
 
 
+def _write(path, doc) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(doc if isinstance(doc, str) else json.dumps(doc))
+
+
+def cmd_inspect_assembly(a) -> None:
+    _write(a.out, {'schema_version': '2.0', 'source': {'file': Path(a.step).name, 'sha256': sha(Path(a.step))},
+                   'components': [{'index': 0, 'parent': None, 'depth': 0, 'instance_name': '',
+                                   'product_name': 'root', 'is_assembly': True, 'bbox_mm': None}]})
+
+
+def cmd_export_cell_view(a) -> None:
+    _write(Path(a.out) / 'cell_view.glb', 'glTF-fake-cell')
+
+
+def cmd_pick_circle(a) -> None:
+    _write(a.out, {'schema_version': '2.0', 'source': {'file': Path(a.step).name, 'sha256': sha(Path(a.step))},
+                   'component_path': a.component, 'edge_id': a.edge, 'center_file_mm': [0.0, 0.0, 0.0],
+                   'axis_file': [-1.0 if a.reverse else 1.0, 0.0, 0.0], 'radius_mm': 60.0,
+                   'reversed': bool(a.reverse), 'method': 'pick'})
+
+
+def cmd_apply_roles(a) -> None:
+    _write(a.out, 'schema: cad_map/0.1\n')
+
+
+def cmd_export_scene(a) -> None:
+    _write(Path(a.repo) / 'cell' / 'model' / 'frames.yaml', 'unit: "mm"\n')
+
+
+def cmd_export_head(a) -> None:
+    _write(Path(a.repo) / 'cell' / 'model' / 'head' / 'head.yaml', f'tcp_edge: {a.tcp_edge}\n')
+
+
+def cmd_job_placement(a) -> None:
+    job = Path(a.repo) / 'jobs' / a.job
+    status = os.environ.get('FAKE_CHECK_STATUS', 'green')
+    inputs = [{'name': n, 'sha256': sha(job / n)} for n in ('model.step', 'roles.json', 'axis_pick.json')
+              if (job / n).is_file()]
+    _write(job / 'cad_check.json', {'schema_version': '2.0', 'created_by': 'fake', 'created_at': '2026-11-06T00:00:00Z',
+                                    'inputs': inputs, 'status': status, 'phi_deg': 0.0,
+                                    'checks': [{'id': 1, 'name': 'positioner match',
+                                                'status': 'red' if status == 'red' else 'green'}]})
+    if status != 'red':
+        _write(job / 'placement.json', {'schema_version': '2.0', 'source': 'job_cad', 'verified': False,
+                                        'inputs': inputs})
+
+
 def cmd_build(a) -> None:
     job = Path(a.job)
     picks = json.loads(Path(a.picks).read_text())['seams']
@@ -138,12 +187,51 @@ def main() -> int:
     p.add_argument('--part-no', required=True)
     p.add_argument('--part-rev', required=True)
     p.add_argument('--component')
+    p.add_argument('--components', action='store_true')
     p = sub.add_parser('export-view')
     p.add_argument('--step', required=True)
     p.add_argument('--job')
     p.add_argument('--component')
+    p.add_argument('--components', action='store_true')
     p.add_argument('--up-axis', default='+Z')
     p.add_argument('--out', required=True)
+    p = sub.add_parser('inspect-assembly')
+    p.add_argument('--step', required=True)
+    p.add_argument('--out', required=True)
+    p.add_argument('--no-cylinders', action='store_true')
+    p = sub.add_parser('export-cell-view')
+    p.add_argument('--step', required=True)
+    p.add_argument('--components', required=True)
+    p.add_argument('--out', required=True)
+    p.add_argument('--up-axis', required=True)
+    p = sub.add_parser('pick-circle')
+    p.add_argument('--step', required=True)
+    p.add_argument('--component')
+    p.add_argument('--components', action='store_true')
+    p.add_argument('--edge', required=True)
+    p.add_argument('--reverse', action='store_true')
+    p.add_argument('--up-axis', required=True)
+    p.add_argument('--out', required=True)
+    p = sub.add_parser('apply-roles')
+    for k in ('--step', '--tree', '--roles', '--axis', '--out'):
+        p.add_argument(k, required=True)
+    p = sub.add_parser('export-scene')
+    p.add_argument('--step', required=True)
+    p.add_argument('--map', required=True)
+    p.add_argument('--repo', required=True)
+    p.add_argument('--job')
+    p = sub.add_parser('export-head')
+    p.add_argument('--step', required=True)
+    p.add_argument('--map', required=True)
+    p.add_argument('--repo', required=True)
+    p.add_argument('--tcp-component')
+    p.add_argument('--tcp-edge')
+    p.add_argument('--tcp-reverse', action='store_true')
+    p.add_argument('--stickout-mm', type=float)
+    p.add_argument('--taught-by')
+    p = sub.add_parser('job-placement')
+    p.add_argument('--repo', required=True)
+    p.add_argument('--job', required=True)
     p = sub.add_parser('build')
     p.add_argument('--job', required=True)
     p.add_argument('--picks', required=True)
@@ -170,7 +258,10 @@ def main() -> int:
     pause()
     fail_if_asked()
     {'import': cmd_import, 'export-view': cmd_export_view, 'build': cmd_build, 'plan': cmd_plan,
-     'generate': cmd_generate, 'sleep': lambda _a: None}[a.cmd](a)
+     'generate': cmd_generate, 'sleep': lambda _a: None, 'inspect-assembly': cmd_inspect_assembly,
+     'export-cell-view': cmd_export_cell_view, 'pick-circle': cmd_pick_circle, 'apply-roles': cmd_apply_roles,
+     'export-scene': cmd_export_scene, 'export-head': cmd_export_head,
+     'job-placement': cmd_job_placement}[a.cmd](a)
     progress(1.0, f'{a.cmd} done')
     print(json.dumps({'ok': True}))
     return 0

@@ -29,7 +29,8 @@ from awm_api.problems import ProblemError
 from awm_api.runner import Step, StepsError
 from awm_api.settings import Settings
 
-IMPORT_OUTPUTS = ('model.step', 'part.json', 'cache/edges.json', 'cache/view/view.glb', 'cache/view/topology.json')
+IMPORT_OUTPUTS = ('model.step', 'part.json', 'cache/edges.json', 'cache/view/view.glb', 'cache/view/topology.json',
+                  'cache/components.json')
 
 
 def _occ_prefix(settings: Settings) -> List[str]:
@@ -52,17 +53,23 @@ def staging_dir(settings: Settings, run_dir: Path) -> Path:
 
 
 def import_steps(settings: Settings, run_dir: Path, step_file: Path, part_no: str, part_rev: str,
-                 component: Optional[str], up_axis: str) -> List[Step]:
-    """STEP → job: A11–A14 import, then the D20 view model export, both into the staging folder."""
+                 component: Optional[str], up_axis: str, components: bool = False) -> List[Step]:
+    """STEP → job: A11–A14 import, then the D20 view model export, both into the staging folder. ``components``
+    (CP-60 job assembly: positioner + fixture + part): whole file per component, plus the component tree."""
     prefix, env = _occ_prefix(settings), _occ_env()
     stage = staging_dir(settings, run_dir)
-    comp = ['--component', component] if component else []
+    if components and component:
+        raise ProblemError(400, 'bad-request', detail='give either a component or the assembly import, not both')
+    comp = ['--components'] if components else ['--component', component] if component else []
+    tree = ([Step('inspect-assembly', prefix + ['inspect-assembly', '--step', str(stage / 'model.step'), '--out',
+                                                str(stage / 'cache' / 'components.json')], env=env, weight=1.0)]
+            if components else [])
     return [
         Step('import', prefix + ['import', '--job', str(stage), '--step', str(step_file), '--part-no', part_no,
                                  '--part-rev', part_rev] + comp, env=env, weight=3.0),
         Step('export-view', prefix + ['export-view', '--step', str(stage / 'model.step'), '--job', str(stage)]
              + comp + ['--up-axis', up_axis, '--out', str(stage / 'cache' / 'view')], env=env, weight=1.0),
-    ]
+    ] + tree
 
 
 def promote_import(settings: Settings, run_dir: Path, job_id: str) -> Dict[str, str]:
@@ -153,3 +160,75 @@ def promote_program(run_dir: Path, job: Path) -> Dict[str, str]:
     if not (job / rel).is_file():
         raise RuntimeError(f'the program CLI reported {revs[-1]} but {rel} does not exist')
     return {rel: sha256_file(job / rel)}
+
+
+# -- CP-60 / CP-61: cell model, positioner-axis pick, TCP teach, job placement + cross-check -----------------------
+
+def save_upload(upload, target: Path, max_upload_mb: float) -> Path:
+    """Stream an uploaded file to ``target`` (413 problem above the size limit)."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    limit, size = int(max_upload_mb * 1024 * 1024), 0
+    with target.open('wb') as fh:
+        while chunk := upload.file.read(1024 * 1024):
+            size += len(chunk)
+            if size > limit:
+                raise ProblemError(413, 'upload-too-large', detail=f'STEP larger than {max_upload_mb:.0f} MB')
+            fh.write(chunk)
+    return target
+
+
+def cell_import_steps(settings: Settings, step_file: Path, out_dir: Path, up_axis: str) -> List[Step]:
+    """S10 import: component tree (A18 input) and the coarse display model of every leaf component."""
+    prefix, env = _occ_prefix(settings), _occ_env()
+    tree = out_dir / 'cell_components.json'
+    return [
+        Step('inspect-assembly', prefix + ['inspect-assembly', '--step', str(step_file), '--out', str(tree)],
+             env=env, weight=2.0),
+        Step('export-cell-view', prefix + ['export-cell-view', '--step', str(step_file), '--components', str(tree),
+                                           '--out', str(out_dir / 'view'), '--up-axis', up_axis], env=env, weight=2.0),
+    ]
+
+
+def component_view_steps(settings: Settings, step_file: Path, component: str, up_axis: str,
+                         out_dir: Path) -> List[Step]:
+    """D20 edge view of one component (for a circle pick on it)."""
+    return [Step('export-view', _occ_prefix(settings) + ['export-view', '--step', str(step_file), '--component',
+                                                         component, '--up-axis', up_axis, '--out', str(out_dir)],
+                 env=_occ_env())]
+
+
+def pick_circle_steps(settings: Settings, step_file: Path, edge_id: str, up_axis: str, out: Path,
+                      component: Optional[str] = None, components: bool = False, reverse: bool = False) -> List[Step]:
+    """Circle pick with the same load arguments as the view the edge id came from."""
+    argv = _occ_prefix(settings) + ['pick-circle', '--step', str(step_file)]
+    argv += ['--components'] if components else ['--component', component] if component else []
+    argv += ['--edge', edge_id, '--up-axis', up_axis, '--out', str(out)] + (['--reverse'] if reverse else [])
+    return [Step('pick-circle', argv, env=_occ_env())]
+
+
+def cell_save_steps(settings: Settings, cad: Path, repo_root: Path) -> List[Step]:
+    """Roles + axis pick -> cad_map.yaml -> cell/model (export-scene without a job)."""
+    prefix, env = _occ_prefix(settings), _occ_env()
+    step, cmap = cad / 'cell.step', cad / 'cad_map.yaml'
+    return [
+        Step('apply-roles', prefix + ['apply-roles', '--step', str(step), '--tree', str(cad / 'cell_components.json'),
+                                      '--roles', str(cad / 'roles.json'), '--axis', str(cad / 'axis_pick.json'),
+                                      '--out', str(cmap)], env=env, weight=1.0),
+        Step('export-scene', prefix + ['export-scene', '--step', str(step), '--map', str(cmap),
+                                       '--repo', str(repo_root)], env=env, weight=4.0),
+    ]
+
+
+def tcp_teach_steps(settings: Settings, head_step: Path, head_map: Path, repo_root: Path, component: str,
+                    edge_id: str, reverse: bool, stickout_mm: float, user: str) -> List[Step]:
+    """CP-61: export-head with the TCP taught from a nozzle-mouth circle."""
+    argv = _occ_prefix(settings) + ['export-head', '--step', str(head_step), '--map', str(head_map), '--repo',
+                                    str(repo_root), '--tcp-component', component, '--tcp-edge', edge_id,
+                                    '--stickout-mm', repr(float(stickout_mm)), '--taught-by', user]
+    return [Step('export-head', argv + (['--tcp-reverse'] if reverse else []), env=_occ_env(), weight=2.0)]
+
+
+def job_placement_steps(settings: Settings, job_id: str) -> List[Step]:
+    """CP-60 job import: placement.json (source job_cad) + cad_check.json."""
+    return [Step('job-placement', _occ_prefix(settings) + ['job-placement', '--repo', str(settings.repo_root),
+                                                           '--job', job_id], env=_occ_env(), weight=3.0)]

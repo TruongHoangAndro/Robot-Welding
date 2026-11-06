@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from starlette.websockets import WebSocketDisconnect
 
-from awm_api import adapters, jobs, placement as placement_mod
+from awm_api import adapters, cad_api, jobs, placement as placement_mod
 from awm_api.auth import TokenStore, User, forbidden, load_users, unauthorized, verify_password
 from awm_api.problems import ProblemError, install as install_problems
 from awm_api.robot_model import RobotModel
@@ -210,6 +210,7 @@ def create_app(settings: Settings) -> FastAPI:
     @api.post('/jobs', status_code=202)
     def create_job(response: Response, step: UploadFile = File(...), part_no: str = Form(...),
                    part_rev: str = Form(...), component: Optional[str] = Form(None), up_axis: str = Form('+Z'),
+                   assembly: bool = Form(False),
                    _u: User = Depends(require(*CREATE_JOB))) -> Dict[str, str]:
         errors = [{'pointer': f'/{k}', 'message': f'{v!r} must match {jobs.TOKEN_RE.pattern}'}
                   for k, v in (('part_no', part_no), ('part_rev', part_rev)) if not jobs.TOKEN_RE.match(v)]
@@ -237,7 +238,8 @@ def create_app(settings: Settings) -> FastAPI:
                         raise ProblemError(413, 'upload-too-large',
                                            detail=f'STEP larger than {settings.max_upload_mb:.0f} MB')
                     fh.write(chunk)
-            return adapters.import_steps(settings, run_dir, target, part_no, part_rev, component or None, up_axis)
+            return adapters.import_steps(settings, run_dir, target, part_no, part_rev, component or None, up_axis,
+                                         components=assembly)
 
         try:
             run = runs.start(job_id, 'import', build,
@@ -280,6 +282,11 @@ def create_app(settings: Settings) -> FastAPI:
                       _u: User = Depends(require(*EDIT_PLACEMENT))) -> Dict[str, Any]:
         """Manual pose (Assumption, ``source: study``) or copy from another job; makes seam_axis / path stale."""
         job = jobs.job_dir(settings.jobs_dir, job_id)
+        current = jobs.read_json(job / 'placement.json') or {}
+        if current.get('source') == 'job_cad':
+            raise ProblemError(409, 'placement-from-cad', 'Placement comes from the job CAD',
+                               detail='this job is placed from its STEP (source job_cad, CP-60): change the roles '
+                                      'or the positioner axis and run the cross-check instead')
         if not (job / placement_mod.VIEW_MESH).is_file():
             raise ProblemError(409, 'no-view', 'No view model',
                                detail=f'{placement_mod.VIEW_MESH} is missing; the import (D20) did not finish')
@@ -332,6 +339,7 @@ def create_app(settings: Settings) -> FastAPI:
                   _u: User = Depends(require(*EDIT_SEAMS))) -> Dict[str, Any]:
         job = jobs.job_dir(settings.jobs_dir, job_id)
         _check_picks(body.seams)
+        cad_api.cad_gate(job, settings.repo_root)  # CP-60: no seam picking on a red / stale cross-check
         has_placement = (job / 'placement.json').is_file()
         stamp = _dt.datetime.now(_dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
         work = settings.repo_root / 'logs' / 'seam_saves' / f'{job_id}-{stamp}-{secrets.token_hex(3)}'
@@ -349,6 +357,7 @@ def create_app(settings: Settings) -> FastAPI:
     def plan(job_id: str, response: Response, body: Optional[PlanRequest] = None,
              _u: User = Depends(require(*PLAN))) -> Dict[str, str]:
         job = jobs.job_dir(settings.jobs_dir, job_id)
+        cad_api.cad_gate(job, settings.repo_root)  # CP-60: Plan blocked by a red / stale cross-check
         seams_doc = jobs.read_json(job / 'seams.json')
         if seams_doc is None:
             raise ProblemError(409, 'no-seams', 'No seams', detail='save the seams (S2) before planning')
@@ -488,6 +497,7 @@ def create_app(settings: Settings) -> FastAPI:
         except WebSocketDisconnect:
             pass
 
+    cad_api.register(api, settings, runs, require, _busy)
     app.include_router(api)
     _mount_front_end(app, settings)
     return app

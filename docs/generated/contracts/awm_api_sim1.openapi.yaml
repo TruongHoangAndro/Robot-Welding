@@ -356,6 +356,155 @@ paths:
         '200': {description: File content, content: {application/octet-stream: {}}}
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
+  /cell/model:
+    get:
+      tags: [cell]
+      summary: S10 cell model status (CP-60) - cell STEP, up axis, roles / axis pick state, saved model, head files, stale jobs
+      responses:
+        '200': {description: status, content: {application/json: {}}}
+    post:
+      tags: [cell]
+      summary: Admin - upload the cell STEP assembly + up axis; run inspect-assembly + export-cell-view into cell/cad
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [step, up_axis]
+              properties:
+                step: {type: string, format: binary}
+                up_axis: {type: string, enum: ['+X', '-X', '+Y', '-Y', '+Z', '-Z']}
+      responses:
+        '202': {description: 'run started: {run_id} (+ key for a view); Location /api/v1/runs/{run_id}', content: {application/json: {}}}
+        '403': {$ref: '#/components/responses/Problem'}
+  /cell/model/files/{name}:
+    parameters: [{name: name, in: path, required: true, schema: {type: string, enum: [cell_components.json, cell_view.glb, roles.json, axis_pick.json, cell_meta.json]}}]
+    get:
+      tags: [cell]
+      summary: Cell CAD files of S10 (read)
+      responses:
+        '200': {description: File content, content: {application/octet-stream: {}}}
+        '404': {$ref: '#/components/responses/Problem'}
+  /cell/model/roles:
+    get:
+      tags: [cell]
+      summary: Cell roles (v2/cad_roles assignments) or the template pre-fill (prefilled true)
+      responses:
+        '200': {description: '{assignments, prefilled, collision, contact_tolerance_mm}', content: {application/json: {}}}
+    put:
+      tags: [cell]
+      summary: Admin - save the cell roles (robot, tool, rotary_fixture, static, exclude; CP-60); 422 lists the problems; updates cell/roles_template.json
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [assignments], properties: {assignments: {type: array}, collision: {type: object}, contact_tolerance_mm: {type: number, minimum: 0}}}}}
+      responses:
+        '200': {description: v2/cad_roles document, content: {application/json: {}}}
+        '403': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+  /cell/model/component_view:
+    post:
+      tags: [cell]
+      summary: Admin - D20 edge view of one cell component (for the positioner-axis circle pick)
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [component_path], properties: {component_path: {type: string}}}}}
+      responses:
+        '202': {description: 'run started: {run_id} (+ key for a view); Location /api/v1/runs/{run_id}', content: {application/json: {}}}
+        '403': {$ref: '#/components/responses/Problem'}
+  /cell/model/views/{key}/{file}:
+    parameters:
+      - {name: key, in: path, required: true, schema: {type: string, pattern: '^[0-9a-f]{12}$'}}
+      - {name: file, in: path, required: true, schema: {type: string, enum: [view.glb, topology.json]}}
+    get:
+      tags: [cell]
+      summary: A component edge view exported by component_view or /cell/head/view
+      responses:
+        '200': {description: File content, content: {application/octet-stream: {}}}
+        '404': {$ref: '#/components/responses/Problem'}
+  /cell/model/axis:
+    put:
+      tags: [cell]
+      summary: Admin - positioner axis from a circular edge of a component view (pick-circle -> cell/cad/axis_pick.json); theta 0 = pose in the file
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [component_path, edge_id], properties: {component_path: {type: string}, edge_id: {type: string, pattern: '^E[0-9]+$'}, reverse: {type: boolean}}}}}
+      responses:
+        '202': {description: 'run started: {run_id} (+ key for a view); Location /api/v1/runs/{run_id}', content: {application/json: {}}}
+        '403': {$ref: '#/components/responses/Problem'}
+  /cell/model/save:
+    post:
+      tags: [cell]
+      summary: Admin - apply-roles + export-scene without a job (cell/model); jobs planned on the old cell become stale
+      responses:
+        '202': {description: 'run started: {run_id} (+ key for a view); Location /api/v1/runs/{run_id}', content: {application/json: {}}}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /cell/head/view:
+    post:
+      tags: [cell]
+      summary: Admin - D20 edge view of a component of cell/cad/head.step (Tool / TCP tab, CP-61)
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [component], properties: {component: {type: string}}}}}
+      responses:
+        '202': {description: 'run started: {run_id} (+ key for a view); Location /api/v1/runs/{run_id}', content: {application/json: {}}}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /cell/head/tcp:
+    put:
+      tags: [cell]
+      summary: Admin - teach tcp_laser from the nozzle-mouth circle (export-head --tcp-edge; stick-out mm along the beam, CP-61)
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [component, edge_id], properties: {component: {type: string}, edge_id: {type: string}, reverse: {type: boolean}, stickout_mm: {type: number, minimum: 0, maximum: 50}}}}}
+      responses:
+        '202': {description: 'run started: {run_id} (+ key for a view); Location /api/v1/runs/{run_id}', content: {application/json: {}}}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /jobs/{job_id}/roles:
+    parameters: [{$ref: '#/components/parameters/JobId'}]
+    get:
+      tags: [jobs]
+      summary: Job roles (v2/cad_roles assignments) or the template pre-fill
+      responses:
+        '200': {description: '{assignments, prefilled}', content: {application/json: {}}}
+    put:
+      tags: [jobs]
+      summary: Engineer - save the job roles (part, rotary_fixture, ...; CP-60); 422 lists the problems; makes the cross-check stale
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [assignments], properties: {assignments: {type: array}}}}}
+      responses:
+        '200': {description: v2/cad_roles document, content: {application/json: {}}}
+        '403': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+  /jobs/{job_id}/axis:
+    parameters: [{$ref: '#/components/parameters/JobId'}]
+    put:
+      tags: [jobs]
+      summary: Engineer - positioner axis picked on the job file (pick-circle --components -> axis_pick.json)
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [edge_id], properties: {edge_id: {type: string, pattern: '^E[0-9]+$'}, reverse: {type: boolean}}}}}
+      responses:
+        '202': {description: 'run started: {run_id} (+ key for a view); Location /api/v1/runs/{run_id}', content: {application/json: {}}}
+        '403': {$ref: '#/components/responses/Problem'}
+  /jobs/{job_id}/check:
+    parameters: [{$ref: '#/components/parameters/JobId'}]
+    get:
+      tags: [jobs]
+      summary: CAD cross-check (v2/cad_check) and its state ok / stale
+      responses:
+        '200': {description: '{state, check}', content: {application/json: {}}}
+        '404': {$ref: '#/components/responses/Problem'}
+    post:
+      tags: [jobs]
+      summary: Engineer - run job-placement (placement.json source job_cad + cad_check.json; 0.05 mm / 0.1 deg); red or stale blocks seams and Plan (409)
+      responses:
+        '202': {description: 'run started: {run_id} (+ key for a view); Location /api/v1/runs/{run_id}', content: {application/json: {}}}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
   /jobs/{job_id}/release:
     x-awm-implemented: false
     parameters: [{$ref: '#/components/parameters/JobId'}]
