@@ -283,7 +283,7 @@ def create_app(settings: Settings) -> FastAPI:
         """Manual pose (Assumption, ``source: study``) or copy from another job; makes seam_axis / path stale."""
         job = jobs.job_dir(settings.jobs_dir, job_id)
         current = jobs.read_json(job / 'placement.json') or {}
-        if current.get('source') == 'job_cad':
+        if current.get('source') == 'job_cad' or cad_api.is_assembly(job):
             raise ProblemError(409, 'placement-from-cad', 'Placement comes from the job CAD',
                                detail='this job is placed from its STEP (source job_cad, CP-60): change the roles '
                                       'or the positioner axis and run the cross-check instead')

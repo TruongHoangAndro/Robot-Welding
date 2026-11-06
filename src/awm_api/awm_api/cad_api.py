@@ -118,9 +118,18 @@ def roles_problem(problems: List[str]) -> ProblemError:
                         errors=[{'pointer': '/assignments', 'message': p} for p in problems])
 
 
+def is_assembly(job: Path) -> bool:
+    """Job imported as an assembly (positioner + fixture + part, CP-60): it has a component tree."""
+    return job.joinpath(*cad_roles.JOB_TREE).is_file()
+
+
 def cad_gate(job: Path, repo_root: Path) -> None:
     """CP-60 gate for seam picking and Plan: a job with roles needs a current cross-check that is not red."""
     if not (job / cad_roles.ROLES_FILE).is_file():
+        if is_assembly(job):
+            raise ProblemError(409, 'roles-missing', 'Roles missing',
+                               detail='this job was imported as an assembly: save its roles, pick the positioner '
+                                      'axis and run the CAD cross-check first (CP-60)')
         return
     doc = jobs.read_json(job / cad_roles.CHECK_FILE)
     if doc is None:

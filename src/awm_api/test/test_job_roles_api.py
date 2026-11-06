@@ -126,3 +126,14 @@ def test_job_without_roles_keeps_g16_flow(client, repo):
                    json={'flange_T_part': {'position_mm': [0, 0, 0], 'rpy_deg': [0, 0, 0]}})
     assert r.status_code == 200, r.text
     assert client.put('/api/v1/jobs/OLD_A/seams', headers=h, json={'seams': [pick()]}).status_code == 200
+
+
+def test_assembly_job_without_roles_is_gated(client, repo):
+    """Review I1: an assembly import (cache/components.json) must not skip the CP-60 gate by never saving roles."""
+    cad_job(repo)
+    h = auth(client, 'eng')
+    r = client.put('/api/v1/jobs/J1_A/seams', headers=h, json={'seams': [pick()]})
+    assert r.status_code == 409 and r.json()['type'].endswith('roles-missing')
+    r = client.put('/api/v1/jobs/J1_A/placement', headers=h,
+                   json={'flange_T_part': {'position_mm': [0, 0, 0], 'rpy_deg': [0, 0, 0]}})
+    assert r.status_code == 409 and r.json()['type'].endswith('placement-from-cad')
