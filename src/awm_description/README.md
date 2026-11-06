@@ -13,3 +13,17 @@ fixture, ros2_control **mock hardware only**, SRDF and MoveIt configuration.
 
 The NOMINAL calibration in `awm_bringup/repo_template` must match `cell_nominal.yaml`
 (checked by awm_bringup tests; the planner also compares the model TCP with the calibration TCP).
+
+## Cell model v2 (laser): `urdf/awm_cell_v2.urdf.xacro`
+
+UR5e + LightWELD head + `positioner_joint`, mock hardware. Head model by xacro / `sim_mock` launch arg `head_model`:
+
+| `head_model` | Macro | Geometry | `tcp_laser` |
+|---|---|---|---|
+| `hbox` (default) | `urdf/lightweld_hbox.xacro` | parametric boxes / cylinders (TST-002 §3.1, Assumption) | tool0 +Z, mount_h + head_h + nozzle_len |
+| `hcad` | `urdf/lightweld_hcad.xacro` | Fusion head CAD from `head_dir` (A18 `head.yaml` + STL): visual = full mesh, collision = convex hull | `beam_exit + nozzle_len_mm * beam_axis`, rotation from `tool0_T_tcp_mm` |
+
+Both models have the same links (`head_mount`, `head_body`, `nozzle_body`, `nozzle_tip`, `conduit`, `tcp_laser`) and
+joints, so the SRDF does not change. `head_dir` is an absolute folder (e.g. `<repo_root>/cell/model/head`), never a
+path in source. Tests run the hcad cases on a synthetic head (`test/head_fixture.py`) and, with
+`AWM_HEAD_DIR=<folder>`, also on the real export.

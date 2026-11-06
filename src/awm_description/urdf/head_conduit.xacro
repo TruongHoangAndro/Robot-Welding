@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<!-- Conduit (fiber + wire feed) capsule shared by the H-BOX and H-CAD head macros: cylinder + 2 spheres, starting at
+     (x, y, z) in the parent frame (tool0) and running along the local +Z of the rotation (r, p, y). mm / deg in,
+     converted only through units.xacro. Every value is an Assumption (TST-002 §3.1; no conduit in the head CAD). -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:include filename="$(find awm_description)/urdf/units.xacro"/>
+
+  <xacro:macro name="awm_head_conduit" params="parent dia_mm len_mm x_mm y_mm z_mm r_deg p_deg y_deg">
+    <xacro:property name="mm" value="${m_per_mm}"/>
+    <xacro:property name="c_r" value="${float(dia_mm) / 2.0}"/>
+    <xacro:property name="c_cyl" value="${float(len_mm) - float(dia_mm)}"/>
+    <link name="conduit">
+      <visual>
+        <origin xyz="0 0 ${(c_r + c_cyl / 2.0) * mm}"/>
+        <geometry><cylinder radius="${c_r * mm}" length="${c_cyl * mm}"/></geometry>
+        <material name="conduit_color"><color rgba="0.10 0.10 0.10 1"/></material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${(c_r + c_cyl / 2.0) * mm}"/>
+        <geometry><cylinder radius="${c_r * mm}" length="${c_cyl * mm}"/></geometry>
+      </collision>
+      <collision>
+        <origin xyz="0 0 ${c_r * mm}"/>
+        <geometry><sphere radius="${c_r * mm}"/></geometry>
+      </collision>
+      <collision>
+        <origin xyz="0 0 ${(c_r + c_cyl) * mm}"/>
+        <geometry><sphere radius="${c_r * mm}"/></geometry>
+      </collision>
+    </link>
+    <joint name="tool0_to_conduit" type="fixed">
+      <parent link="${parent}"/>
+      <child link="conduit"/>
+      <origin xyz="${float(x_mm) * mm} ${float(y_mm) * mm} ${float(z_mm) * mm}"
+              rpy="${float(r_deg) * rad_per_deg} ${float(p_deg) * rad_per_deg} ${float(y_deg) * rad_per_deg}"/>
+    </joint>
+  </xacro:macro>
+</robot>

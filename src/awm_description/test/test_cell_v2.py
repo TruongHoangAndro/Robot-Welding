@@ -66,7 +66,8 @@ def test_units_match_awm_core():
     m_per_mm = float(re.search(r'name="m_per_mm" value="([^"]+)"', text).group(1))
     assert m_per_mm == pytest.approx(1.0 / units.MM_PER_M, rel=1e-15)
     assert 'pi / 180.0' in text and units.DEG_PER_RAD == pytest.approx(180.0 / math.pi)
-    for f in ('awm_cell_v2.urdf.xacro', 'lightweld_hbox.xacro', 'positioner.xacro', '../srdf/awm_cell_v2.srdf.xacro'):
+    for f in ('awm_cell_v2.urdf.xacro', 'lightweld_hbox.xacro', 'lightweld_hcad.xacro', 'head_conduit.xacro',
+              'rotations.xacro', 'positioner.xacro', '../srdf/awm_cell_v2.srdf.xacro'):
         body = re.sub(r'<!--.*?-->', '', (PKG / 'urdf' / f).read_text(), flags=re.S)
         assert not SCALE_LITERAL.search(body), (f, SCALE_LITERAL.search(body).group(0))
 

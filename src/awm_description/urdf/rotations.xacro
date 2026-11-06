@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<!-- Rotation helpers of the cell v2 xacro files (no unit factors here; see units.xacro).
+     awm_quat_rpy: quaternion (x, y, z, w) -> URDF roll / pitch / yaw (rad), set as property `name` in the caller's
+     scope. Gimbal-safe conversion via the rotation matrix R = Rz(yaw) Ry(pitch) Rx(roll): at |pitch| = 90 deg roll is
+     set to 0 and yaw = atan2(-R01, R11), so the URDF origin reproduces R exactly. -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="awm_quat_rpy" params="q name">
+    <xacro:property name="n" value="${sqrt(q[0]**2 + q[1]**2 + q[2]**2 + q[3]**2)}"/>
+    <xacro:property name="x" value="${q[0] / n}"/>
+    <xacro:property name="y" value="${q[1] / n}"/>
+    <xacro:property name="z" value="${q[2] / n}"/>
+    <xacro:property name="w" value="${q[3] / n}"/>
+    <xacro:property name="r00" value="${1.0 - 2.0 * (y * y + z * z)}"/>
+    <xacro:property name="r01" value="${2.0 * (x * y - w * z)}"/>
+    <xacro:property name="r10" value="${2.0 * (x * y + w * z)}"/>
+    <xacro:property name="r11" value="${1.0 - 2.0 * (x * x + z * z)}"/>
+    <xacro:property name="r20" value="${2.0 * (x * z - w * y)}"/>
+    <xacro:property name="r21" value="${2.0 * (y * z + w * x)}"/>
+    <xacro:property name="r22" value="${1.0 - 2.0 * (x * x + y * y)}"/>
+    <xacro:property name="cp" value="${sqrt(r00 * r00 + r10 * r10)}"/>
+    <xacro:property name="${name}" scope="parent"
+                    value="${[atan2(r21, r22), atan2(-r20, cp), atan2(r10, r00)] if cp > 1e-9
+                             else [0.0, atan2(-r20, cp), atan2(-r01, r11)]}"/>
+  </xacro:macro>
+</robot>
