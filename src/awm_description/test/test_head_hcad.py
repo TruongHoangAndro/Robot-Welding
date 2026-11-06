@@ -18,7 +18,7 @@ from urdf_parser_py.urdf import URDF
 from awm_core import units
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from head_fixture import real_head_dir, write_synthetic_head_dir  # noqa: E402
+from head_fixture import real_head_dir, write_map_override_head_dir, write_synthetic_head_dir  # noqa: E402
 from urdf_fk import fk, origin_matrix  # noqa: E402
 
 PKG = Path(__file__).resolve().parents[1]
@@ -38,10 +38,12 @@ def _urdf(**args) -> URDF:
     return URDF.from_xml_string(proc.stdout)
 
 
-@pytest.fixture(scope='module', params=['synthetic', 'real'] if real_head_dir() else ['synthetic'])
+@pytest.fixture(scope='module', params=['synthetic', 'map_override'] + (['real'] if real_head_dir() else []))
 def head_dir(request, tmp_path_factory):
     if request.param == 'real':
         return real_head_dir()
+    if request.param == 'map_override':
+        return write_map_override_head_dir(tmp_path_factory.mktemp('head') / 'map_override')
     return write_synthetic_head_dir(tmp_path_factory.mktemp('head') / 'synthetic')
 
 
@@ -172,6 +174,31 @@ def test_hcad_relative_head_dir_fails():
 def test_unknown_head_model_fails():
     proc = _run_xacro(head_model='hcube')
     assert proc.returncode != 0 and 'head_model' in proc.stderr
+
+
+def test_map_override_tcp_in_front_of_flange(tmp_path):
+    """Map TCP override (export-head, bug of 2026-11-06): tool0 -> tcp_laser equals head.yaml and lies in front of
+    the flange; the nozzle cylinders end at the TCP (beam exit = tcp - nozzle_len_mm * beam)."""
+    folder = write_map_override_head_dir(tmp_path / 'h')
+    head = yaml.safe_load((folder / 'head.yaml').read_text())
+    r = _urdf(head_model='hcad', head_dir=str(folder))
+    t = fk(r, 'tcp_laser', root='tool0')
+    xyz_mm = np.asarray(units.m_to_mm(list(t[:3, 3])))
+    assert np.max(np.abs(xyz_mm - np.asarray(head['tool0_T_tcp_mm']['xyz']))) <= TOL_MM
+    assert xyz_mm[2] > 0.0
+    assert np.allclose(t[:3, 2], head['beam_axis_tool0'], atol=1e-9)
+    _b0, _b1, _r = _segment(r, 'nozzle_body')
+    assert np.max(np.abs(_b0 - np.asarray(head['beam_exit_tool0_mm']))) <= TOL_MM
+
+
+def test_hcad_null_beam_exit_fails(tmp_path):
+    """A head.yaml without a beam exit (old export-head map override) stops xacro with a message."""
+    folder = write_map_override_head_dir(tmp_path / 'h')
+    doc = yaml.safe_load((folder / 'head.yaml').read_text())
+    doc['beam_exit_tool0_mm'] = None
+    (folder / 'head.yaml').write_text(yaml.safe_dump(doc))
+    proc = _run_xacro(head_model='hcad', head_dir=str(folder))
+    assert proc.returncode != 0 and 'beam_exit_tool0_mm' in proc.stderr and 'export-head' in proc.stderr
 
 
 def test_hcad_wrong_unit_fails(tmp_path):

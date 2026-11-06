@@ -1,7 +1,8 @@
 """Test helper: a small synthetic H-CAD head folder with the keys of the A18 / export-head ``head.yaml`` (mm, tool0).
 
 Test data only (no part or cell data): two boxes as STL meshes and hulls, and a beam axis that is deliberately tilted
-and offset so the tests do not depend on the real CAD values. ``real_head_dir()`` returns the folder named by the
+and offset so the tests do not depend on the real CAD values. Two variants: the automatic beam estimate
+(``write_synthetic_head_dir``) and a map TCP override (``write_map_override_head_dir``: TCP given, beam exit derived). ``real_head_dir()`` returns the folder named by the
 environment variable ``AWM_HEAD_DIR`` (the real export, e.g. ``<repo_root>/cell/model/head``) or None.
 """
 
@@ -50,7 +51,6 @@ def write_stl(path: Path, triangles) -> str:
 
 def write_synthetic_head_dir(folder: Path, tilt_deg: float = 20.0, nozzle_len_mm: float = 40.0) -> Path:
     """Write head.yaml + 4 STL files into ``folder``; beam = tool0 -Z tilted by tilt_deg about tool0 X."""
-    folder.mkdir(parents=True, exist_ok=True)
     t = math.radians(tilt_deg)
     beam = [0.0, math.sin(t), -math.cos(t)]
     exit_mm = [-50.0, 12.5, -300.0]
@@ -58,6 +58,24 @@ def write_synthetic_head_dir(folder: Path, tilt_deg: float = 20.0, nozzle_len_mm
     # tcp rotation = Rx(180 deg + tilt): its Z column is the beam direction.
     a = (math.pi + t) / 2.0
     quat = [math.sin(a), 0.0, 0.0, math.cos(a)]
+    return _write_head_dir(folder, tcp, quat, beam, exit_mm, nozzle_len_mm, {'method': 'beam_axis'})
+
+
+def write_map_override_head_dir(folder: Path, tilt_deg: float = 55.0, nozzle_len_mm: float = 40.0) -> Path:
+    """head.yaml as export-head writes it for a map TCP override (frames.tcp point_file_mm / axis_file).
+
+    The TCP is in front of the flange and the beam leaves the nozzle forward and sideways (tool0 +X / +Z, tilted
+    tilt_deg from the flange axis about tool0 Y); beam_exit = tcp - nozzle_len_mm * beam (export-head rule)."""
+    t = math.radians(tilt_deg)
+    beam = [math.sin(t), 0.0, math.cos(t)]
+    tcp = [35.0, -4.0, 260.0]
+    exit_mm = [p - nozzle_len_mm * b for p, b in zip(tcp, beam)]
+    quat = [0.0, math.sin(t / 2.0), 0.0, math.cos(t / 2.0)]  # Ry(tilt): Z column = beam
+    return _write_head_dir(folder, tcp, quat, beam, exit_mm, nozzle_len_mm, {'method': 'map', 'behind_flange': False})
+
+
+def _write_head_dir(folder: Path, tcp, quat, beam, exit_mm, nozzle_len_mm, tcp_estimate) -> Path:
+    folder.mkdir(parents=True, exist_ok=True)
     links = {}
     for name, lo, hi in (('head_body', (-120.0, -20.0, -300.0), (40.0, 20.0, 200.0)),
                          ('head_mount', (-40.0, -40.0, 0.0), (40.0, 40.0, 60.0))):
@@ -70,6 +88,6 @@ def write_synthetic_head_dir(folder: Path, tilt_deg: float = 20.0, nozzle_len_mm
            'schema': 'awm_head/0.1', 'head_model': 'H-CAD', 'unit': 'mm', 'frame': 'tool0',
            'tool0_T_tcp_mm': {'xyz': tcp, 'quat_xyzw': quat},
            'beam_axis_tool0': beam, 'beam_exit_tool0_mm': exit_mm, 'nozzle_len_mm': nozzle_len_mm,
-           'links': links, 'assumptions': ['synthetic test head']}
+           'links': links, 'estimates': {'tcp': tcp_estimate}, 'assumptions': ['synthetic test head']}
     (folder / 'head.yaml').write_text(yaml.safe_dump(doc, sort_keys=False))
     return folder
