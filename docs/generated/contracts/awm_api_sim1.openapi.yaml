@@ -8,7 +8,15 @@ info:
     src/awm_core/awm_core/schemas/v2 (named "v2/<name>" below); the D20 files follow
     docs/generated/contracts/D20_view_model.md. Errors are RFC 9457 problem details. The browser never reaches ROS;
     awm_api runs the engineering CLIs as subprocesses (B-11), one planning run per cell at a time.
-    Progress is polled through /runs/{run_id} in Sim-1; the status WebSocket comes with S6 (WP4).
+    Progress is polled through /runs/{run_id} or pushed over the run WebSocket (x-awm-websockets, G1.4); the cell
+    status WebSocket comes with S6 (WP4). Updated 2026-11-06 by the web agent (G1.6) to what the server serves: plan
+    travel speed, program runs, S4 simulation payload, placement PUT, robot description + meshes, SeamPick D04 2.1
+    fields, JobDetail fields. Paths marked x-awm-implemented false are contract only (not served yet).
+x-awm-websockets:
+  /runs/{run_id}/ws:
+    description: >
+      Run progress push (G1.4). Query parameter token = bearer token. Sends the Run document on every change (≤ 10 Hz)
+      until the run ends, then closes. Close code 4401 = token unknown, 4404 = run unknown. Display only.
 servers:
   - url: /api/v1
 security:
@@ -17,6 +25,7 @@ tags:
   - name: auth
   - name: jobs
   - name: runs
+  - name: cell
 paths:
   /auth/login:
     post:
@@ -41,9 +50,10 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [token, role, expires_at]
+                required: [token, role, expires_at, username]
                 properties:
                   token: {type: string}
+                  username: {type: string}
                   role: {$ref: '#/components/schemas/Role'}
                   expires_at: {type: string, format: date-time}
         '401': {$ref: '#/components/responses/Problem'}
@@ -134,10 +144,15 @@ paths:
                   type: array
                   items: {$ref: '#/components/schemas/SeamPick'}
       responses:
-        '200': {description: v2/seams document as stored, content: {application/json: {}}}
+        '200':
+          description: v2/seams document as stored (seam_axis.json rebuilt when the job has a placement)
+          headers:
+            X-AWM-Seam-Axis: {schema: {type: string}, description: 'built, or "not built: …" without placement.json'}
+          content: {application/json: {}}
         '400': {$ref: '#/components/responses/Problem'}
         '403': {$ref: '#/components/responses/Problem'}
         '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem', description: 'field errors with pointers, or the seam CLI refusal'}
         '422': {$ref: '#/components/responses/Problem'}
   /jobs/{job_id}/placement:
     parameters: [{$ref: '#/components/parameters/JobId'}]
@@ -147,6 +162,42 @@ paths:
       responses:
         '200': {description: v2/placement document, content: {application/json: {}}}
         '404': {$ref: '#/components/responses/Problem'}
+    put:
+      tags: [jobs]
+      summary: >
+        Placement for a job made in the browser (Engineer, G1.6): a manual pose of the part in positioner_flange or a
+        copy of another job's flange_T_part. Written as v2/placement with source study, verified false, Assumption in
+        created_by; the part object uses the D20 view.glb as its mesh (not a collision mesh, Goal 1). seam_axis.json
+        and path.json become stale (header X-AWM-Seam-Axis carries the new seam_axis state).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              description: exactly one of flange_T_part or copy_from
+              properties:
+                flange_T_part:
+                  type: object
+                  additionalProperties: false
+                  required: [position_mm]
+                  description: exactly one of rpy_deg (URDF convention R = Rz(yaw)·Ry(pitch)·Rx(roll)) or quat_xyzw
+                  properties:
+                    position_mm: {type: array, items: {type: number, minimum: -5000, maximum: 5000}, minItems: 3, maxItems: 3}
+                    rpy_deg: {type: array, items: {type: number}, minItems: 3, maxItems: 3}
+                    quat_xyzw: {type: array, items: {type: number}, minItems: 4, maxItems: 4, description: normalised by the server}
+                copy_from: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*_[A-Za-z0-9][A-Za-z0-9._-]*$'}
+      responses:
+        '200':
+          description: v2/placement document as stored
+          headers:
+            X-AWM-Seam-Axis: {schema: {type: string, enum: [missing, ok, stale]}}
+          content: {application/json: {}}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem', description: 'no-view, no-placement (copy source), run-busy'}
+        '422': {$ref: '#/components/responses/Problem'}
   /jobs/{job_id}/files/{path}:
     parameters:
       - {$ref: '#/components/parameters/JobId'}
@@ -175,10 +226,35 @@ paths:
               additionalProperties: false
               properties:
                 seams: {type: array, items: {type: string, pattern: '^S[0-9]{2,3}$'}, description: subset; default all}
+                travel_speed_mm_s:
+                  type: number
+                  exclusiveMinimum: 0
+                  description: >
+                    WPS travel speed relative to the part, entered by the Engineer (CP-59 follow-up 2026-11-06);
+                    absent = planner default (Assumption, recorded in D07 planner.params). Passed to the planner as
+                    --travel-speed-mm-s. Never slowed down silently: D07 reports max_travel_speed_mm_s per arc and the
+                    program step refuses a speed above it.
       responses:
         '202': {$ref: '#/components/responses/RunStarted'}
         '403': {$ref: '#/components/responses/Problem'}
-        '409': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem', description: 'no-seams, no-placement, seam-axis-missing, seam-axis-stale, run-busy'}
+        '422': {$ref: '#/components/responses/Problem'}
+  /jobs/{job_id}/program:
+    parameters: [{$ref: '#/components/parameters/JobId'}]
+    post:
+      tags: [jobs, runs]
+      summary: >
+        Start a program run (M6, G1.5 CLI `generate --job`; Engineer). Needs a current path.json. The CLI writes
+        programs/P###/program.json (D09) itself; the run outputs name it. A refusal (e.g. travel speed above the
+        feasible maximum) fails the run with the CLI reason in problem.detail.
+      requestBody:
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: false}
+      responses:
+        '202': {$ref: '#/components/responses/RunStarted'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem', description: 'no-path, path-stale, run-busy'}
   /runs/{run_id}:
     parameters:
       - name: run_id
@@ -206,7 +282,10 @@ paths:
     parameters: [{$ref: '#/components/parameters/JobId'}]
     get:
       tags: [jobs]
-      summary: Playback data for S4 — the latest D07 (v2/path, accepted seams with timed joint paths, rejected seams with failing points) and D19 (v2/placement)
+      summary: >
+        Playback data for S4 (all roles, display only): the newest current program (D09) when one exists, else the
+        path timing (D07); always the path (per-point status, TCP poses in the part frame), placement (D19) and seams
+        (D04). A program whose input hashes no longer match (path re-planned) is not played (program_state stale).
       responses:
         '200':
           description: Playback data
@@ -214,12 +293,71 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [path, placement]
+                required: [job_id, source, program_rev, program_state, program, path, path_state, placement, seams,
+                           collision_checked, view_url, robot_description_url, notes]
                 properties:
-                  path: {description: v2/path document}
+                  job_id: {type: string}
+                  source: {type: string, enum: [program, path], description: what the timeline is built from}
+                  program_rev: {type: [string, 'null'], pattern: '^P[0-9]{3}$'}
+                  program_state: {type: [string, 'null'], enum: [ok, stale, null]}
+                  program: {description: 'v2/program document (2.0 or 2.1) or null'}
+                  path: {description: 'v2/path document or null (a v1 path is not playable)'}
+                  path_state: {type: string, enum: [ok, stale, missing]}
                   placement: {description: v2/placement document}
+                  seams: {description: 'v2/seams document or null'}
+                  collision_checked: {type: boolean, description: 'true only when every played document says true; false = show "Kinematic only — collision not checked" (CP-58)'}
+                  view_url: {type: string}
+                  robot_description_url: {type: string}
+                  notes: {type: array, items: {type: string}}
+        '404': {$ref: '#/components/responses/Problem'}
+  /cell/robot_description:
+    get:
+      tags: [cell]
+      summary: >
+        Cell URDF for the browser (all roles, display only): rendered like the planner
+        (awm_path.description.load_planning_description, head_model hcad, pose arguments from cell/model/frames.yaml),
+        in metres / radians (URDF, REP 103). Mesh URIs rewritten to /api/v1/cell/meshes/…; cached by the SHA-256 of
+        frames.yaml and head.yaml.
+      responses:
+        '200':
+          description: Description
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [urdf, head_model, unit]
+                properties:
+                  urdf: {type: string}
+                  head_model: {type: string, const: hcad}
+                  unit: {type: string}
+                  frames_sha256: {type: string}
+                  head_yaml_sha256: {type: string}
+                  note: {type: string}
+        '409': {$ref: '#/components/responses/Problem', description: no-cell-model (frames.yaml or head folder missing)}
+        '500': {$ref: '#/components/responses/Problem', description: description-failed}
+  /cell/meshes/head/{path}:
+    parameters:
+      - {name: path, in: path, required: true, schema: {type: string}, description: 'file below the H-CAD head folder'}
+    get:
+      tags: [cell]
+      summary: Read-only head mesh (stl / dae / obj / glb / gltf / png / jpg); no traversal, no symlink leaving the folder
+      responses:
+        '200': {description: File content, content: {application/octet-stream: {}}}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+  /cell/meshes/package/{package}/{path}:
+    parameters:
+      - {name: package, in: path, required: true, schema: {type: string}, description: 'a package named by the rendered URDF'}
+      - {name: path, in: path, required: true, schema: {type: string}}
+    get:
+      tags: [cell]
+      summary: Read-only mesh from the share folder of a package referenced by the description (e.g. ur_description)
+      responses:
+        '200': {description: File content, content: {application/octet-stream: {}}}
+        '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
   /jobs/{job_id}/release:
+    x-awm-implemented: false
     parameters: [{$ref: '#/components/parameters/JobId'}]
     post:
       tags: [jobs]
@@ -314,6 +452,14 @@ components:
                 trial: {type: [string, 'null']}
                 production: {type: [string, 'null']}
             active_run: {type: [string, 'null']}
+            placement:
+              oneOf:
+                - {type: 'null'}
+                - {type: object, properties: {source: {type: string, enum: [study, fixture_cad]}, verified: {type: boolean}}}
+            placement_note: {type: [string, 'null'], description: why planning is not available without a placement}
+            seam_axis: {type: string, enum: [missing, ok, stale], description: 'seam_axis.json by its input hashes (CP-58 d2)'}
+            path: {type: string, enum: [missing, ok, stale], description: path.json by its input hashes}
+            collision_checked: {type: boolean, const: false, description: 'Goal 1 (CP-58): nothing in this backend checks collision'}
     SeamPick:
       type: object
       additionalProperties: false
@@ -322,12 +468,15 @@ components:
         seam_id: {type: string, pattern: '^S[0-9]{2,3}$'}
         edges: {type: array, minItems: 1, items: {type: string, pattern: '^E[0-9]+$'}, description: picked edges; M2 chains tangent edges and maps a joint edge of either solid to its joint}
         reversed: {type: boolean}
-        range_mm: {type: [array, 'null'], items: {type: number}, minItems: 2, maxItems: 2}
+        range_mm: {type: [array, 'null'], items: {type: number}, minItems: 2, maxItems: 2, description: 'reserved; refused with 422 in Goal 1 (D04 2.1 uses arcs, arc_overlap_mm and start_offset_mm)'}
         joint_type: {type: string, enum: [butt, fillet, lap, groove]}
         sequence: {type: integer, minimum: 1}
         leg_mm: {type: [number, 'null'], minimum: 0}
         arcs: {type: integer, minimum: 1, maximum: 12, default: 1, description: 'number of weld arcs entered by the Engineer (CP-53); equal lengths from the seam start'}
-        arc_overlap_mm: {type: number, minimum: 0, description: 'overlap between consecutive arcs; default from the WPS'}
+        arc_overlap_mm: {type: number, minimum: 0, default: 2.0, description: 'overlap between consecutive arcs and the 360° closing overlap; default 2 mm (Assumption until the WPS carries it)'}
+        positioner_mode: {type: string, enum: [sync, C, B], default: sync, description: 'CP-59: sync = robot + positioner as 7 joints; C = robot at rest, positioner turns; B = fixed positioner angle per arc'}
+        positioner_angles_deg: {type: [array, 'null'], items: {type: number}, description: 'mode B only: one angle per arc (B-12); refused otherwise'}
+        start_offset_mm: {type: number, minimum: 0, default: 0, description: 'closed seams: start point along the joint edge from its first vertex'}
         note: {type: string}
     Run:
       type: object

@@ -44,7 +44,8 @@ def repo(tmp_path: Path) -> Path:
 @pytest.fixture
 def settings(repo: Path, users_file: Path) -> Settings:
     return Settings(repo_root=repo, secrets_file=users_file, occ_python_cmd=fake_cmd(),
-                    seam_cmd=fake_cmd(), plan_cmd=fake_cmd(), kill_grace_s=2.0)
+                    seam_cmd=fake_cmd(), plan_cmd=fake_cmd(), program_cmd=fake_cmd(), describe_cmd=fake_cmd(),
+                    kill_grace_s=2.0, package_shares={'ur_description': repo.parent / 'share' / 'ur_description'})
 
 
 @pytest.fixture

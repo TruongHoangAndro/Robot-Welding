@@ -1,8 +1,9 @@
 """FastAPI application: ``/api/v1`` (contract docs/generated/contracts/awm_api_sim1.openapi.yaml) + static front-end.
 
-Roles (DES-001 §7.3, §4.5 S1 / S2, CP-21): every role reads; jobs are created by Engineer or Admin (S1); seams
-are edited by Engineer only (CP-21); planning runs are started by Engineer (§7.3 "run simulation"); runs are
-cancelled by Engineer or Admin. Nothing here commands motion, the PLC or the laser.
+Roles (DES-001 §7.3, §4.5 S1 / S2 / S4, CP-21): every role reads; jobs are created by Engineer or Admin (S1); seams
+and the placement are edited by Engineer only (CP-21, §7.3 "placement study"); planning and program runs are started
+by Engineer (§7.3 "run simulation"); runs are cancelled by Engineer or Admin. Nothing here commands motion, the PLC
+or the laser: S4 playback is display only, computed in the browser from the stored program.
 """
 
 from __future__ import annotations
@@ -19,12 +20,13 @@ from typing import Annotated, Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, FastAPI, File, Form, Header, Request, Response, UploadFile, WebSocket
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from starlette.websockets import WebSocketDisconnect
 
-from awm_api import adapters, jobs
+from awm_api import adapters, jobs, placement as placement_mod
 from awm_api.auth import TokenStore, User, forbidden, load_users, unauthorized, verify_password
 from awm_api.problems import ProblemError, install as install_problems
+from awm_api.robot_model import RobotModel
 from awm_api.runner import TERMINAL, RunBusyError, RunFinishedError, RunManager, RunNotFoundError, StepsError
 from awm_api.settings import Settings
 
@@ -33,6 +35,7 @@ LOG = logging.getLogger('awm_api')
 READ = ('Operator', 'Engineer', 'Admin')
 CREATE_JOB = ('Engineer', 'Admin')
 EDIT_SEAMS = ('Engineer',)
+EDIT_PLACEMENT = ('Engineer',)
 PLAN = ('Engineer',)
 CANCEL = ('Engineer', 'Admin')
 UP_AXES = ('+X', '-X', '+Y', '-Y', '+Z', '-Z')
@@ -74,8 +77,52 @@ class SeamsPut(BaseModel):
 
 
 class PlanRequest(BaseModel):
+    """Plan request. ``travel_speed_mm_s``: WPS travel speed relative to the part, entered by the Engineer (CP-59
+    follow-up 2026-11-06); absent = the planner default (Assumption, recorded in D07). Never slowed down silently:
+    the planner reports the largest feasible speed per arc and the program step refuses a speed above it."""
+
     model_config = ConfigDict(extra='forbid')
     seams: Optional[List[SeamId]] = None
+    travel_speed_mm_s: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
+
+
+Coord = Annotated[float, Field(ge=-placement_mod.MAX_OFFSET_MM, le=placement_mod.MAX_OFFSET_MM,
+                               allow_inf_nan=False)]
+Finite = Annotated[float, Field(allow_inf_nan=False)]
+
+
+class PoseIn(BaseModel):
+    """Pose of the part frame in ``positioner_flange``: mm and either roll-pitch-yaw in degrees (URDF convention,
+    R = Rz(yaw)·Ry(pitch)·Rx(roll)) or a quaternion xyzw."""
+
+    model_config = ConfigDict(extra='forbid')
+    position_mm: List[Coord] = Field(min_length=3, max_length=3)
+    rpy_deg: Optional[List[Finite]] = Field(default=None, min_length=3, max_length=3)
+    quat_xyzw: Optional[List[Finite]] = Field(default=None, min_length=4, max_length=4)
+
+    @model_validator(mode='after')
+    def _one_rotation(self) -> 'PoseIn':
+        if (self.rpy_deg is None) == (self.quat_xyzw is None):
+            raise ValueError('give exactly one of rpy_deg or quat_xyzw')
+        return self
+
+
+class PlacementPut(BaseModel):
+    """Manual placement (``flange_T_part``) or a copy of another job's ``flange_T_part`` (``copy_from``)."""
+
+    model_config = ConfigDict(extra='forbid')
+    flange_T_part: Optional[PoseIn] = None
+    copy_from: Optional[str] = Field(default=None, pattern=jobs.JOB_ID_RE.pattern)
+
+    @model_validator(mode='after')
+    def _one_source(self) -> 'PlacementPut':
+        if (self.flange_T_part is None) == (self.copy_from is None):
+            raise ValueError('give exactly one of flange_T_part or copy_from')
+        return self
+
+
+class ProgramRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
 
 
 def _check_picks(picks: List[SeamPick]) -> None:
@@ -85,6 +132,9 @@ def _check_picks(picks: List[SeamPick]) -> None:
         if p.seam_id in seen:
             errors.append({'pointer': f'/seams/{i}/seam_id', 'message': f'duplicate seam id {p.seam_id}'})
         seen.add(p.seam_id)
+        if p.range_mm is not None:
+            errors.append({'pointer': f'/seams/{i}/range_mm', 'message': 'range_mm is not supported in Goal 1 '
+                           '(D04 2.1): use arcs, arc_overlap_mm and start_offset_mm'})
         ptr = f'/seams/{i}/positioner_angles_deg'
         if p.positioner_mode == 'B':
             if p.positioner_angles_deg is None or len(p.positioner_angles_deg) != p.arcs:
@@ -105,6 +155,7 @@ def create_app(settings: Settings) -> FastAPI:
     users = load_users(settings.secrets_file)  # fails early with a clear message
     tokens = TokenStore(settings.token_ttl_s)
     runs = RunManager(settings.runs_dir, kill_grace_s=settings.kill_grace_s)
+    robot = RobotModel(settings)
     settings.jobs_dir.mkdir(parents=True, exist_ok=True)
 
     @contextlib.asynccontextmanager
@@ -224,6 +275,45 @@ def create_app(settings: Settings) -> FastAPI:
             raise ProblemError(404, 'no-placement', 'No placement', detail=jobs.NO_PLACEMENT_NOTE)
         return doc
 
+    @api.put('/jobs/{job_id}/placement')
+    def put_placement(job_id: str, body: PlacementPut, response: Response,
+                      _u: User = Depends(require(*EDIT_PLACEMENT))) -> Dict[str, Any]:
+        """Manual pose (Assumption, ``source: study``) or copy from another job; makes seam_axis / path stale."""
+        job = jobs.job_dir(settings.jobs_dir, job_id)
+        if not (job / placement_mod.VIEW_MESH).is_file():
+            raise ProblemError(409, 'no-view', 'No view model',
+                               detail=f'{placement_mod.VIEW_MESH} is missing; the import (D20) did not finish')
+        extra: List[Path] = []
+        if body.copy_from is not None:
+            if body.copy_from == job_id:
+                raise ProblemError(422, 'validation', detail='copy_from names this job itself',
+                                   errors=[{'pointer': '/copy_from', 'message': 'another job is needed'}])
+            src = jobs.job_dir(settings.jobs_dir, body.copy_from)
+            src_doc = jobs.read_json(src / 'placement.json')
+            if src_doc is None or 'flange_T_part' not in src_doc:
+                raise ProblemError(409, 'no-placement', 'No placement',
+                                   detail=f'job {body.copy_from} has no placement.json to copy')
+            pose, how = src_doc['flange_T_part'], f'flange_T_part copied from job {body.copy_from}'
+            extra.append(src / 'placement.json')
+        else:
+            p = body.flange_T_part
+            try:
+                quat = placement_mod.quat_from_input(p.rpy_deg, p.quat_xyzw)
+            except ValueError as exc:
+                raise ProblemError(422, 'validation', detail=str(exc),
+                                   errors=[{'pointer': '/flange_T_part/quat_xyzw', 'message': str(exc)}]) from exc
+            pose, how = {'position_mm': list(p.position_mm), 'quat_xyzw': quat}, 'manual pose'
+        try:
+            with runs.slot('placement', job_id):
+                doc = placement_mod.build(job, pose, how, extra)
+                placement_mod.write(job, doc)
+        except RunBusyError as exc:
+            raise _busy(exc) from exc
+        except ValueError as exc:  # schema refusal of the built document
+            raise ProblemError(422, 'validation', 'Placement refused', detail=str(exc)) from exc
+        response.headers['X-AWM-Seam-Axis'] = jobs.seam_axis_state(job, settings.repo_root)
+        return doc
+
     @api.get('/jobs/{job_id}/files/{path:path}')
     def get_file(job_id: str, path: str, _u: User = Depends(require(*READ))) -> FileResponse:
         job = jobs.job_dir(settings.jobs_dir, job_id)
@@ -279,9 +369,29 @@ def create_app(settings: Settings) -> FastAPI:
             if unknown:
                 raise ProblemError(422, 'unknown-seam', detail=f'unknown seam id(s): {", ".join(unknown)}',
                                    errors=[{'pointer': '/seams', 'message': f'unknown {s}'} for s in unknown])
+        speed = body.travel_speed_mm_s if body else None
         try:
-            run = runs.start(job_id, 'plan', lambda d: adapters.plan_steps(settings, d, job, subset),
+            run = runs.start(job_id, 'plan', lambda d: adapters.plan_steps(settings, d, job, subset, speed),
                              on_success=lambda d: adapters.promote_plan(d, job))
+        except RunBusyError as exc:
+            raise _busy(exc) from exc
+        response.headers['Location'] = f'/api/v1/runs/{run["run_id"]}'
+        return {'run_id': run['run_id']}
+
+    @api.post('/jobs/{job_id}/program', status_code=202)
+    def program(job_id: str, response: Response, body: Optional[ProgramRequest] = None,
+                _u: User = Depends(require(*PLAN))) -> Dict[str, str]:
+        """D07 → D09 through the program CLI (G1.5) in the run slot; progress like a plan run."""
+        job = jobs.job_dir(settings.jobs_dir, job_id)
+        state = jobs.document_state(job, 'path.json', settings.repo_root)
+        if state == 'missing':
+            raise ProblemError(409, 'no-path', 'No path', detail='plan the seams first (path.json, M4)')
+        if state == 'stale':
+            raise ProblemError(409, 'path-stale', 'path.json stale',
+                               detail='seams, placement or cell frames changed after planning; re-plan first')
+        try:
+            run = runs.start(job_id, 'program', lambda d: adapters.program_steps(settings, job),
+                             on_success=lambda d: adapters.promote_program(d, job))
         except RunBusyError as exc:
             raise _busy(exc) from exc
         response.headers['Location'] = f'/api/v1/runs/{run["run_id"]}'
@@ -289,14 +399,49 @@ def create_app(settings: Settings) -> FastAPI:
 
     @api.get('/jobs/{job_id}/simulation')
     def simulation(job_id: str, _u: User = Depends(require(*READ))) -> Dict[str, Any]:
-        """S4 playback data; available once a v2 path.json exists (G1.3 / G1.5)."""
+        """S4 playback data: the newest current program (D09) when there is one, else the path (D07) timing; the
+        path (statuses, TCP poses), placement (D19), seams (D04) and the URLs of the view and robot models."""
         job = jobs.job_dir(settings.jobs_dir, job_id)
         path = jobs.read_json(job / 'path.json')
+        if path is not None and not str(path.get('schema_version', '')).startswith('2.'):
+            path = None  # v1 paths (before G1.3) carry no positioner angle: not playable
         placement = jobs.read_json(job / 'placement.json')
-        if not path or not str(path.get('schema_version', '')).startswith('2.') or placement is None:
+        rev, program, program_state = jobs.latest_program(job, settings.repo_root)
+        if placement is None or (path is None and program is None):
             raise ProblemError(404, 'no-simulation', 'No simulation data',
-                               detail='no v2 path.json with a placement yet (planner G1.3 / program G1.5)')
-        return {'path': path, 'placement': placement}
+                               detail='needs placement.json and a planned path.json (M4) or a program (M6)')
+        notes: List[str] = []
+        path_state = jobs.document_state(job, 'path.json', settings.repo_root, path) if path else 'missing'
+        if path_state == 'stale':
+            notes.append('path.json is stale (seams, placement or cell frames changed): re-plan')
+        if program is not None and program_state != 'ok':
+            notes.append(f'program {rev} is stale (the path changed after it was generated): generate the program '
+                         'again; playing the path timing instead')
+        use_program = program is not None and program_state == 'ok'
+        checked = [d.get('collision_checked') for d in (path, program if use_program else None) if d is not None]
+        return {
+            'job_id': job_id, 'source': 'program' if use_program else 'path',
+            'program_rev': rev, 'program_state': program_state, 'program': program if use_program else None,
+            'path': path, 'path_state': path_state, 'placement': placement,
+            'seams': jobs.read_json(job / 'seams.json'),
+            'collision_checked': bool(checked) and all(c is True for c in checked),
+            'view_url': f'/api/v1/jobs/{job_id}/view/view.glb',
+            'robot_description_url': '/api/v1/cell/robot_description',
+            'notes': notes,
+        }
+
+    # -- cell model for the browser (display only) ------------------------------------------------------------------
+    @api.get('/cell/robot_description')
+    def robot_description(_u: User = Depends(require(*READ))) -> Dict[str, Any]:
+        return robot.description()
+
+    @api.get('/cell/meshes/head/{path:path}')
+    def head_mesh(path: str, _u: User = Depends(require(*READ))) -> FileResponse:
+        return FileResponse(robot.head_mesh(path), media_type='application/octet-stream')
+
+    @api.get('/cell/meshes/package/{package}/{path:path}')
+    def package_mesh(package: str, path: str, _u: User = Depends(require(*READ))) -> FileResponse:
+        return FileResponse(robot.package_mesh(package, path), media_type='application/octet-stream')
 
     # -- runs -----------------------------------------------------------------------------------------------------
     def _run_or_404(run_id: str) -> Dict[str, Any]:

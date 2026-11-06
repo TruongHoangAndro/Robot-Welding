@@ -4,9 +4,12 @@ exact command line of a CLI that is not merged yet is wired in one place.
 * A11–A14 / A13: ``awm_geometry.cli import`` + ``export-view`` in the OCC conda interpreter (ADR-15).
 * A21 / A22 (G1.2, branch ``g1-2-seam-axis``, not merged): ``joint_seam build --job J --picks P [--no-axis]``
   (writes ``seams.json`` D04 v2.1 and ``seam_axis.json``). Prefix from ``Settings.seam_cmd``.
-* A41–A49 (G1.3, not written): ``plan --job J --collision off --out O [--seams S01 …]``. **Assumption:** the
-  planner writes D07 to ``--out`` (the run folder); awm_api promotes it to ``<job>/path.json`` only when the run
-  succeeds. Prefix from ``Settings.plan_cmd``.
+* A41–A49 (G1.3): ``plan --job J --collision off --out O --head-dir H [--travel-speed-mm-s V] [--seams S01 …]``.
+  The planner writes D07 to ``--out`` (the run folder); awm_api promotes it to ``<job>/path.json`` only when the
+  run succeeds. Prefix from ``Settings.plan_cmd``. Without a speed the planner default (Assumption) is used.
+* A61–A64 (G1.5): ``generate --job J``: writes ``<job>/programs/P###/program.json`` itself and ends with
+  ``result ok program_rev=P### out=<file> …`` (exit 0) or ``result refused <reason>`` (exit 1). Prefix from
+  ``Settings.program_cmd``.
 """
 
 from __future__ import annotations
@@ -86,9 +89,9 @@ def build_seams(settings: Settings, job: Path, picks: Sequence[Dict[str, Any]], 
     """Picked ids + attributes → ``seams.json`` (+ ``seam_axis.json``) through the seam CLI; returns D04."""
     work_dir.mkdir(parents=True, exist_ok=True)
     picks_file = work_dir / 'picks.json'
-    # The G1.2 CLI refuses request fields it does not know; ``range_mm`` (contract SeamPick, not used by S2 in
-    # Goal 1) is passed only when set, so the CLI reports it clearly instead of every save failing.
-    request = [{k: v for k, v in p.items() if not (k == 'range_mm' and v is None)} for p in picks]
+    # The G1.2 CLI refuses request fields it does not know; ``range_mm`` (contract SeamPick) is refused by the API
+    # in Goal 1 before this point, so it is never sent.
+    request = [{k: v for k, v in p.items() if k != 'range_mm'} for p in picks]
     picks_file.write_text(json.dumps({'seams': request}, indent=1) + '\n')
     argv = settings.seam_argv() + ['build', '--job', str(job), '--picks', str(picks_file)]
     if not build_axis:
@@ -112,9 +115,12 @@ def build_seams(settings: Settings, job: Path, picks: Sequence[Dict[str, Any]], 
     return doc
 
 
-def plan_steps(settings: Settings, run_dir: Path, job: Path, seams: Optional[List[str]]) -> List[Step]:
+def plan_steps(settings: Settings, run_dir: Path, job: Path, seams: Optional[List[str]],
+               travel_speed_mm_s: Optional[float] = None) -> List[Step]:
     argv = settings.plan_argv() + ['plan', '--job', str(job), '--collision', 'off', '--out',
-                                   str(run_dir / 'path.json')]
+                                   str(run_dir / 'path.json'), '--head-dir', str(settings.head_dir)]
+    if travel_speed_mm_s is not None:
+        argv += ['--travel-speed-mm-s', repr(float(travel_speed_mm_s))]
     if seams:
         argv += ['--seams', *seams]
     return [Step('plan', argv, env=dict(os.environ))]
@@ -128,3 +134,22 @@ def promote_plan(run_dir: Path, job: Path) -> Dict[str, str]:
     shutil.copyfile(out, tmp)
     tmp.replace(job / 'path.json')
     return {'path.json': sha256_file(job / 'path.json')}
+
+
+_RESULT_OK_RE = re.compile(r'^result ok .*\bprogram_rev=(P[0-9]{3})\b')
+
+
+def program_steps(settings: Settings, job: Path) -> List[Step]:
+    return [Step('program', settings.program_argv() + ['generate', '--job', str(job)], env=dict(os.environ))]
+
+
+def promote_program(run_dir: Path, job: Path) -> Dict[str, str]:
+    """The program CLI writes into the job itself; report the revision named by its ``result ok`` line."""
+    log = (run_dir / 'log.txt').read_text(errors='replace') if (run_dir / 'log.txt').is_file() else ''
+    revs = [m.group(1) for m in (_RESULT_OK_RE.match(ln) for ln in log.splitlines()) if m]
+    if not revs:
+        raise RuntimeError('the program CLI finished without a "result ok program_rev=P###" line')
+    rel = f'programs/{revs[-1]}/program.json'
+    if not (job / rel).is_file():
+        raise RuntimeError(f'the program CLI reported {revs[-1]} but {rel} does not exist')
+    return {rel: sha256_file(job / rel)}
