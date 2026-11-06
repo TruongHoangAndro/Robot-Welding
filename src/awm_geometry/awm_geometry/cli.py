@@ -22,6 +22,8 @@ Commands (lengths in metres, except export-view: mm per the D20 contract):
   export-head --step FILE --map MAP.yaml --repo DIR
                                              A18 H-CAD head (mm, tool0 frame): cell/model/head/ meshes +
                                              hulls + head.yaml (tool0 / tcp_laser estimate, S.5c)
+  pick-circle --step FILE [--component NAME | --components] --edge E<n> [--reverse] --up-axis A --out FILE.json
+                                             CP-60 / CP-61: centre, axis, radius of a circular D20 edge (file mm)
   inspect-assembly --step FILE --out FILE.json [--no-cylinders]
                                              A18 input: component tree of a STEP assembly (paths,
                                              names, placements 4x4 and bboxes in mm, file frame)
@@ -68,7 +70,7 @@ def cmd_import(args) -> dict:
     LOG.info('A11 reading %s%s', job.model_step,
              f' (component {args.component})' if args.component else '')
     LOG.info('A12 check & heal')
-    loaded = part_mod.load_part(job.model_step, args.component)
+    loaded = part_mod.load_part(job.model_step, args.component, components=args.components)
     return write_part_record(job, Path(args.step).name, loaded, args.part_no, args.part_rev,
                              args.linear_deflection_m, args.angular_deflection_deg)
 
@@ -185,7 +187,7 @@ def cmd_export_view(args) -> dict:
     job = Path(args.job) if args.job else None
     view.source_name(step, job)  # rule 7: fail early if the STEP is not inside the job
     LOG.info('A11 reading %s%s', step, f' (component {args.component})' if args.component else '')
-    loaded = part.load_part(step, args.component)
+    loaded = part.load_part(step, args.component, components=args.components)
     return view.export(loaded, step, args.component, args.up_axis, Path(args.out),
                        _created_by(), job)
 
@@ -226,6 +228,13 @@ def cmd_export_head(args) -> dict:
     return head.export_head(Path(args.step), Path(args.map), Path(args.repo), _created_by())
 
 
+def cmd_pick_circle(args) -> dict:
+    from awm_geometry import circle_pick
+
+    return circle_pick.pick(Path(args.step), args.edge, args.up_axis, Path(args.out), _created_by(),
+                            component=args.component, components=args.components, reverse=args.reverse)
+
+
 def cmd_export_cell_view(args) -> dict:
     from awm_geometry import cell_view
 
@@ -246,6 +255,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--part-rev', required=True)
     p.add_argument('--component', default=None,
                    help='assembly component name (default: the whole file); same as export-view')
+    p.add_argument('--components', action='store_true',
+                   help='CP-60: whole file read per assembly component (same flag for export-view and pick-circle)')
     p.add_argument('--linear-deflection-m', type=float, default=1.0e-4)
     p.add_argument('--angular-deflection-deg', type=float, default=10.0)
     p = sub.add_parser('sample')
@@ -265,6 +276,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help='job folder: source.file / inputs relative to it (STEP must be inside)')
     p.add_argument('--component', default=None,
                    help='assembly component name (default: the whole file)')
+    p.add_argument('--components', action='store_true',
+                   help='CP-60: whole file per assembly component; solids carry component_index / component_path')
     p.add_argument('--up-axis', default='+Z', choices=['+X', '-X', '+Y', '-Y', '+Z', '-Z'],
                    help='up axis of the source file (recorded only; no rotation is applied)')
     p.add_argument('--out', required=True)
@@ -288,6 +301,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--step', required=True, help='head CAD STEP assembly (robot arm + mount + LightWELD head)')
     p.add_argument('--map', required=True, help='head map cad_map_head.yaml (components, links, frame rules)')
     p.add_argument('--repo', required=True, help='repository root (cell/model/head is written)')
+    p = sub.add_parser('pick-circle')
+    p.add_argument('--step', required=True)
+    group = p.add_mutually_exclusive_group()
+    group.add_argument('--component', default=None, help='same component as the export-view the edge id came from')
+    group.add_argument('--components', action='store_true', help='same flag as the export-view the edge id came from')
+    p.add_argument('--edge', required=True, help='edge id E<n> of that D20 view')
+    p.add_argument('--reverse', action='store_true', help='flip the circle axis (UI Reverse button)')
+    p.add_argument('--up-axis', required=True, choices=['+X', '-X', '+Y', '-Y', '+Z', '-Z'])
+    p.add_argument('--out', required=True, help='axis_pick.json (v2/axis_pick)')
     p = sub.add_parser('export-cell-view')
     p.add_argument('--step', required=True, help='cell CAD STEP assembly')
     p.add_argument('--components', required=True, help='cell_components.json of inspect-assembly')
@@ -300,7 +322,7 @@ def build_parser() -> argparse.ArgumentParser:
 COMMANDS = {'info': cmd_info, 'import': cmd_import, 'sample': cmd_sample,
             'make-test-part': cmd_make_test_part, 'sample-joints': cmd_sample_joints, 'export-view': cmd_export_view,
             'inspect-assembly': cmd_inspect_assembly, 'export-scene': cmd_export_scene,
-            'export-cell-view': cmd_export_cell_view, 'export-head': cmd_export_head}
+            'export-cell-view': cmd_export_cell_view, 'pick-circle': cmd_pick_circle, 'export-head': cmd_export_head}
 
 
 def main(argv: Optional[List[str]] = None) -> int:

@@ -256,3 +256,56 @@ def write_tree_assembly(path: Union[str, Path], root_name: str, nodes: List[Dict
     writer.SetNameMode(True)
     if not writer.Transfer(doc, STEPControl_AsIs) or writer.Write(str(path)) != IFSelect_RetDone:
         raise GeometryError(f'cannot write STEP assembly {path}')
+
+
+# --- CP-60 job assembly (positioner + fixture + part + robot), mm ------------------------------------------------
+
+#: Positioner axis of the synthetic job assembly: +X through this point (file frame, mm).
+JOB_AXIS_POINT_MM = (0.0, -450.0, 150.0)
+JOB_DISC_R_MM = 60.0
+JOB_PIPE_R_MM = 13.335
+JOB_PIPE_BORE_MM = 10.465
+JOB_JOINT_X_MM = 60.0
+
+
+def x_cylinder(r: float, x0: float, length: float, center=JOB_AXIS_POINT_MM) -> TopoDS_Shape:
+    """Solid cylinder (mm) about an axis parallel to +X through ``center``, from x0 to x0 + length."""
+    return BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(x0, center[1], center[2]), gp_Dir(1, 0, 0)), r, length).Shape()
+
+
+def x_tube(r: float, bore: float, x0: float, length: float, center=JOB_AXIS_POINT_MM) -> TopoDS_Shape:
+    return _cut(x_cylinder(r, x0, length, center), x_cylinder(bore, x0, length, center))
+
+
+def box_mm(lo: Sequence[float], hi: Sequence[float]) -> TopoDS_Shape:
+    return BRepPrimAPI_MakeBox(gp_Pnt(*lo), gp_Pnt(*hi)).Shape()
+
+
+def job_assembly_nodes(group_placement_mm: Optional[Sequence[Sequence[float]]] = None) -> List[Dict]:
+    """Nodes for :func:`write_tree_assembly`: a job file with a positioner, a fixture and a two-pipe part.
+
+    Instance paths: ``Positioner:1 / Base:1`` (static), ``Positioner:1 / Disc:1`` (rim circles r 60 at x -20 and 0),
+    ``Fixture:1 / Holder:1``, ``Clamps:1 / Holder:1`` (same instance name under another parent),
+    ``Part:1 / PipeA:1`` + ``Part:1 / PipeB:1`` (coaxial tubes, joint ring r 13.335 at x 60) and ``Robot:1``.
+    ``group_placement_mm`` (4x4, mm) is applied to Disc, Fixture and Part (a positioner turned in the file).
+    """
+    c = JOB_AXIS_POINT_MM
+    turned = [
+        {'name': 'Fixture', 'children': [{'name': 'Holder', 'shape': x_tube(30.0, 20.0, 0.0, 30.0)}]},
+        {'name': 'Part', 'children': [
+            {'name': 'PipeA', 'shape': x_tube(JOB_PIPE_R_MM, JOB_PIPE_BORE_MM, 30.0, JOB_JOINT_X_MM - 30.0)},
+            {'name': 'PipeB', 'shape': x_tube(JOB_PIPE_R_MM, JOB_PIPE_BORE_MM, JOB_JOINT_X_MM, 40.0)}]},
+    ]
+    disc = {'name': 'Disc', 'shape': x_cylinder(JOB_DISC_R_MM, -20.0, 20.0)}
+    if group_placement_mm is not None:
+        for node in turned:
+            node['placement_mm'] = group_placement_mm
+        disc['placement_mm'] = group_placement_mm
+    return [
+        {'name': 'Positioner', 'children': [
+            {'name': 'Base', 'shape': box_mm((-40.0, c[1] - 70.0, 0.0), (-20.0, c[1] + 70.0, 80.0))}, disc]},
+        *turned,
+        {'name': 'Clamps', 'children': [
+            {'name': 'Holder', 'shape': box_mm((100.0, c[1] - 70.0, 140.0), (110.0, c[1] - 50.0, 160.0))}]},
+        {'name': 'Robot', 'shape': box_mm((-300.0, 0.0, 0.0), (-200.0, 100.0, 400.0))},
+    ]

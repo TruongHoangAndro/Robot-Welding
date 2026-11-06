@@ -264,6 +264,7 @@ def export(loaded: LoadedPart, step: Path, component_name: Optional[str], up_axi
     root = glb.add_node('part')
     solid_nodes = {}
     solid_docs = []
+    comps = loaded.solid_components
     for b in range(1, model.solids.Size() + 1):
         solid = model.solids.FindKey(b)
         props = GProp_GProps()
@@ -273,12 +274,26 @@ def export(loaded: LoadedPart, step: Path, component_name: Optional[str], up_axi
         solid_docs.append({'solid_id': f'B{b}', 'name': model.names[b - 1],
                            'volume_mm3': volume_mm3, 'bbox_min_mm': _mm(lo),
                            'bbox_max_mm': _mm(hi)})
+        if comps is not None and comps[b - 1] is not None:
+            solid_docs[-1].update(component_index=comps[b - 1],
+                                  component_path=loaded.component_paths[comps[b - 1]])
         solid_nodes[b] = glb.add_node(f'B{b}', root, extras={'solid_id': f'B{b}'})
+
+    shells: List[int] = []
+
+    def _parent(owner: Optional[int]) -> int:
+        """glb parent node: the owning solid, or one 'shells' node for faces / edges without a solid."""
+        if owner is not None:
+            return solid_nodes[owner]
+        if not shells:
+            shells.append(glb.add_node('shells', root, extras={'solid_id': None}))
+        return shells[0]
 
     face_docs = []
     for i in range(1, model.faces.Size() + 1):
         face = topods.Face(model.faces.FindKey(i))
-        fid, sid = f'F{i}', f'B{face_owner[i]}'
+        owner = face_owner.get(i)
+        fid, sid = f'F{i}', (None if owner is None else f'B{owner}')
         stype = topology._SURFACE_NAMES.get(BRepAdaptor_Surface(face).GetType(), 'other')
         area_mm2 = units.m_to_mm(units.m_to_mm(topology.face_area(face)))
         face_docs.append({'face_id': fid, 'solid_id': sid, 'surface_type': stype,
@@ -288,8 +303,7 @@ def export(loaded: LoadedPart, step: Path, component_name: Optional[str], up_axi
         except GeometryError as exc:
             raise GeometryError(f'{fid}: {exc}') from exc
         mesh = glb.add_triangles(fid, units.m_to_mm(pos), nor, idx)
-        glb.add_node(fid, solid_nodes[face_owner[i]], mesh,
-                     extras={'face_id': fid, 'solid_id': sid})
+        glb.add_node(fid, _parent(owner), mesh, extras={'face_id': fid, 'solid_id': sid})
 
     ancestors = TopTools_IndexedDataMapOfShapeListOfShape()
     topexp.MapShapesAndAncestors(model.shape, TopAbs_EDGE, TopAbs_FACE, ancestors)
@@ -299,7 +313,8 @@ def export(loaded: LoadedPart, step: Path, component_name: Optional[str], up_axi
         edge = topods.Edge(model.edges.FindKey(i))
         if BRep_Tool.Degenerated(edge):
             continue
-        eid, sid = f'E{i}', f'B{edge_owner[i]}'
+        owner = edge_owner.get(i)
+        eid, sid = f'E{i}', (None if owner is None else f'B{owner}')
         curve = BRepAdaptor_Curve(edge)
         jid = edge_joint.get(i)
         edge_docs.append({
@@ -312,13 +327,13 @@ def export(loaded: LoadedPart, step: Path, component_name: Optional[str], up_axi
             'fingerprint': topology.edge_fingerprint(edge), 'joint_edge_id': jid,
         })
         mesh = glb.add_line_strip(eid, units.m_to_mm(edge_polyline(edge, chord_m)))
-        glb.add_node(eid, solid_nodes[edge_owner[i]], mesh,
-                     extras={'edge_id': eid, 'solid_id': sid, 'joint_edge_id': jid})
+        glb.add_node(eid, _parent(owner), mesh, extras={'edge_id': eid, 'solid_id': sid, 'joint_edge_id': jid})
 
     doc = jsonio.make_header(created_by, [step], base_dir)
     doc.update({
         'schema_version': SCHEMA_VERSION, 'unit': 'mm', 'frame': 'part',
-        'source': {'file': name, 'component': component_name, 'up_axis': up_axis},
+        'source': dict({'file': name, 'component': component_name, 'up_axis': up_axis},
+                       **({'components': True} if comps is not None else {})),
         'tessellation': {'face_linear_deflection_mm': FACE_LINEAR_DEFLECTION_MM,
                          'face_angular_deflection_deg': FACE_ANGULAR_DEFLECTION_DEG,
                          'edge_chord_mm': EDGE_CHORD_MM},

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from awm_core import jsonio
-from awm_core.repository import Repository
+from awm_core.repository import JobPaths, Repository
 
 
 def seam_from_edges(job, seam_id, edge_ids, sequence=1, reversed_=False, weld_side='bisector'):
@@ -72,3 +72,29 @@ def cell_map_path():
     """Role map of the cell CAD for real-CAD tests: ``AWM_CELL_MAP`` or the spike record in the repository."""
     return Path(os.environ.get('AWM_CELL_MAP') or
                 REPO / 'docs' / 'generated' / 'spike' / 'cad_map_cell.yaml')
+
+
+@pytest.fixture(scope='session')
+def job_assembly_step(tmp_path_factory, occ):
+    """CP-60 synthetic job STEP (testparts.job_assembly_nodes)."""
+    from awm_geometry import testparts
+
+    path = tmp_path_factory.mktemp('job') / 'job.step'
+    testparts.write_tree_assembly(path, 'job', testparts.job_assembly_nodes())
+    return path
+
+
+@pytest.fixture(scope='session')
+def job_assembly(job_assembly_step, tmp_path_factory):
+    """(job, topology, inspect-assembly components): `import --components` + `export-view --components`."""
+    from awm_geometry import cli
+
+    job = JobPaths(tmp_path_factory.mktemp('repo') / 'JOB_A')
+    assert cli.main(['import', '--job', str(job.dir), '--step', str(job_assembly_step), '--part-no', 'JOB',
+                     '--part-rev', 'A', '--components']) == 0
+    out = job.dir / 'cache' / 'view'
+    assert cli.main(['export-view', '--step', str(job.model_step), '--job', str(job.dir), '--components',
+                     '--up-axis', '+Z', '--out', str(out)]) == 0
+    tree = job.dir / 'tree.json'
+    assert cli.main(['inspect-assembly', '--step', str(job.model_step), '--out', str(tree)]) == 0
+    return job, json.loads((out / 'topology.json').read_text()), json.loads(tree.read_text())['components']
