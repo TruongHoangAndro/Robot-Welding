@@ -707,3 +707,65 @@ D09 schemas (θ per point / per trajectory point, `positioner_mode`).
    without objection: closure of a 360° seam to its start state is not enforced; Mode C FK tolerance = F8
    (0.05 mm / 0.1°), sync = 0.01 mm / 0.01°.
 
+
+## CP-60 CAD import split into "cell import" and "job import", components classified by role in the browser; positioner axis picked on the B-Rep (proposed 2026-11-06 — direction decided by Truong, details for approval)
+
+**Decision (Truong, 2026-11-06):** the STEP assembly tree is shown in the browser and the user classifies its
+components by role; the import is split into a **cell import** (once per cell) and a **job import** (once per part
+number). In S2 the Engineer picks the seams and the **positioner reference (centre of the rotary table)**; the seam file
+in the positioner frame (`seam_axis.json`, CP-58) is built from these two inputs for "Plan all seams".
+**Why:** today a new job has no placement (manual pose entry in G1.6 is an Assumption); the mechanical team already
+structures the Fusion assemblies by device; one source per piece of information (robot / tool / positioner = cell,
+fixture / part = job) avoids two files disagreeing about the robot position.
+**Roles (data, not source):** `robot` (locates the base only; the robot model always comes from `ur_description`,
+ADR-16), `tool` (LightWELD head + mount: display, collision, TCP teach CP-61), `positioner_base` (static),
+`positioner_rotating` (flange, holders), `fixture` (flag rotating / static, OI-27), `part` (weld solids; seams only
+on these), `cell_static` (frame, table, enclosure), `ignore`. A role set on an assembly node applies to its children.
+The first classification is saved as a template keyed by component instance names; the next import with the same
+names is pre-classified and only reviewed.
+**Cell import (Admin, S10):** STEP with robot, tool, positioner, frame. Outputs: cell `roles.json`, robot base
+location, positioner axis (picked circular edge / cylindrical face → centre + axis exactly from the B-Rep; θ = 0 = pose
+in the file; `REF_POSITIONER` marker used first if present), tool meshes + TCP (CP-61), cell meshes. Writes the cell
+model (`cell/model/frames.yaml`, head folder) — nominal D08 until calibration (A51–A55) replaces it.
+**Job import (Engineer, S1 → S2):** STEP with at least the positioner (or its flange), fixture and part; robot / tool
+may be present and are then **reference only** (cross-check, never override the cell). Outputs: job `roles.json`,
+positioner axis pick in the job file, D19 `placement.json` computed (`positioner_flange_T_part`, `source: job_cad`),
+D20 view model with all solids and a role per node (only `part` edges pickable), cross-check report.
+**Cross-check (`job/cad_check.json`, shown green / yellow / red in S2; tolerances Assumption, in D16):**
+1. job positioner vs cell positioner — picked circle radius, bounding box and fingerprint of `positioner_rotating`;
+   mismatch → red, Plan blocked;
+2. robot in the job file — base → positioner-axis transform vs the cell (e.g. ≤ 1 mm, ≤ 0.1°) → yellow "layout in the
+   file differs from the cell; cell used";
+3. tool in the job file — TCP vs the cell TCP → yellow, information;
+4. every `part` and rotating `fixture` attached to the rotating group (near flange / axis), no `part` in a static
+   group → red;
+5. a picked seam edge must belong to `part` solids and lie between two of them → refused at pick time;
+6. hashes of the job STEP, `roles.json`, the axis pick and the cell `frames.yaml` recorded in `seam_axis.json` → any
+   change makes it stale ("re-plan").
+**Frame chain (unchanged CP-58):** robot → positioner axis (cell, later D08) → part (job STEP + roles + axis pick) → seam.
+**DES-001 impact:** D01 becomes the job STEP **assembly** (part + fixture + positioner, optional reference robot / tool);
+D21 keeps the cell CAD (`cell/cad/`), `job/fixture.step` is dropped (fixture = a role inside D01); new data items
+`roles.json` (cell and job, schema `v2/cad_roles`) and `cad_check.json`; D19 gains `source: job_cad`; D20 gains roles;
+A15 (place part) becomes "classify + pick positioner axis"; A18 uses the same classification UI; screens S2 and S10;
+§5.2 job package; ADR-16 (the `cad_map.yaml` becomes UI-generated `roles.json`); ADR-17 (`job_cad` counts like
+`fixture_cad` for a production release). Supersedes the G1.6 manual / copied placement (kept as a test helper only).
+**Open for approval:** role list; tolerances of checks 1–2; where θ = 0 is defined if the file has no marker.
+
+## CP-61 TCP taught in the browser on the tool CAD; never guessed (proposed 2026-11-06 — direction decided by Truong)
+
+**Decision (Truong, 2026-11-06):** the robot configuration page has a "Teach TCP" function: the user selects the TCP
+on the 3D tool model with the mouse and saves it.
+**Bug that triggered it (2026-11-06):** the automatic beam estimate of `export-head` (S.5c) took the fiber / cable
+connector end behind the flange as the nozzle: TCP (−67.6, 0, −385.4) mm along tool0 −Z. The nozzle tip is at tool0
+(43.8, 0, 279.6) mm, beam (0.866, 0, 0.5) — 60° from the flange axis (Truong's mark, located on the barrel axis in the
+B-Rep). All Goal 1 results of G1.3 / G1.5 (J1, J2 coverage, 1.19 mm/s) were computed with the wrong TCP and are
+re-run. Interim fix: TCP from an explicit map entry (`frames.tcp`), automatic estimates behind the flange refused.
+**Teach procedure (proposal):** (1) the user clicks the **circular edge of the nozzle mouth** (or the nozzle's
+cylindrical face); (2) the software takes centre and axis from the B-Rep (a mouse click alone gives a surface point,
+not the beam axis or its direction), shows the beam arrow pointing out of the nozzle, with a "reverse" button;
+(3) the user enters the stick-out / focus offset in mm along the beam (default 0, DES-001 §5.3); (4) save → head.yaml
+TCP with `method: teach_ui`, picked edge, offset, user, date, hash; every path planned with the old TCP becomes stale.
+**Role / screen:** Admin, S10 "Cell model", tab "Tool / TCP" (§7.3: cell configuration is Admin).
+**Relation to calibration:** the taught TCP is the nominal value from CAD; the measured TCP of A51 (4–6 orientations
+on the real robot) replaces it in D08 at the hardware stage.
+**DES-001 impact:** §5.3 `tcp_laser` source; A51 (nominal vs measured); S10; head.yaml / D08 records.
