@@ -1,0 +1,139 @@
+{
+ "schema_version": "2.0",
+ "program_rev": "P001",
+ "joint_names": {
+  "robot": [
+   "shoulder_pan_joint",
+   "shoulder_lift_joint",
+   "elbow_joint",
+   "wrist_1_joint",
+   "wrist_2_joint",
+   "wrist_3_joint"
+  ],
+  "positioner": [
+   "positioner_joint"
+  ]
+ },
+ "home": {
+  "robot_deg": [
+   90.0,
+   -90.0,
+   90.0,
+   -90.0,
+   -90.0,
+   0.0
+  ],
+  "positioner_deg": 0.0
+ },
+ "segments": [
+  {
+   "segment_id": "G001",
+   "controller": "positioner",
+   "kind": "index",
+   "seam_id": null,
+   "hold_deg": [
+    90.0,
+    -90.0,
+    90.0,
+    -90.0,
+    -90.0,
+    0.0
+   ],
+   "tcp_speed_mm_s": null,
+   "points": [
+    {
+     "time_from_start_s": 0.0,
+     "positions_deg": [
+      0.0
+     ],
+     "velocities_deg_s": [
+      0.0
+     ],
+     "accelerations_deg_s2": [
+      0.0
+     ]
+    },
+    {
+     "time_from_start_s": 1.0,
+     "positions_deg": [
+      45.0
+     ],
+     "velocities_deg_s": [
+      0.0
+     ],
+     "accelerations_deg_s2": [
+      0.0
+     ]
+    }
+   ]
+  },
+  {
+   "segment_id": "G002",
+   "controller": "robot",
+   "kind": "weld",
+   "seam_id": "S01",
+   "hold_deg": [
+    45.0
+   ],
+   "tcp_speed_mm_s": 5.0,
+   "points": [
+    {
+     "time_from_start_s": 0.0,
+     "positions_deg": [
+      90.0,
+      -90.0,
+      90.0,
+      -90.0,
+      -90.0,
+      0.0
+     ],
+     "velocities_deg_s": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "accelerations_deg_s2": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "time_from_start_s": 2.0,
+     "positions_deg": [
+      95.0,
+      -105.0,
+      95.0,
+      -80.0,
+      -85.0,
+      10.0
+     ],
+     "velocities_deg_s": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "accelerations_deg_s2": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    }
+   ]
+  }
+ ],
+ "events": [],
+ "cycle_time_s": 3.0
+}

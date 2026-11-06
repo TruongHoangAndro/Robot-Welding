@@ -8,6 +8,7 @@ import {
   cancelRun,
   getJob,
   getSeams,
+  putPlacement,
   putSeams,
   startPlan,
   viewBase,
@@ -17,6 +18,7 @@ import {
   type Session,
 } from '../lib/api';
 import { loadFromUrl, type Model } from '../lib/load';
+import { emptyPlacementForm, placementRequest, type PlacementForm } from '../lib/placement';
 import type { PickTarget } from '../lib/pick';
 import {
   JOINT_TYPES,
@@ -58,6 +60,9 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
   const [showFrames, setShowFrames] = useState(true);
   const [saving, setSaving] = useState(false);
   const [run, setRun] = useState<Run | null>(null);
+  const [speed, setSpeed] = useState('');
+  const [placeForm, setPlaceForm] = useState<PlacementForm>(emptyPlacementForm);
+  const [placeMsg, setPlaceMsg] = useState<string | null>(null);
   const stopWatch = useRef<(() => void) | null>(null);
   useEffect(() => () => stopWatch.current?.(), []);
 
@@ -170,11 +175,32 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
       .finally(() => setSaving(false));
   };
 
+  const speedValue = speed.trim() === '' ? undefined : Number(speed);
+  const speedError = speedValue !== undefined && !(Number.isFinite(speedValue) && speedValue > 0) ? 'travel speed must be a number > 0 mm/s' : null;
   const plan = () => {
     setError(null);
-    startPlan(token, jobId)
+    startPlan(token, jobId, undefined, speedValue)
       .then(follow)
       .catch((e: Error) => setError(e.message));
+  };
+
+  const savePlacement = () => {
+    const req = placementRequest(placeForm, jobId);
+    if ('errors' in req) {
+      setPlaceMsg(req.errors.join('; '));
+      return;
+    }
+    setPlaceMsg(null);
+    putPlacement(token, jobId, req.body)
+      .then(({ seamAxis }) => {
+        setPlaceMsg(
+          seamAxis === 'stale'
+            ? 'Placement saved (study, Assumption). seam_axis.json is now stale: save the seams again, then re-plan.'
+            : `Placement saved (study, Assumption). seam_axis.json: ${seamAxis}.`,
+        );
+        return reloadDetail();
+      })
+      .catch((e: Error) => setPlaceMsg(e.message));
   };
 
   const planBlock = planBlocker(detail, saved, dirty, canEdit, run);
@@ -257,6 +283,47 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
                   )}
                 </Row>
                 {detail.placement_note && <div className="warn">{detail.placement_note}</div>}
+                {canEdit && (
+                  <details open={!detail.placement} data-testid="placement-panel">
+                    <summary>{detail.placement ? 'Change placement' : 'Give this job a placement'}</summary>
+                    <div className="muted">
+                      Pose of the part frame in positioner_flange (θ = 0), mm and degrees (roll-pitch-yaw, URDF convention), or a copy of another
+                      job's placement. Saved as source <code>study</code>, not verified — an Assumption for simulation only.
+                    </div>
+                    <div className="form">
+                      <label>source</label>
+                      <select value={placeForm.mode} onChange={(e) => setPlaceForm({ ...placeForm, mode: e.target.value as PlacementForm['mode'] })}>
+                        <option value="manual">manual pose</option>
+                        <option value="copy">copy from job</option>
+                      </select>
+                      {placeForm.mode === 'manual' ? (
+                        <>
+                          <label>position mm x y z</label>
+                          <span className="angles">
+                            {placeForm.position_mm.map((v, i) => (
+                              <input key={i} value={v} onChange={(e) => setPlaceForm({ ...placeForm, position_mm: placeForm.position_mm.map((w, k) => (k === i ? e.target.value : w)) })} />
+                            ))}
+                          </span>
+                          <label>roll pitch yaw deg</label>
+                          <span className="angles">
+                            {placeForm.rpy_deg.map((v, i) => (
+                              <input key={i} value={v} onChange={(e) => setPlaceForm({ ...placeForm, rpy_deg: placeForm.rpy_deg.map((w, k) => (k === i ? e.target.value : w)) })} />
+                            ))}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <label>job id</label>
+                          <input value={placeForm.copy_from} placeholder="<PartNo>_<PartRev>" onChange={(e) => setPlaceForm({ ...placeForm, copy_from: e.target.value })} />
+                        </>
+                      )}
+                    </div>
+                    <button className="btn small" onClick={savePlacement}>
+                      Save placement
+                    </button>
+                    {placeMsg && <div className="warn">{placeMsg}</div>}
+                  </details>
+                )}
                 <Row k="seam_axis.json">
                   <span className={detail.seam_axis === 'ok' ? 'ok' : 'warn'}>{detail.seam_axis}</span>
                 </Row>
@@ -339,9 +406,20 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
           <Panel title="Plan (M4)">
             <KinematicBanner />
             <p className="muted">Robot + positioner, synchronised 7 axes by default (CP-59). Collision is not evaluated in Goal 1.</p>
-            <button className="btn small" disabled={!!planBlock} onClick={plan} title={planBlock ?? ''}>
+            <div className="form">
+              <label>travel speed mm/s</label>
+              <input value={speed} placeholder="planner default (Assumption)" disabled={!canEdit} onChange={(e) => setSpeed(e.target.value)} />
+            </div>
+            {speedError && <div className="err">{speedError}</div>}
+            <button className="btn small" disabled={!!planBlock || !!speedError} onClick={plan} title={planBlock ?? ''}>
               Plan all seams
             </button>
+            {detail && detail.path !== 'missing' && (
+              <a className="btn small" href={`#/jobs/${encodeURIComponent(jobId)}/sim`} data-testid="open-s4">
+                S4 simulation →
+              </a>
+            )}
+            {detail?.path === 'stale' && <div className="warn">path.json is stale: re-plan.</div>}
             {planBlock && <div className="muted">{planBlock}</div>}
             {run && <RunView run={run} onCancel={canEdit ? () => cancelRun(token, run.run_id).catch((e: Error) => setError(e.message)) : undefined} />}
           </Panel>
@@ -357,7 +435,7 @@ function planBlocker(d: JobDetail | null, saved: SeamDoc | null, dirty: boolean,
   if (run && (run.state === 'queued' || run.state === 'running')) return 'A run is active.';
   if (!saved || saved.seams.length === 0) return 'Save at least one seam first.';
   if (dirty) return 'Save the seam changes first.';
-  if (!d.placement) return 'No placement for this job (Goal 1 uses the golden-part placement from the cell CAD).';
+  if (!d.placement) return 'No placement for this job: give it one in the Job panel (manual pose or copy).';
   if (d.seam_axis !== 'ok') return `seam_axis.json is ${d.seam_axis}: save the seams again.`;
   return null;
 }
