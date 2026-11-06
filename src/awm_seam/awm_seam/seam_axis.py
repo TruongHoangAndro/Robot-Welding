@@ -21,7 +21,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import yaml
 
-from awm_core import frames, jsonio, units
+from awm_core import cad_roles, frames, jsonio, units
 from awm_core.repository import JobPaths
 from awm_seam import joint_seams
 
@@ -158,7 +158,12 @@ def build_seam_axis(job: JobPaths, tol_r_spread_mm: float = TOL_R_SPREAD_MM,
     seams = joint_seams.load_seams(job)
     placement = jsonio.read_json(placement_path(job), 'v2/placement', base_dir=job.dir)
     flange_t_part = pose_mm_to_matrix(placement['flange_T_part'], 'placement.json flange_T_part')
-    doc = jsonio.make_header(created_by, [job.seams_json, placement_path(job), frames_file], job.dir)
+    inputs = [job.seams_json, placement_path(job), frames_file]
+    if (job.dir / joint_seams.ROLES_FILE).is_file():  # CP-60 job import: a role / axis / STEP edit -> stale
+        inputs += [job.model_step, job.dir / joint_seams.ROLES_FILE]
+        if (job.dir / cad_roles.AXIS_FILE).is_file():
+            inputs.append(job.dir / cad_roles.AXIS_FILE)
+    doc = jsonio.make_header(created_by, inputs, job.dir)
     doc.update({
         'schema_version': SCHEMA_VERSION, 'frame': 'positioner_flange', 'theta_deg': 0,
         'axis': {'point_mm': [0.0, 0.0, 0.0], 'direction': [1.0, 0.0, 0.0]},

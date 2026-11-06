@@ -17,9 +17,9 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, fields
-from typing import Callable, Dict, List, Optional, Sequence
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
-from awm_core import jsonio
+from awm_core import cad_roles, jsonio
 from awm_core.hashing import sha256_text
 from awm_core.repository import JobPaths
 
@@ -230,6 +230,40 @@ def _part_ids(job: JobPaths) -> Dict[str, str]:
         raise SeamDefinitionError(f'{job.part_json}: no {exc}') from exc
 
 
+ROLES_FILE = cad_roles.ROLES_FILE
+
+
+def load_roles(job: JobPaths) -> Optional[List[Dict]]:
+    """Assignments of ``roles.json`` (CP-60 job import), None for a job without roles (G1 flow unchanged)."""
+    path = job.dir / ROLES_FILE
+    if not path.is_file():
+        return None
+    return jsonio.read_json(path, 'v2/cad_roles', base_dir=job.dir)['assignments']
+
+
+def check_part_only(topo: Topology, req: JointSeamRequest, joint: Dict, assignments: List[Dict]) -> None:
+    """CP-60 check 5: picked edges and both joint solids must belong to ``part`` components."""
+    paths = {s['solid_id']: s.get('component_path') for s in topo.doc['solids']}
+
+    def role(solid_id: str) -> Tuple[str, str]:
+        path = paths.get(solid_id)
+        if path is None:
+            raise SeamDefinitionError(f'{req.seam_id}: solid {solid_id} has no component path in topology.json '
+                                      '(re-import the job with components)')
+        return cad_roles.role_of_path(path, assignments), path
+
+    for eid in req.edges:
+        r, path = role(topo.edges[eid]['solid_id'])
+        if r != 'part':
+            raise SeamDefinitionError(f'{req.seam_id}: edge {eid} is on {r} component {path}; only part edges can '
+                                      'be welded')
+    ra, pa = role(joint['solid_a'])
+    rb, pb = role(joint['solid_b'])
+    if ra != 'part' or rb != 'part':
+        raise SeamDefinitionError(f'{req.seam_id}: joint {joint["joint_edge_id"]} joins {pa} ({ra}) and {pb} ({rb}); '
+                                  'only joints between two part solids can be welded')
+
+
 def build_seams(job: JobPaths, requests: Sequence[JointSeamRequest], pitch_mm: float,
                 sampler: Sampler, created_by: str = CREATED_BY) -> Dict:
     """A21 + A22 + A24: resolve, validate, sample and write ``seams.json`` (full list, replaces the file)."""
@@ -237,6 +271,10 @@ def build_seams(job: JobPaths, requests: Sequence[JointSeamRequest], pitch_mm: f
         raise SeamDefinitionError(f'pitch {pitch_mm} mm outside (0, {MAX_PITCH_MM}] mm')
     topo = Topology.load(job)
     joints = [topo.resolve_joint(r.edges) for r in requests]
+    roles = load_roles(job)
+    if roles is not None:
+        for req, joint in zip(requests, joints):
+            check_part_only(topo, req, joint, roles)
     for req, joint in zip(requests, joints):
         check_request(req, joint)
     check_seam_list(requests, joints)
