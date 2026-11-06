@@ -717,12 +717,18 @@ in the positioner frame (`seam_axis.json`, CP-58) is built from these two inputs
 **Why:** today a new job has no placement (manual pose entry in G1.6 is an Assumption); the mechanical team already
 structures the Fusion assemblies by device; one source per piece of information (robot / tool / positioner = cell,
 fixture / part = job) avoids two files disagreeing about the robot position.
-**Roles (data, not source):** `robot` (locates the base only; the robot model always comes from `ur_description`,
-ADR-16), `tool` (LightWELD head + mount: display, collision, TCP teach CP-61), `positioner_base` (static),
-`positioner_rotating` (flange, holders), `fixture` (flag rotating / static, OI-27), `part` (weld solids; seams only
-on these), `cell_static` (frame, table, enclosure), `ignore`. A role set on an assembly node applies to its children.
-The first classification is saved as a template keyed by component instance names; the next import with the same
-names is pre-classified and only reviewed.
+**Roles (decided by Truong 2026-11-06: four roles + default; data, not source).** The roles say only what a component moves with — the planner and the collision check need nothing else:
+
+| Role (UI name) | Id | Moves with | Used for |
+|---|---|---|---|
+| Robot | `robot` | robot joints | locating the base and the cross-check only; the robot model always comes from `ur_description` (ADR-16), CAD robot geometry is never a collision object |
+| Tool (đầu hàn) | `tool` | robot flange | head, mount, conduit: display, collision, TCP teach (CP-61) |
+| Rotary fixture (gá xoay) | `rotary_fixture` | positioner θ | everything mounted on the 7th axis that turns while welding (flange, holders, clamps): collision objects moving with θ |
+| Part (chi tiết hàn) | `part` | positioner θ | weld solids: seams are picked only here; only the nozzle tip may touch the seam faces (ACM) |
+| *(not assigned)* → Static | `static` | nothing | default for every unassigned component: static obstacle (frame, table, positioner base and motor, enclosure, a fixture that does not turn) |
+
+Unassigned = static obstacle is the safe default (a forgotten component is still checked). Removing a component from the computation is an explicit "exclude" action, listed in the cross-check report; it is not a role. A role set on an assembly node applies to its children. The first classification is saved as a template keyed by component instance names; the next import with the same names is pre-classified and only reviewed. The positioner axis is not a role: it is a separate reference pick (below).
+**Collision pairs this gives (Goal 2):** robot / tool ↔ static at q; robot / tool ↔ rotary fixture + part at (q, θ) (Mode C over the full turn); nozzle tip ↔ part only on the seam faces; rotary fixture + part ↔ static swept over the positioner θ range (new check: a long part must not hit the base or the frame while turning).
 **Cell import (Admin, S10):** STEP with robot, tool, positioner, frame. Outputs: cell `roles.json`, robot base
 location, positioner axis (picked circular edge / cylindrical face → centre + axis exactly from the B-Rep; θ = 0 = pose
 in the file; `REF_POSITIONER` marker used first if present), tool meshes + TCP (CP-61), cell meshes. Writes the cell
@@ -732,13 +738,13 @@ may be present and are then **reference only** (cross-check, never override the 
 positioner axis pick in the job file, D19 `placement.json` computed (`positioner_flange_T_part`, `source: job_cad`),
 D20 view model with all solids and a role per node (only `part` edges pickable), cross-check report.
 **Cross-check (`job/cad_check.json`, shown green / yellow / red in S2; tolerances Assumption, in D16):**
-1. job positioner vs cell positioner — picked circle radius, bounding box and fingerprint of `positioner_rotating`;
+1. job positioner vs cell positioner — picked circle radius, bounding box and fingerprint of `rotary_fixture`;
    mismatch → red, Plan blocked;
 2. robot in the job file — base → positioner-axis transform vs the cell (e.g. ≤ 1 mm, ≤ 0.1°) → yellow "layout in the
    file differs from the cell; cell used";
 3. tool in the job file — TCP vs the cell TCP → yellow, information;
-4. every `part` and rotating `fixture` attached to the rotating group (near flange / axis), no `part` in a static
-   group → red;
+4. `rotary_fixture` + `part` lie around the picked axis, and sweeping them over the θ range does not hit `static`
+   → red;
 5. a picked seam edge must belong to `part` solids and lie between two of them → refused at pick time;
 6. hashes of the job STEP, `roles.json`, the axis pick and the cell `frames.yaml` recorded in `seam_axis.json` → any
    change makes it stale ("re-plan").
@@ -749,7 +755,8 @@ D21 keeps the cell CAD (`cell/cad/`), `job/fixture.step` is dropped (fixture = a
 A15 (place part) becomes "classify + pick positioner axis"; A18 uses the same classification UI; screens S2 and S10;
 §5.2 job package; ADR-16 (the `cad_map.yaml` becomes UI-generated `roles.json`); ADR-17 (`job_cad` counts like
 `fixture_cad` for a production release). Supersedes the G1.6 manual / copied placement (kept as a test helper only).
-**Open for approval:** role list; tolerances of checks 1–2; where θ = 0 is defined if the file has no marker.
+**Open for approval:** tolerances of checks 1–2 (proposal ≤ 1 mm, ≤ 0.1°, Assumption); θ = 0 = positioner pose in the
+file when there is no `REF_POSITIONER` marker (proposal). Role list decided 2026-11-06.
 
 ## CP-61 TCP taught in the browser on the tool CAD; never guessed (proposed 2026-11-06 — direction decided by Truong)
 
