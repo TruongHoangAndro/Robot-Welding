@@ -1,6 +1,6 @@
 {
-  "schema_version": "2.0",
-  "created_by": "lead (hand-made contract example T0.5; format only, values not kinematically checked)",
+  "schema_version": "2.1",
+  "created_by": "lead (hand-made contract example T0.5; format only, values not kinematically checked); MINOR 2.1 fields added by planner G1.3",
   "created_at": "2026-11-03T09:00:00+07:00",
   "inputs": [
     {
@@ -53,6 +53,7 @@
     "psi_case": "free",
     "head_model": "box"
   },
+  "collision_checked": true,
   "seams": [
     {
       "seam_id": "S01",
@@ -92,7 +93,8 @@
             90.0,
             0.0
           ],
-          "min_clearance_mm": 7.5
+          "min_clearance_mm": 7.5,
+          "status": "ok"
         },
         {
           "s_mm": 10.473285,
@@ -119,7 +121,8 @@
             90.0,
             0.0
           ],
-          "min_clearance_mm": 7.5
+          "min_clearance_mm": 7.5,
+          "status": "ok"
         },
         {
           "s_mm": 20.946569,
@@ -146,7 +149,8 @@
             90.0,
             0.0
           ],
-          "min_clearance_mm": 7.5
+          "min_clearance_mm": 7.5,
+          "status": "ok"
         },
         {
           "s_mm": 31.419854,
@@ -173,7 +177,8 @@
             90.0,
             0.0
           ],
-          "min_clearance_mm": 7.5
+          "min_clearance_mm": 7.5,
+          "status": "ok"
         },
         {
           "s_mm": 41.893138,
@@ -200,7 +205,8 @@
             90.0,
             0.0
           ],
-          "min_clearance_mm": 7.5
+          "min_clearance_mm": 7.5,
+          "status": "ok"
         },
         {
           "s_mm": 52.366423,
@@ -227,7 +233,8 @@
             90.0,
             0.0
           ],
-          "min_clearance_mm": 7.5
+          "min_clearance_mm": 7.5,
+          "status": "ok"
         },
         {
           "s_mm": 62.839707,
@@ -254,7 +261,8 @@
             90.0,
             0.0
           ],
-          "min_clearance_mm": 7.5
+          "min_clearance_mm": 7.5,
+          "status": "ok"
         },
         {
           "s_mm": 73.312992,
@@ -281,7 +289,8 @@
             90.0,
             0.0
           ],
-          "min_clearance_mm": 7.5
+          "min_clearance_mm": 7.5,
+          "status": "ok"
         },
         {
           "s_mm": 83.786276,
@@ -308,7 +317,8 @@
             90.0,
             0.0
           ],
-          "min_clearance_mm": 7.5
+          "min_clearance_mm": 7.5,
+          "status": "ok"
         }
       ],
       "timed": [
@@ -341,7 +351,44 @@
             }
           ]
         }
-      ]
+      ],
+      "planning": {
+        "pitch_mm": 10.473285,
+        "points": 9,
+        "interpolated_points": 0,
+        "theta_min_deg": 0.0,
+        "theta_max_deg": 360.0,
+        "theta_travel_deg": 360.0,
+        "wrist3_travel_deg": 0.0,
+        "max_step_deg": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          45.0
+        ],
+        "fk_max_error_mm": 0.0,
+        "fk_max_error_deg": 0.0,
+        "seam_z_up_max_deg": 0.0,
+        "max_joint_speed_deg_s": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          34.4
+        ],
+        "speed_within_limits": false,
+        "max_travel_speed_mm_s": 6.98,
+        "closure": {
+          "dq_robot_max_deg": 0.0,
+          "dtheta_deg": 360.0
+        },
+        "cost": 12.5
+      }
     }
   ],
   "rejected": [
@@ -369,7 +416,17 @@
               "link": "head_body",
               "object": "holder_left"
             }
-          ]
+          ],
+          "status": "step"
+        }
+      ],
+      "pitch_mm": 1.0,
+      "failing_ranges": [
+        {
+          "s_from_mm": 51.2,
+          "s_to_mm": 53.2,
+          "status": "step",
+          "points": 3
         }
       ]
     }

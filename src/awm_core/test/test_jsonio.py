@@ -167,3 +167,35 @@ def test_v2_release_scopes_trial_and_promotion():
         jsonio.validate(dict(trial, promoted_from=production['promoted_from']), 'v2/release')
     active = json.loads((v2 / 'examples' / 'active.example.json').read_text())
     jsonio.validate(dict(active, scope='trial'), 'v2/active')
+
+
+def test_v2_path_minor_2_1_sync_and_kinematic_only():
+    """G1.3 (CP-58 / CP-59): mode sync, per-point status, collision_checked false, null clearance, failing ranges."""
+    import copy
+    v2 = jsonio.SCHEMA_DIR / 'v2' / 'examples'
+    base = json.loads((v2 / 'path.example.json').read_text())
+    doc = copy.deepcopy(base)
+    doc['collision_checked'] = False
+    seam = doc['seams'][0]
+    seam['mode'] = 'sync'
+    for pt in seam['points']:
+        pt['min_clearance_mm'] = None
+    jsonio.validate(doc, 'v2/path')
+    bad = copy.deepcopy(doc)
+    bad['seams'][0]['points'][0]['status'] = 'maybe'
+    with pytest.raises(SchemaValidationError):
+        jsonio.validate(bad, 'v2/path')
+    bad = copy.deepcopy(doc)
+    bad['rejected'][0]['failing_ranges'][0]['status'] = 'collision?'
+    with pytest.raises(SchemaValidationError):
+        jsonio.validate(bad, 'v2/path')
+    bad = copy.deepcopy(doc)
+    bad['seams'][0]['mode'] = 'free'
+    with pytest.raises(SchemaValidationError):
+        jsonio.validate(bad, 'v2/path')
+    old = copy.deepcopy(base)  # a 2.0 document without the new fields stays valid (MINOR)
+    del old['collision_checked']
+    del old['seams'][0]['planning']
+    for pt in old['seams'][0]['points']:
+        del pt['status']
+    jsonio.validate(old, 'v2/path')
