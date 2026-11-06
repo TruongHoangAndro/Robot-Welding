@@ -70,7 +70,7 @@ All lengths mm, angles deg (ADR-14); headers with `inputs` SHA-256 (rule 2).
 | 1 | Job positioner = cell positioner. The job file has its own origin, so only quantities relative to the picked axis are compared: (a) radius of the picked circle, job vs cell; (b) after placing the job axis pick on the cell axis pick, the pose of every `rotary_fixture` component present in both files (matched by instance name) relative to the axis. Catches a wrong pick (other circle, other end of the shaft) and an older / different positioner model | 0.05 mm / 0.1° (decided 2026-11-06, = F8: both sides are nominal CAD, an identical model differs by ~1e-6 mm; real placement error belongs to calibration A52 / A53, not to this check) | red, Plan blocked |
 | 2 | Robot in the job file: base → axis transform vs cell | 0.05 mm / 0.1° (as 1) | yellow, cell used |
 | 3 | Tool in the job file: TCP vs cell TCP | same as 2 | yellow, info |
-| 4 | `rotary_fixture` + `part` around the axis; swept over the θ limits they do not intersect `static` | mesh distance > 0 | red |
+| 4 | `rotary_fixture` + `part` around the axis; swept over the θ limits they do not intersect `static` | mesh distance > 0 | red (designed contacts such as bearing seats or belts stay red until the CAD models them as separate components; Truong 2026-11-07) |
 | 5 | Picked seam edges belong to `part` solids and lie between two of them | — | refused at pick |
 | 6 | Hashes of 4 recorded in `seam_axis.json` | — | stale → "re-plan" |
 
