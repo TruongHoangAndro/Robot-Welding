@@ -52,4 +52,4 @@
   `--collision on` and stale `seam_axis.json`, schema validation, identical payload on re-run.
 - [x] 6. Golden run (env `AWM_SPIKE_REPO`, copy of the spike job): J1 sync + C, J2 sync; run record in
   `docs/generated/goal1/`.
-- [ ] 7. `colcon test --packages-select awm_core awm_path awm_seam`; report.
+- [x] 7. `colcon test --packages-select awm_core awm_path awm_seam`; report.
