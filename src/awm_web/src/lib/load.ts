@@ -48,7 +48,7 @@ export async function buildModel(glbBuf: ArrayBuffer, topoText: string, label: s
 
   const faceMaterials = new Map<string, MeshStandardMaterial>();
   for (const [id, mesh] of glb.faces) {
-    const sid = (mesh.userData.solid_id as string) ?? tidx.faces.get(id)?.solid_id;
+    const sid = (mesh.userData.solid_id as string | null) ?? tidx.faces.get(id)?.solid_id ?? '';
     const mat = new MeshStandardMaterial({
       color: new Color(solidColour.get(sid) ?? '#b0b0b0'),
       side: DoubleSide,

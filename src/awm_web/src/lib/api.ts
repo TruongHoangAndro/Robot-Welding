@@ -3,6 +3,8 @@
  * browser talks to awm_api and nothing else (DES-001 §7.3: no ROS, robot or PLC from the browser).
  */
 
+import type { CadCheck } from './cadcheck';
+import type { Assignment, TreeNode } from './roles';
 import type { SeamDoc, SeamPick } from './seams';
 import type { SimulationPayload } from './simulation';
 
@@ -48,7 +50,7 @@ export interface JobDetail extends JobSummary {
 export interface Run {
   run_id: string;
   job_id: string;
-  kind: 'import' | 'plan' | 'program' | 'verify';
+  kind: string;
   state: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
   progress: number;
   step?: string;
@@ -187,10 +189,10 @@ export async function putPlacement(token: string, id: string, req: Record<string
 export const viewBase = (id: string) => `${API}/jobs/${encodeURIComponent(id)}/view/`;
 
 /** STEP upload with byte progress (XHR: fetch has no upload progress). Resolves with the import run id. */
-export function uploadStep(token: string, form: FormData, onProgress: (fraction: number) => void): Promise<string> {
+export function uploadStep(token: string, form: FormData, onProgress: (fraction: number) => void, path = '/jobs'): Promise<string> {
   return new Promise((ok, fail) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${API}/jobs`);
+    xhr.open('POST', `${API}${path}`);
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
     xhr.onerror = () => fail(new ApiError(0, { type: '/problems/network', title: 'Network error', status: 0 }));
@@ -250,4 +252,58 @@ export function watchRun(token: string, runId: string, onRun: (r: Run) => void, 
     if (timer) clearTimeout(timer);
     ws?.close();
   };
+}
+
+// -- CP-60 / CP-61: cell model (S10, Admin) and job roles / axis / cross-check (S2, Engineer) ---------------------
+
+
+export interface CellStatus {
+  step: { file: string; sha256: string } | null;
+  up_axis: string | null;
+  roles: { state: 'missing' | 'ok' | 'stale' };
+  axis: { component_path: string | null; edge_id: string; center_file_mm: number[]; axis_file: number[]; radius_mm: number; reversed: boolean; state: string } | null;
+  model: { saved: boolean };
+  head: { step: boolean; map: boolean; head_yaml: boolean };
+  stale_jobs: string[];
+}
+export interface RolesView {
+  assignments: Assignment[];
+  prefilled: boolean;
+}
+const enc = encodeURIComponent;
+const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
+
+export const getCellStatus = async (t: string) => (await call<CellStatus>('/cell/model', t)).body;
+export const getCellTree = async (t: string) => (await call<{ components: TreeNode[] }>('/cell/model/files/cell_components.json', t)).body.components;
+export const cellFileUrl = (name: string) => `${API}/cell/model/files/${name}`;
+export const cellViewBase = (key: string) => `${API}/cell/model/views/${key}/`;
+export const getCellRoles = async (t: string) => (await call<RolesView>('/cell/model/roles', t)).body;
+export const putCellRoles = async (t: string, assignments: Assignment[]) => (await call<unknown>('/cell/model/roles', t, json('PUT', { assignments }))).body;
+export const startComponentView = async (t: string, componentPath: string) =>
+  (await call<{ run_id: string; key: string }>('/cell/model/component_view', t, json('POST', { component_path: componentPath }))).body;
+export const putCellAxis = async (t: string, componentPath: string, edgeId: string, reverse: boolean) =>
+  (await call<{ run_id: string }>('/cell/model/axis', t, json('PUT', { component_path: componentPath, edge_id: edgeId, reverse }))).body.run_id;
+export const saveCell = async (t: string) => (await call<{ run_id: string }>('/cell/model/save', t, json('POST', {}))).body.run_id;
+export const startHeadView = async (t: string, component: string) =>
+  (await call<{ run_id: string; key: string }>('/cell/head/view', t, json('POST', { component }))).body;
+export const putTcp = async (t: string, component: string, edgeId: string, reverse: boolean, stickoutMm: number) =>
+  (await call<{ run_id: string }>('/cell/head/tcp', t, json('PUT', { component, edge_id: edgeId, reverse, stickout_mm: stickoutMm }))).body.run_id;
+
+export const getJobTree = async (t: string, id: string) =>
+  (await call<{ components: TreeNode[] }>(`/jobs/${enc(id)}/files/cache/components.json`, t)).body.components;
+export const getJobRoles = async (t: string, id: string) => (await call<RolesView>(`/jobs/${enc(id)}/roles`, t)).body;
+export const putJobRoles = async (t: string, id: string, assignments: Assignment[]) =>
+  (await call<unknown>(`/jobs/${enc(id)}/roles`, t, json('PUT', { assignments }))).body;
+export const putJobAxis = async (t: string, id: string, edgeId: string, reverse: boolean) =>
+  (await call<{ run_id: string }>(`/jobs/${enc(id)}/axis`, t, json('PUT', { edge_id: edgeId, reverse }))).body.run_id;
+export const startCheck = async (t: string, id: string) => (await call<{ run_id: string }>(`/jobs/${enc(id)}/check`, t, json('POST', {}))).body.run_id;
+
+/** Cross-check and its state, or null when none was run yet (404 no-check). */
+export async function getCheck(t: string, id: string): Promise<{ state: 'ok' | 'stale'; check: CadCheck } | null> {
+  try {
+    return (await call<{ state: 'ok' | 'stale'; check: CadCheck }>(`/jobs/${enc(id)}/check`, t)).body;
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
 }

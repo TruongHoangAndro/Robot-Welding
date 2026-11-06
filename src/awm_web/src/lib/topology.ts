@@ -18,18 +18,22 @@ export interface SolidInfo {
   volume_mm3: number;
   bbox_min_mm: Vec3;
   bbox_max_mm: Vec3;
+  /** CP-60 components mode: inspect-assembly index and path of the component. */
+  component_index?: number;
+  component_path?: string;
 }
 
 export interface FaceInfo {
   face_id: string;
-  solid_id: string;
+  /** null: face of a shell without a solid (surface model, CP-60 components mode). */
+  solid_id: string | null;
   surface_type: string;
   area_mm2: number;
 }
 
 export interface EdgeInfo {
   edge_id: string;
-  solid_id: string;
+  solid_id: string | null;
   curve_type: string;
   length_mm: number;
   closed: boolean;
@@ -63,7 +67,9 @@ export interface Topology {
   inputs: { name: string; sha256: string }[];
   unit: 'mm';
   frame: 'part';
-  source: { file: string; component: string | null; up_axis: UpAxis };
+  source: { file: string; component: string | null; up_axis: UpAxis; components?: boolean };
+  /** CP-60: faces exported without a display mesh (display only, ids unchanged). */
+  display_gaps?: string[];
   tessellation: { face_linear_deflection_mm: number; face_angular_deflection_deg: number; edge_chord_mm: number };
   solids: SolidInfo[];
   faces: FaceInfo[];
@@ -135,11 +141,11 @@ export function parseTopology(input: string | unknown): Topology {
   const solidIds = new Set(solids.map((s) => s.solid_id));
   checkArray<FaceInfo>(doc, 'faces', (f, w) => {
     need(typeof f.face_id === 'string', `${w}.face_id missing`);
-    need(solidIds.has(f.solid_id as string), `${w}.solid_id ${JSON.stringify(f.solid_id)} is not in "solids"`);
+    need(f.solid_id === null || solidIds.has(f.solid_id as string), `${w}.solid_id ${JSON.stringify(f.solid_id)} is not in "solids"`);
   });
   const edges = checkArray<EdgeInfo>(doc, 'edges', (e, w) => {
     need(typeof e.edge_id === 'string', `${w}.edge_id missing`);
-    need(solidIds.has(e.solid_id as string), `${w}.solid_id ${JSON.stringify(e.solid_id)} is not in "solids"`);
+    need(e.solid_id === null || solidIds.has(e.solid_id as string), `${w}.solid_id ${JSON.stringify(e.solid_id)} is not in "solids"`);
     need(typeof e.length_mm === 'number', `${w}.length_mm missing`);
     need(typeof e.closed === 'boolean', `${w}.closed missing`);
     need(Array.isArray(e.faces) && Array.isArray(e.tangent_neighbours), `${w}.faces / tangent_neighbours must be arrays`);

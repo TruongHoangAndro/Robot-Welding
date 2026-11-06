@@ -68,6 +68,7 @@ function CreateJob({ session, onDone }: { session: Session; onDone: () => void }
   const [partNo, setPartNo] = useState('');
   const [partRev, setPartRev] = useState('A');
   const [component, setComponent] = useState('');
+  const [assembly, setAssembly] = useState(false);
   const [upAxis, setUpAxis] = useState('+Z');
   const [upload, setUpload] = useState<number | null>(null);
   const [run, setRun] = useState<Run | null>(null);
@@ -83,7 +84,8 @@ function CreateJob({ session, onDone }: { session: Session; onDone: () => void }
     form.append('step', file);
     form.append('part_no', partNo);
     form.append('part_rev', partRev);
-    if (component.trim()) form.append('component', component.trim());
+    if (assembly) form.append('assembly', 'true');
+    else if (component.trim()) form.append('component', component.trim());
     form.append('up_axis', upAxis);
     setError(null);
     setRun(null);
@@ -117,8 +119,12 @@ function CreateJob({ session, onDone }: { session: Session; onDone: () => void }
         <input value={partNo} onChange={(e) => setPartNo(e.target.value)} disabled={busy} placeholder="letters, digits, . _ -" />
         <label>Part rev</label>
         <input value={partRev} onChange={(e) => setPartRev(e.target.value)} disabled={busy} />
+        <label>Job assembly</label>
+        <label className="check">
+          <input type="checkbox" checked={assembly} onChange={(e) => setAssembly(e.target.checked)} disabled={busy} /> positioner + fixture + part (roles and axis in S2, CP-60)
+        </label>
         <label>Component</label>
-        <input value={component} onChange={(e) => setComponent(e.target.value)} disabled={busy} placeholder="assembly component (empty = whole file)" />
+        <input value={component} onChange={(e) => setComponent(e.target.value)} disabled={busy || assembly} placeholder="assembly component (empty = whole file)" />
         <label>Up axis of the file</label>
         <select value={upAxis} onChange={(e) => setUpAxis(e.target.value)} disabled={busy}>
           {UP_AXES.map((a) => (

@@ -75,3 +75,16 @@ input[type='number'] { width: 90px; }
 .frame-label.arc { color: #ffe14d; }
 .statusline { font-size: 12px; }
 aside.wide { width: 380px; }
+
+/* CP-60 role tree, S10 */
+.tree { max-height: 46vh; overflow: auto; border: 1px solid #3a404a; border-radius: 4px; margin: 6px 0; }
+.tree-row { display: flex; align-items: center; gap: 6px; padding: 2px 4px; cursor: pointer; font-size: 12px; }
+.tree-row.active { background: #1d3a44; }
+.tree-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-row .name.excluded { text-decoration: line-through; opacity: 0.6; }
+.tree-row select { max-width: 150px; font-size: 11px; }
+.twisty { width: 16px; background: none; border: 0; color: inherit; cursor: pointer; padding: 0; }
+.chip { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.pickview { height: 46vh; }
+.cadbanner { padding: 6px 8px; border-radius: 4px; margin: 6px 0; font-size: 12px; }
+.cadbanner.green { background: #173b24; } .cadbanner.yellow { background: #4a3f12; } .cadbanner.red, .cadbanner.stale { background: #4d1d1d; }

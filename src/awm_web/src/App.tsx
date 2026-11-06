@@ -310,7 +310,7 @@ function EdgeDetails({ model, id, link }: { model: Model; id: string; link: (k: 
     <div>
       <h4>Edge {e.edge_id}</h4>
       <Row k="solid">
-        {e.solid_id} {model.tidx.solids.get(e.solid_id)?.name ? `(${model.tidx.solids.get(e.solid_id)!.name})` : ''}
+        {e.solid_id ?? 'shell'} {e.solid_id && model.tidx.solids.get(e.solid_id)?.name ? `(${model.tidx.solids.get(e.solid_id)!.name})` : ''}
       </Row>
       <Row k="curve type">{e.curve_type}</Row>
       <Row k="length">{fmt(e.length_mm)} mm</Row>
@@ -332,7 +332,7 @@ function FaceDetails({ model, id }: { model: Model; id: string }) {
     <div>
       <h4>Face {f.face_id}</h4>
       <Row k="solid">
-        {f.solid_id} {model.tidx.solids.get(f.solid_id)?.name ? `(${model.tidx.solids.get(f.solid_id)!.name})` : ''}
+        {f.solid_id ?? 'shell'} {f.solid_id && model.tidx.solids.get(f.solid_id)?.name ? `(${model.tidx.solids.get(f.solid_id)!.name})` : ''}
       </Row>
       <Row k="surface type">{f.surface_type}</Row>
       <Row k="area">{fmt(f.area_mm2, 2)} mm²</Row>

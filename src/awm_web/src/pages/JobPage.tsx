@@ -1,13 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Vector3 } from 'three';
 import { KinematicBanner, Panel, Row, RunView } from '../components/Common';
+import { RoleTree } from '../components/RoleTree';
 import { SeamOverlay } from '../components/SeamOverlay';
 import { JOINT_COLOUR, SELECT_COLOUR, Viewer, type FocusRequest } from '../components/Viewer';
 import {
   authHeaders,
   cancelRun,
+  ApiError,
+  getCheck,
   getJob,
+  getJobRoles,
+  getJobTree,
   getSeams,
+  putJobAxis,
+  putJobRoles,
+  startCheck,
   putPlacement,
   putSeams,
   startPlan,
@@ -17,7 +25,9 @@ import {
   type Run,
   type Session,
 } from '../lib/api';
+import { cadBlocker, checkBanner, type CadCheck } from '../lib/cadcheck';
 import { loadFromUrl, type Model } from '../lib/load';
+import { JOB_ROLES, ROLE_COLOUR, relPaths, solidRoles, type Assignable, type Assignment, type TreeNode } from '../lib/roles';
 import { emptyPlacementForm, placementRequest, type PlacementForm } from '../lib/placement';
 import type { PickTarget } from '../lib/pick';
 import {
@@ -65,8 +75,20 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
   const [placeMsg, setPlaceMsg] = useState<string | null>(null);
   const stopWatch = useRef<(() => void) | null>(null);
   useEffect(() => () => stopWatch.current?.(), []);
+  // CP-60 job assembly (positioner + fixture + part): roles, positioner-axis pick, cross-check
+  const [tree, setTree] = useState<TreeNode[] | null>(null);
+  const [roles, setRoles] = useState<Assignment[]>([]);
+  const [savedRoles, setSavedRoles] = useState<string | null>(null);
+  const [roleProblems, setRoleProblems] = useState<string[]>([]);
+  const [treeSel, setTreeSel] = useState<number | null>(null);
+  const [check, setCheck] = useState<{ state: 'ok' | 'stale'; check: CadCheck } | null>(null);
+  const [axisMode, setAxisMode] = useState(false);
+  const [axisEdge, setAxisEdge] = useState<string | null>(null);
+  const [axisReverse, setAxisReverse] = useState(false);
+  const afterRun = useRef<(() => void) | null>(null);
 
   const reloadDetail = useCallback(() => getJob(token, jobId).then(setDetail), [token, jobId]);
+  const reloadCad = useCallback(() => getCheck(token, jobId).then(setCheck), [token, jobId]);
 
   const follow = useCallback(
     (runId: string) => {
@@ -76,12 +98,17 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
         runId,
         (r) => {
           setRun(r);
-          if (r.state === 'succeeded' || r.state === 'failed' || r.state === 'cancelled') reloadDetail().catch(() => undefined);
+          if (r.state === 'succeeded' || r.state === 'failed' || r.state === 'cancelled') {
+            reloadDetail().catch(() => undefined);
+            reloadCad().catch(() => undefined);
+            if (r.state === 'succeeded') afterRun.current?.();
+            afterRun.current = null;
+          }
         },
         (e) => setError(e.message),
       );
     },
-    [token, reloadDetail],
+    [token, reloadDetail, reloadCad],
   );
 
   useEffect(() => {
@@ -98,6 +125,17 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
         if (!live) return;
         setModel(m);
         setFocus({ box: m.displayBox.clone(), key: Date.now() });
+        if (m.topo.source.components) {
+          Promise.all([getJobTree(token, jobId), getJobRoles(token, jobId), getCheck(token, jobId)])
+            .then(([t, r, c]) => {
+              if (!live) return;
+              setTree(t);
+              setRoles(r.assignments);
+              setSavedRoles(r.prefilled ? null : JSON.stringify(r.assignments));
+              setCheck(c);
+            })
+            .catch((e: Error) => live && setError(`roles: ${e.message}`));
+        }
       })
       .catch((e: Error) => live && setError(`3D view model: ${e.message}`));
     getSeams(token, jobId)
@@ -111,6 +149,50 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
       live = false;
     };
   }, [token, jobId, follow]);
+
+  const components = !!model?.topo.source.components;
+  const roleOfSolid = useMemo(() => (model && components ? solidRoles(model.topo, roles) : new Map<string, Assignable>()), [model, components, roles]);
+  const hasRoles = components && savedRoles !== null;
+  const cadBlock = components ? (hasRoles ? cadBlocker(true, check?.check ?? null, check?.state ?? null) : 'Save the roles of this job file first.') : null;
+
+  // role colours on the faces of non-part components (part solids keep their own colours)
+  useEffect(() => {
+    if (!model || !components) return;
+    for (const [fid, mat] of model.faceMaterials) {
+      const sid = model.tidx.faces.get(fid)?.solid_id;
+      const role = sid ? roleOfSolid.get(sid) : undefined;
+      mat.color.set(role && role !== 'part' ? ROLE_COLOUR[role] : (sid && model.solidColour.get(sid)) || '#b0b0b0');
+      mat.transparent = role === 'exclude';
+      mat.opacity = role === 'exclude' ? 0.15 : 1;
+    }
+  }, [model, components, roleOfSolid]);
+
+  const saveRoles = () => {
+    setRoleProblems([]);
+    putJobRoles(token, jobId, roles)
+      .then(() => {
+        setSavedRoles(JSON.stringify(roles));
+        return Promise.all([reloadDetail(), reloadCad()]);
+      })
+      .catch((e: Error) => {
+        setError(e.message);
+        if (e instanceof ApiError) setRoleProblems(e.problem?.errors?.map((x) => x.message) ?? []);
+      });
+  };
+  const useAxis = () => {
+    if (!axisEdge) return;
+    putJobAxis(token, jobId, axisEdge, axisReverse)
+      .then((id) => {
+        setAxisMode(false);
+        follow(id);
+      })
+      .catch((e: Error) => setError(e.message));
+  };
+  const runCheck = () => {
+    startCheck(token, jobId)
+      .then(follow)
+      .catch((e: Error) => setError(e.message));
+  };
 
   const selJoint: JointInfo | null = useMemo(() => {
     if (!model || !sel) return null;
@@ -203,7 +285,8 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
       .catch((e: Error) => setPlaceMsg(e.message));
   };
 
-  const planBlock = planBlocker(detail, saved, dirty, canEdit, run);
+  const planBlock = cadBlock ?? planBlocker(detail, saved, dirty, canEdit, run);
+  const banner = check ? checkBanner(check.check, check.state) : null;
   const size = model ? Math.max(model.displayBox.getSize(new Vector3()).length() * 0.05, 2) : 5;
   const errFor = (i: number, f: string) => fieldErrors.filter((e) => e.pointer.startsWith(`/seams/${i}/${f}`)).map((e) => e.message).join('; ');
 
@@ -236,11 +319,27 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
               hover={hover}
               onHover={setHover}
               onPick={(t) => {
+                if (axisMode) {
+                  const e = t?.kind === 'edge' ? model.tidx.edges.get(t.id) : undefined;
+                  if (e?.curve_type === 'circle') {
+                    setAxisEdge(e.edge_id);
+                    setNote(null);
+                  } else setNote('Positioner axis: click a circle of the turntable / flange / holder (an arc is fine).');
+                  return;
+                }
+                if (t?.kind === 'edge' && components) {
+                  const sid = model.tidx.edges.get(t.id)?.solid_id;
+                  const role = sid ? roleOfSolid.get(sid) : undefined;
+                  if (role !== 'part') {
+                    setNote(`${t.id} is on a ${role ?? 'shell'} component: only edges of part components can be welded (CP-60 check 5).`);
+                    return;
+                  }
+                }
                 setSel(t);
                 setNote(t?.kind === 'edge' && model && !jointForEdge(model.tidx, t.id)
                   ? `${t.id} is not a joint edge. Goal 1 welds joints between solids only (orange edges).` : null);
               }}
-              selectedEdges={selectedEdges}
+              selectedEdges={axisMode && axisEdge ? new Set([axisEdge]) : selectedEdges}
               selectedFace={sel?.kind === 'face' ? sel.id : null}
               showFrames={false}
               focus={focus}
@@ -283,7 +382,7 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
                   )}
                 </Row>
                 {detail.placement_note && <div className="warn">{detail.placement_note}</div>}
-                {canEdit && (
+                {canEdit && detail.placement?.source !== 'job_cad' && !components && (
                   <details open={!detail.placement} data-testid="placement-panel">
                     <summary>{detail.placement ? 'Change placement' : 'Give this job a placement'}</summary>
                     <div className="muted">
@@ -334,6 +433,53 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
             )}
           </Panel>
 
+          {components && tree && (
+            <Panel title={`Job CAD (CP-60)${savedRoles !== JSON.stringify(roles) ? ' · roles unsaved' : ''}`}>
+              {banner ? (
+                <div className={`cadbanner ${banner.level}`} data-testid="cad-banner">
+                  <b>cross-check {banner.level}</b>
+                  {banner.phi !== null && <span> · φ {banner.phi}°</span>}
+                  {banner.lines.map((l) => (
+                    <div key={l}>{l}</div>
+                  ))}
+                </div>
+              ) : (
+                <div className="muted">No cross-check yet.</div>
+              )}
+              {cadBlock && <div className="warn">{cadBlock}</div>}
+              <RoleTree tree={tree} assignments={roles} roles={JOB_ROLES} disabled={!canEdit} selected={treeSel} onSelect={setTreeSel} onChange={setRoles} />
+              {treeSel !== null && <div className="muted">{relPaths(tree)[treeSel]}</div>}
+              {roleProblems.length > 0 && <div className="err">{roleProblems.join('; ')}</div>}
+              {canEdit && (
+                <>
+                  <button className="btn small" disabled={savedRoles === JSON.stringify(roles)} onClick={saveRoles}>
+                    Save roles
+                  </button>
+                  <label className="check">
+                    <input type="checkbox" checked={axisMode} onChange={(e) => (setAxisMode(e.target.checked), setAxisEdge(null))} /> pick the positioner axis
+                  </label>
+                  {axisMode && (
+                    <>
+                      <label className="check">
+                        <input type="checkbox" checked={axisReverse} onChange={(e) => setAxisReverse(e.target.checked)} /> reverse axis
+                      </label>
+                      <button className="btn small" disabled={!axisEdge} onClick={useAxis}>
+                        Use {axisEdge ?? 'circle'} as positioner axis
+                      </button>
+                    </>
+                  )}
+                  <button className="btn small" disabled={!hasRoles} onClick={runCheck}>
+                    Run cross-check
+                  </button>
+                </>
+              )}
+              {check?.check.excluded?.length ? <div className="muted">excluded: {check.check.excluded.join(', ')}</div> : null}
+              {check?.check.unassigned_static?.length ? (
+                <div className="muted">static (unassigned): {check.check.unassigned_static.join(', ')}</div>
+              ) : null}
+            </Panel>
+          )}
+
           <Panel title="Selection">
             {!sel && <div className="muted">Click a joint edge (orange) in the view or a joint below.</div>}
             {sel && sel.kind !== 'joint' && (
@@ -352,7 +498,7 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
                 <Row k="length">
                   {fmt(selJoint.length_mm)} mm · {selJoint.closed ? 'closed' : 'open'}
                 </Row>
-                {canEdit && (
+                {canEdit && !cadBlock && (
                   <button className="btn small" onClick={addSeam}>
                     New seam on {selJoint.joint_edge_id}
                   </button>
@@ -396,7 +542,7 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
               />
             ))}
             {canEdit && (
-              <button className="btn small" disabled={saving || !dirty} onClick={save}>
+              <button className="btn small" disabled={saving || !dirty || !!cadBlock} onClick={save} title={cadBlock ?? ''}>
                 {saving ? 'Saving …' : 'Save seams'}
               </button>
             )}
