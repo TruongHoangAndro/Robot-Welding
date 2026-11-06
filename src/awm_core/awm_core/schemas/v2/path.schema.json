@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "v2/path.schema.json",
   "title": "path",
-  "description": "D07 weld path v2 (A41\u2013A49): part frame, mm / deg. One entry per arc (D04 `arcs`, CP-53). An arc is listed in `seams` only when 100 % of its points are reachable, collision-free and continuous; otherwise it is in `rejected` with failing points, and the seam is not weldable until every arc is accepted. Never a partial path (design rule 4).",
+  "description": "D07 weld path v2 (A41\u2013A49): part frame, mm / deg. One entry per arc (D04 `arcs`, CP-53). An arc is listed in `seams` only when 100 % of its points are reachable, collision-free and continuous; otherwise it is in `rejected` with failing points, and the seam is not weldable until every arc is accepted. Never a partial path (design rule 4). MINOR 2.1 (G1.3, CP-58 / CP-59): positioner mode sync, per-point status, collision_checked (absent = not checked), min_clearance_mm null when collision is not evaluated, per-arc planning record, failing s ranges.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -81,8 +81,16 @@
             "cad",
             "box"
           ]
+        },
+        "params": {
+          "type": "object",
+          "description": "planner parameters used for this run (weights, grids, limits; Assumption defaults recorded), hashed into params_sha256"
         }
       }
+    },
+    "collision_checked": {
+      "type": "boolean",
+      "description": "false = kinematic only, collision not evaluated (Goal 1, CP-58); every release gate refuses it. Absent = not checked"
     },
     "seams": {
       "type": "array",
@@ -176,7 +184,18 @@
                   "$ref": "common.schema.json#/$defs/joints6_deg"
                 },
                 "min_clearance_mm": {
-                  "type": "number"
+                  "oneOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "null = collision / clearance not evaluated"
+                },
+                "status": {
+                  "$ref": "common.schema.json#/$defs/point_status"
                 }
               },
               "description": "tcp_laser pose in the part frame; theta = positioner angle"
@@ -230,6 +249,118 @@
               }
             },
             "minItems": 1
+          },
+          "planning": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "pitch_mm",
+              "points",
+              "theta_min_deg",
+              "theta_max_deg",
+              "max_step_deg",
+              "fk_max_error_mm",
+              "fk_max_error_deg"
+            ],
+            "properties": {
+              "pitch_mm": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "largest point spacing used (F1 ceiling, CP-53)"
+              },
+              "points": {
+                "type": "integer",
+                "minimum": 2
+              },
+              "interpolated_points": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "points added by pitch refinement (not B-Rep samples)"
+              },
+              "theta_min_deg": {
+                "type": "number"
+              },
+              "theta_max_deg": {
+                "type": "number"
+              },
+              "theta_travel_deg": {
+                "type": "number",
+                "minimum": 0
+              },
+              "wrist3_travel_deg": {
+                "type": "number",
+                "minimum": 0
+              },
+              "max_step_deg": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 7,
+                "maxItems": 7,
+                "description": "max |dq| per step, 6 robot joints + positioner"
+              },
+              "fk_max_error_mm": {
+                "type": "number",
+                "minimum": 0
+              },
+              "fk_max_error_deg": {
+                "type": "number",
+                "minimum": 0
+              },
+              "seam_z_up_max_deg": {
+                "type": "number",
+                "minimum": 0,
+                "description": "largest angle of the seam Z to world +Z"
+              },
+              "max_joint_speed_deg_s": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 7,
+                "maxItems": 7
+              },
+              "speed_within_limits": {
+                "type": "boolean",
+                "description": "timed weld segment within the joint velocity limits (reported)"
+              },
+              "max_travel_speed_mm_s": {
+                "type": "number",
+                "minimum": 0,
+                "description": "largest travel speed that keeps every joint within its velocity limit"
+              },
+              "closure": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object"
+                  }
+                ],
+                "description": "closed seams: joint change between s = 0 and s = L (F3 reported, not enforced)"
+              },
+              "cost": {
+                "type": "number"
+              },
+              "mode_c_residual_mm": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Mode C: largest deviation of a seam point from the rigid rotation of the first point (F8)"
+              },
+              "mode_c_residual_deg": {
+                "type": "number",
+                "minimum": 0
+              },
+              "attempts": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                },
+                "description": "planning attempts per pitch (CP-53 F1 refinement): pitch_mm, points, result, failure kind"
+              }
+            }
           }
         }
       }
@@ -294,6 +425,50 @@
             "items": {
               "$ref": "common.schema.json#/$defs/failing_point"
             }
+          },
+          "pitch_mm": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "failing_ranges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "s_from_mm",
+                "s_to_mm",
+                "status",
+                "points"
+              ],
+              "properties": {
+                "s_from_mm": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "s_to_mm": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "status": {
+                  "$ref": "common.schema.json#/$defs/point_status"
+                },
+                "points": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "mode": {
+            "$ref": "common.schema.json#/$defs/positioner_mode"
+          },
+          "attempts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "planning attempts per pitch (CP-53 F1 refinement): pitch_mm, points, result, failure kind"
           }
         }
       }

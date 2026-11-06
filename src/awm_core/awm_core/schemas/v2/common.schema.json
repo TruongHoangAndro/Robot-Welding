@@ -134,9 +134,10 @@
       "enum": [
         "robot_only",
         "B",
-        "C"
+        "C",
+        "sync"
       ],
-      "description": "DES-001 \u00a76.3: C = robot at rest, positioner turns; B = rotate, stop, weld"
+      "description": "DES-001 \u00a76.3: C = robot at rest, positioner turns; B = rotate, stop, weld; sync = robot and positioner planned and moved together as 7 joints (CP-59, MINOR 2.1, simulation scope)"
     },
     "config_label": {
       "type": "string",
@@ -323,8 +324,23 @@
               }
             }
           }
+        },
+        "status": {
+          "$ref": "common.schema.json#/$defs/point_status"
         }
       }
+    },
+    "point_status": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "ik",
+        "limit",
+        "singularity",
+        "wrist3",
+        "step"
+      ],
+      "description": "per-point planning status (G1.3): ok, ik = no IK solution, limit = joint / positioner limit, singularity = F6 margin, wrist3 = F11 wrist-3 travel / absolute limit, step = no continuous edge (|dq| > dq_max, F3)"
     }
   }
 }

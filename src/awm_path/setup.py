@@ -26,6 +26,7 @@ setup(
             's6_run = awm_path.spike_s6:main',
             's5b_run = awm_path.spike_s5b:main',
             's5b_check = awm_path.spike_s5b:main_check',
+            'awm_path_cli = awm_path.cli:entry',
         ],
     },
 )

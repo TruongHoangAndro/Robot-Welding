@@ -1,0 +1,475 @@
+{
+ "record": "G1.3 golden run \u2014 kinematic 7-axis planner (collision OFF, CP-58), golden part 564082",
+ "date": "2026-11-06",
+ "created_by": "planner agent (G1.3)",
+ "job_source": "copy of .worktrees/spike_repo/jobs/564082_A + cell/model/frames.yaml + cell/model/head (spike repo not written)",
+ "seams": {
+  "S01": "J1 = joint edge JE2 (pick E46), butt, closed, 1 arc, overlap 2 mm",
+  "S02": "J2 = joint edge JE4 (pick E71), butt, closed, 1 arc, overlap 2 mm"
+ },
+ "commands": [
+  "python3 -m awm_seam.joint_cli build --job <copy>/jobs/564082_A --picks picks.json  (AWM_OCC_PYTHON set)",
+  "python3 -m awm_path.cli plan --job <copy>/jobs/564082_A --collision off --out path.json  (defaults: head_model hcad, head_dir <repo>/cell/model/head, travel 10 mm/s Assumption)",
+  "python3 -m awm_path.cli plan ... --seams S01 / --seams S02 (per-seam timing)"
+ ],
+ "machine": "awm_dev container, Intel Core Ultra 7 165H (22 threads), Python 3.12.3, single process",
+ "run_time_s": {
+  "sync_S01_S02_run1": 25.53,
+  "sync_S01_S02_run2": 25.82,
+  "sync_S01_only": 8.36,
+  "sync_S02_only": 18.18,
+  "C_S01_run1": 0.37,
+  "C_S01_run2": 0.33,
+  "note": "run_time_s = whole CLI incl. reading inputs and rendering the description (xacro); analytic IK only, no collision"
+ },
+ "results": {
+  "sync": {
+   "reproducible_payload": true,
+   "payload_sha256": "bc2ca5996bd476ed32b33300bad005edfc3150df504de43692fb7ce4c8fd55a2",
+   "run_ids": [
+    "R20261106T021611Z-30b065",
+    "R20261106T021642Z-7afdf3"
+   ],
+   "git": {
+    "commit": "2e3537e84114547326e609a65d6771c3d01485af",
+    "dirty": false
+   },
+   "inputs": [
+    {
+     "name": "seam_axis.json",
+     "sha256": "dc72110e7627b17cd5273bc1db9576122319c1484cb418884164a33d9a9539eb"
+    },
+    {
+     "name": "seams.json",
+     "sha256": "ed73fa1f98ac0fd9717b54a34a34beee2a3e772234c7ec1aa75fc3db4d1fbdda"
+    },
+    {
+     "name": "placement.json",
+     "sha256": "8cd8f2beec05a3baaed2ad2a34181cc2a620564c1eacd849931eeab52d6741a9"
+    },
+    {
+     "name": "../../cell/model/frames.yaml",
+     "sha256": "b09a3574096b5008f746462d1a8bd2d5d59e778a930580637b7006dcf17aace8"
+    },
+    {
+     "name": "../../cell/model/head/head.yaml",
+     "sha256": "5f0bac8aeb20f5b437d2fdd64f7acc59c16024bf0d8524660c24035b70d2c54b"
+    }
+   ],
+   "planner": {
+    "kinematics_backend": "ur_analytic_ik-0.1.0.post3/ur5e",
+    "scene_backend": "none (collision not evaluated, Goal 1 / CP-58)",
+    "params_sha256": "b7b392ea477f838ade6f0f12c2d2b356bbf6dd8662c47d64052a24bd979f65ba",
+    "psi_case": "free",
+    "head_model": "cad"
+   },
+   "d14_sha256": "3ecda1ab663dd317e5435381aa939682f1c14620c56e0ddb238145623d18294e",
+   "collision_checked": false,
+   "head_tool0_T_tcp_mm": {
+    "position_mm": [
+     -67.60089859162042,
+     -9.399869419826552e-14,
+     -385.36375026918415
+    ],
+    "quat_xyzw": [
+     1.0,
+     -5.6811047337287e-31,
+     -3.616078014831144e-15,
+     6.123233995736766e-17
+    ]
+   },
+   "arcs": [
+    {
+     "seam_id": "S01",
+     "arc": {
+      "index": 1,
+      "of": 1,
+      "start_s_mm": 0.0,
+      "end_s_mm": 85.786276071
+     },
+     "mode": "sync",
+     "config_label": "S+E+W+",
+     "points": 88,
+     "coverage_percent": 100.0,
+     "pitch_mm": 0.997455668,
+     "interpolated_points": 1,
+     "theta_min_deg": -249.032134457,
+     "theta_max_deg": 119.559975049,
+     "theta_travel_deg": 368.592109506,
+     "psi_deg_set": [
+      20.0
+     ],
+     "q_range_deg": [
+      [
+       90.008418472,
+       90.008419904
+      ],
+      [
+       165.263777931,
+       165.265360233
+      ],
+      [
+       69.328423426,
+       69.345839565
+      ],
+      [
+       35.397068331,
+       35.399530514
+      ],
+      [
+       89.999998651,
+       90.00000135
+      ],
+      [
+       69.991580096,
+       69.991581528
+      ]
+     ],
+     "max_step_deg_7": [
+      5.3999997362552676e-08,
+      5.91539999845736e-05,
+      0.000651021999999557,
+      9.207600000138427e-05,
+      1.0100001190949115e-07,
+      5.3999997362552676e-08,
+      4.286401037999994
+     ],
+     "wrist3_travel_deg": 1.127e-06,
+     "fk_independent_max_mm": 8.071861336598227e-09,
+     "fk_independent_max_deg": 9.066505980111898e-08,
+     "seam_z_up_max_deg": 0.009184042,
+     "closure": {
+      "s_mm": 83.786276071,
+      "dq_robot_deg": [
+       -0.0,
+       0.0,
+       -0.0,
+       0.0,
+       0.0,
+       0.0
+      ],
+      "dq_robot_max_deg": 0.0,
+      "dtheta_deg": -360.0,
+      "same_robot_state": true
+     },
+     "max_joint_speed_deg_s": [
+      5.37e-07,
+      0.000593042,
+      0.006526825,
+      0.000923115,
+      1.012e-06,
+      5.37e-07,
+      42.973348867
+     ],
+     "speed_within_limits": false,
+     "max_travel_speed_mm_s": 6.981071011,
+     "travel_speed_mm_s": 10.0,
+     "timed_kind": "weld",
+     "weld_time_s": 8.578627607,
+     "attempts": [
+      {
+       "pitch_mm": 0.997455668,
+       "points": 88,
+       "result": "ok",
+       "status_counts": {
+        "ok": 88
+       }
+      }
+     ],
+     "mode_c_residual_mm": null,
+     "mode_c_residual_deg": null,
+     "cost": 552.95802614
+    },
+    {
+     "seam_id": "S02",
+     "arc": {
+      "index": 1,
+      "of": 1,
+      "start_s_mm": 0.0,
+      "end_s_mm": 85.786276071
+     },
+     "mode": "sync",
+     "config_label": "S+E+W+",
+     "points": 174,
+     "coverage_percent": 100.0,
+     "pitch_mm": 0.498727834,
+     "interpolated_points": 87,
+     "theta_min_deg": -156.601876,
+     "theta_max_deg": -89.823631379,
+     "theta_travel_deg": 129.210980526,
+     "psi_deg_set": [
+      110.0,
+      120.0,
+      130.0,
+      140.0,
+      150.0,
+      160.0,
+      170.0,
+      180.0,
+      190.0,
+      200.0,
+      210.0,
+      220.0,
+      230.0,
+      240.0,
+      250.0,
+      260.0,
+      270.0,
+      280.0,
+      290.0,
+      300.0,
+      310.0,
+      320.0
+     ],
+     "q_range_deg": [
+      [
+       68.427366501,
+       153.323947238
+      ],
+      [
+       101.302750887,
+       158.982250382
+      ],
+      [
+       60.083651842,
+       139.272594234
+      ],
+      [
+       -32.189820076,
+       26.101726187
+      ],
+      [
+       18.91102024,
+       131.376329319
+      ],
+      [
+       50.635183483,
+       172.815942266
+      ]
+     ],
+     "max_step_deg_7": [
+      1.924506354000016,
+      3.1417038149999996,
+      1.5679283710000078,
+      4.205480236,
+      2.15886762800001,
+      4.220329125000006,
+      4.658496002999996
+     ],
+     "wrist3_travel_deg": 122.180758783,
+     "fk_independent_max_mm": 7.802461982438435e-09,
+     "fk_independent_max_deg": 9.301579397563312e-08,
+     "seam_z_up_max_deg": 129.831439322,
+     "closure": {
+      "s_mm": 83.786276071,
+      "dq_robot_deg": [
+       -39.126972371,
+       15.871054935,
+       -50.189552383,
+       11.311679441,
+       -27.078480258,
+       -116.433915367
+      ],
+      "dq_robot_max_deg": 116.433915367,
+      "dtheta_deg": 35.0,
+      "same_robot_state": false
+     },
+     "max_joint_speed_deg_s": [
+      38.588308557,
+      62.99435487,
+      31.438557567,
+      84.324153409,
+      43.287490329,
+      84.621888713,
+      93.407580005
+     ],
+     "speed_within_limits": false,
+     "max_travel_speed_mm_s": 3.211730782,
+     "travel_speed_mm_s": 10.0,
+     "timed_kind": "weld",
+     "weld_time_s": 8.578627607,
+     "attempts": [
+      {
+       "pitch_mm": 0.997455668,
+       "points": 88,
+       "result": "rejected",
+       "status_counts": {
+        "ok": 87,
+        "step": 1
+       }
+      },
+      {
+       "pitch_mm": 0.498727834,
+       "points": 174,
+       "result": "ok",
+       "status_counts": {
+        "ok": 174
+       }
+      }
+     ],
+     "mode_c_residual_mm": null,
+     "mode_c_residual_deg": null,
+     "cost": 1893.117442629
+    }
+   ],
+   "rejected": []
+  },
+  "C": {
+   "reproducible_payload": true,
+   "payload_sha256": "e8f4c6e5cd6401baab3465831c6c5f877298933205e31316fcb61af3ebb400a1",
+   "run_ids": [
+    "R20261106T021643Z-080410",
+    "R20261106T021643Z-ead0bc"
+   ],
+   "git": {
+    "commit": "2e3537e84114547326e609a65d6771c3d01485af",
+    "dirty": false
+   },
+   "inputs": [
+    {
+     "name": "seam_axis.json",
+     "sha256": "ad1ed301732a6fb6d9ee0315eb92b104e6371a6a92cd6a9f516ca83a7a0ea0f1"
+    },
+    {
+     "name": "seams.json",
+     "sha256": "383a246c0802d3fe867e220d9e955358d86460be5e254afb204e1ce35712a00f"
+    },
+    {
+     "name": "placement.json",
+     "sha256": "8cd8f2beec05a3baaed2ad2a34181cc2a620564c1eacd849931eeab52d6741a9"
+    },
+    {
+     "name": "../../cell/model/frames.yaml",
+     "sha256": "b09a3574096b5008f746462d1a8bd2d5d59e778a930580637b7006dcf17aace8"
+    },
+    {
+     "name": "../../cell/model/head/head.yaml",
+     "sha256": "5f0bac8aeb20f5b437d2fdd64f7acc59c16024bf0d8524660c24035b70d2c54b"
+    }
+   ],
+   "planner": {
+    "kinematics_backend": "ur_analytic_ik-0.1.0.post3/ur5e",
+    "scene_backend": "none (collision not evaluated, Goal 1 / CP-58)",
+    "params_sha256": "0fa05da47c48c0ca0adfb9b989cdf89c3ffc215c28b9fe71e9f743d9b6246d8e",
+    "psi_case": "free",
+    "head_model": "cad"
+   },
+   "d14_sha256": "81075d2cbfe5a9b5958f069fadcab389c44a85d0e3b4e272e849e0dfba0f5444",
+   "collision_checked": false,
+   "head_tool0_T_tcp_mm": {
+    "position_mm": [
+     -67.60089859162042,
+     -9.399869419826552e-14,
+     -385.36375026918415
+    ],
+    "quat_xyzw": [
+     1.0,
+     -5.6811047337287e-31,
+     -3.616078014831144e-15,
+     6.123233995736766e-17
+    ]
+   },
+   "arcs": [
+    {
+     "seam_id": "S01",
+     "arc": {
+      "index": 1,
+      "of": 1,
+      "start_s_mm": 0.0,
+      "end_s_mm": 85.786276071
+     },
+     "mode": "C",
+     "config_label": "S+E+W+",
+     "points": 88,
+     "coverage_percent": 100.0,
+     "pitch_mm": 0.997455668,
+     "interpolated_points": 1,
+     "theta_min_deg": -249.032134457,
+     "theta_max_deg": 119.559975049,
+     "theta_travel_deg": 368.592109506,
+     "psi_deg_set": [
+      0.0
+     ],
+     "q_range_deg": [
+      [
+       92.46138981,
+       92.46138981
+      ],
+      [
+       165.170159128,
+       165.170159128
+      ],
+      [
+       69.60700719,
+       69.60700719
+      ],
+      [
+       35.228095886,
+       35.228095886
+      ],
+      [
+       90.0002262,
+       90.0002262
+      ],
+      [
+       87.538610201,
+       87.538610201
+      ]
+     ],
+     "max_step_deg_7": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      4.286401037999994
+     ],
+     "wrist3_travel_deg": 0.0,
+     "fk_independent_max_mm": 0.0038886724127296353,
+     "fk_independent_max_deg": 0.014451043709017633,
+     "seam_z_up_max_deg": 0.009184042,
+     "closure": {
+      "s_mm": 83.786276071,
+      "dq_robot_deg": [
+       0.0,
+       0.0,
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ],
+      "dq_robot_max_deg": 0.0,
+      "dtheta_deg": -360.0,
+      "same_robot_state": true
+     },
+     "max_joint_speed_deg_s": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      42.973348867
+     ],
+     "speed_within_limits": false,
+     "max_travel_speed_mm_s": 6.981071011,
+     "travel_speed_mm_s": 10.0,
+     "timed_kind": "positioner_weld",
+     "weld_time_s": 8.578627607,
+     "attempts": [
+      {
+       "pitch_mm": 0.997455668,
+       "points": 88,
+       "result": "ok"
+      }
+     ],
+     "mode_c_residual_mm": 0.003888668,
+     "mode_c_residual_deg": 0.01445107,
+     "cost": 552.913626879
+    }
+   ],
+   "rejected": []
+  }
+ }
+}
