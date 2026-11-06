@@ -31,6 +31,7 @@ POSE_A = frames.make_transform([100.0, -50.0, 300.0],
                                frames.axis_angle_to_matrix([1.0, 2.0, 3.0], units.deg_to_rad(37.0)))
 POSE_B = frames.make_transform([-400.0, 20.0, 15.0],
                                frames.axis_angle_to_matrix([-2.0, 0.5, 1.0], units.deg_to_rad(-121.0)))
+CABLE = (8.0, (0.0, -60.0, -350.0), 300.0)  # r, base, length along +Z: behind the flange, reach about 355 mm
 INNER = frames.make_transform([5.0, 7.0, -3.0], frames.axis_angle_to_matrix([0.0, 1.0, 0.0], units.deg_to_rad(20.0)))
 
 
@@ -68,13 +69,17 @@ def _flange():
     return BRepAlgoAPI_Cut(_cyl(31.5, (0.0, 0.0, -10.0), 10.0), _cyl(3.0, (0.0, -25.0, -6.0), 6.0)).Shape()
 
 
-def _head_step(path, pose, surface_body=False):
-    """Write the synthetic head CAD with the flange (and the head with it) at ``pose`` in the file."""
+def _head_step(path, pose, surface_body=False, cable=False):
+    """Write the synthetic head CAD with the flange (and the head with it) at ``pose`` in the file.
+
+    ``cable``: add a long cable cylinder hanging behind the flange (tool0 -Z), reaching farther from tool0 than the
+    nozzle (the real head CAD: fiber / cable connector end, bug of 2026-11-06)."""
     from awm_geometry import testparts
 
     body = (_open_box(*BODY_BOX)[0] if surface_body else _box(*BODY_BOX))
+    extra = [{'name': 'cable', 'shape': _cyl(*CABLE)}] if cable else []
     head_children = [
-        {'name': 'body', 'placement_mm': frames.invert(INNER), 'children': [
+        {'name': 'body', 'placement_mm': frames.invert(INNER), 'children': extra + [
             {'name': 'skin', 'shape': body},
             {'name': 'nozzle', 'shape': _cyl(10.0, (0.0, -60.0, 200.0), 40.0)},
             {'name': 'wire', 'shape': _cyl(1.0, (0.0, -90.0, 40.0), 140.0)},
@@ -180,10 +185,15 @@ def test_meshes_independent_of_robot_pose(head_a, tmp_path):
 
 
 def test_map_override_wins(tmp_path, occ):
+    """frames.tcp override: point_file_mm = TCP (nozzle tip + stick-out), axis_file = beam out of the nozzle.
+
+    head.yaml keeps the xacro rule tcp = beam_exit + nozzle_len_mm * beam_axis: beam_exit = tcp - len * axis, so the
+    parametric collision nozzle ends at the TCP (CP-56, CP-61 draft)."""
     step = _head_step(tmp_path / 'head.step', POSE_A)
-    point_tool0, axis_tool0 = np.array([3.0, -55.0, 250.0]), np.array([0.0, 0.0, 1.0])
+    point_tool0 = np.array([3.0, -55.0, 250.0])
+    axis_tool0 = np.array([np.sin(units.deg_to_rad(60.0)), 0.0, np.cos(units.deg_to_rad(60.0))])
     point_file = (POSE_A @ np.append(point_tool0, 1.0))[:3]
-    cmap = _map(step, tcp={'point_file_mm': point_file.tolist(),
+    cmap = _map(step, tcp={'point_file_mm': point_file.tolist(), 'nozzle_len_mm': 40.0,
                            'axis_file': (POSE_A[:3, :3] @ axis_tool0).tolist()})
     code, out = _export(tmp_path, step, cmap)
     assert code == 0
@@ -192,9 +202,68 @@ def test_map_override_wins(tmp_path, occ):
     tcp = _pose(doc['tool0_T_tcp_mm'])
     np.testing.assert_allclose(tcp[:3, 3], point_tool0, atol=1e-6)
     np.testing.assert_allclose(tcp[:3, 2], axis_tool0, atol=1e-9)
-    # the geometric estimate is still recorded for comparison
-    assert doc['estimates']['tcp']['geometry_estimate']['tcp_offset_mm'] == pytest.approx(
-        float(np.linalg.norm(point_tool0 - NOZZLE_END)), abs=0.01)
+    np.testing.assert_allclose(doc['beam_axis_tool0'], axis_tool0, atol=1e-9)
+    # xacro-compatible keys: none null, and the tcp rule holds at the file nozzle length
+    for key in ('beam_exit_tool0_mm', 'beam_axis_tool0', 'nozzle_len_mm', 'tool0_T_tcp_mm'):
+        assert doc[key] is not None
+    assert doc['nozzle_len_mm'] == 40.0
+    np.testing.assert_allclose(doc['beam_exit_tool0_mm'], point_tool0 - 40.0 * axis_tool0, atol=1e-6)
+    np.testing.assert_allclose(np.asarray(doc['beam_exit_tool0_mm']) + doc['nozzle_len_mm'] * axis_tool0,
+                               tcp[:3, 3], atol=1e-6)
+    # the geometric estimate is still recorded for comparison (nozzle end + 40 mm along tool0 +Z)
+    geo = doc['estimates']['tcp']['geometry_estimate']
+    geo_tcp = NOZZLE_END + [0.0, 0.0, 40.0]
+    assert geo['tcp_offset_mm'] == pytest.approx(float(np.linalg.norm(point_tool0 - geo_tcp)), abs=0.01)
+    np.testing.assert_allclose(geo['tcp_tool0_mm'], geo_tcp, atol=0.01)
+    assert geo['axis_angle_deg'] == pytest.approx(60.0, abs=0.01)
+    assert geo['behind_flange'] is False
+    assert doc['estimates']['tcp']['behind_flange'] is False
+    assert any('point_file_mm' in a and 'nozzle tip' in a for a in doc['assumptions'])
+
+
+def test_estimate_behind_flange_refused(tmp_path, occ):
+    """An automatic beam estimate whose TCP lies behind the flange plane (tool0 z < 0) is the cable end, not the
+    nozzle: export-head refuses it and tells the user to set frames.tcp; nothing is written."""
+    from awm_geometry import head
+
+    step = _head_step(tmp_path / 'head.step', POSE_A, cable=True)
+    map_path = tmp_path / 'cad_map_head.yaml'
+    map_path.write_text(miniyaml.dumps(_map(step)))
+    with pytest.raises(head.HeadError, match='behind the flange') as err:
+        head.export_head(step, map_path, tmp_path / 'repo', 'test')
+    assert 'frames.tcp' in str(err.value)
+    assert not (tmp_path / 'repo' / 'cell' / 'model' / 'head').exists()
+    code, out = _export(tmp_path, step, _map(step))
+    assert code != 0 and not out.exists()
+
+
+def test_override_accepted_with_cable_behind_flange(tmp_path, occ):
+    """With frames.tcp set, the wrong automatic estimate (cable end) is kept as a comparison record, flagged."""
+    step = _head_step(tmp_path / 'head.step', POSE_A, cable=True)
+    point_tool0, axis_tool0 = NOZZLE_END, np.array([0.0, 0.0, 1.0])
+    cmap = _map(step, tcp={'point_file_mm': (POSE_A @ np.append(point_tool0, 1.0))[:3].tolist(),
+                           'axis_file': (POSE_A[:3, :3] @ axis_tool0).tolist(), 'nozzle_len_mm': 40.0})
+    code, out = _export(tmp_path, step, cmap)
+    assert code == 0
+    doc = miniyaml.load(out / 'head.yaml')
+    np.testing.assert_allclose(_pose(doc['tool0_T_tcp_mm'])[:3, 3], point_tool0, atol=1e-6)
+    geo = doc['estimates']['tcp']['geometry_estimate']
+    assert geo['behind_flange'] is True and geo['tcp_tool0_mm'][2] < 0.0
+    assert geo['tcp_offset_mm'] > 500.0
+
+
+def test_override_behind_flange_accepted_and_recorded(tmp_path, occ):
+    """An explicit override is accepted wherever it is (the user said so), but recorded."""
+    step = _head_step(tmp_path / 'head.step', POSE_A)
+    point_tool0, axis_tool0 = np.array([0.0, 0.0, -50.0]), np.array([0.0, 0.0, -1.0])
+    cmap = _map(step, tcp={'point_file_mm': (POSE_A @ np.append(point_tool0, 1.0))[:3].tolist(),
+                           'axis_file': (POSE_A[:3, :3] @ axis_tool0).tolist()})
+    code, out = _export(tmp_path, step, cmap)
+    assert code == 0
+    doc = miniyaml.load(out / 'head.yaml')
+    np.testing.assert_allclose(_pose(doc['tool0_T_tcp_mm'])[:3, 3], point_tool0, atol=1e-6)
+    assert doc['estimates']['tcp']['behind_flange'] is True
+    assert any('behind the flange' in a for a in doc['assumptions'])
 
 
 def test_tool0_override_and_nozzle_length(tmp_path, occ):
@@ -308,3 +377,7 @@ def test_dau_han_robot(tmp_path):
         assert rec['faces_meshed'] == rec['faces_in']
     assert doc['estimates']['tool0']['residuals']['contact_plane_gap_mm'] <= 0.1
     assert abs(np.linalg.norm(doc['beam_axis_tool0']) - 1.0) < 1e-9
+    assert tcp[2, 3] > 0.0  # TCP in front of the flange (bug 2026-11-06: the cable end was taken as the nozzle)
+    exit_mm = np.asarray(doc['beam_exit_tool0_mm'])
+    np.testing.assert_allclose(exit_mm + doc['nozzle_len_mm'] * np.asarray(doc['beam_axis_tool0']), tcp[:3, 3],
+                               atol=1e-6)
