@@ -2,12 +2,14 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>awm_seam</name>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <description>APLSMN601 M2 seam definition (A21, A22, A24): edge picking, seam attributes, seams.json.</description>
   <maintainer email="truongxhoang@apillis.com">Truong Hoang</maintainer>
   <license>Proprietary</license>
 
   <exec_depend>awm_core</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
 
   <test_depend>python3-pytest</test_depend>
 
