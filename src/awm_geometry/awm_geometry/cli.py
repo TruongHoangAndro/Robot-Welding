@@ -13,7 +13,7 @@ Commands (lengths in metres, except export-view: mm per the D20 contract):
   export-view --step FILE [--job DIR] [--component NAME] [--up-axis +Y] --out DIR
                                              A13 D20 view model in mm: DIR/view.glb + DIR/topology.json
                                              (contract docs/generated/contracts/D20_view_model.md)
-  export-scene --step FILE --map MAP.yaml --repo DIR --job JOB [--chord-near-mm 0.1]
+  export-scene --step FILE --map MAP.yaml --repo DIR [--job JOB] [--chord-near-mm 0.1]
                                              A15 / A18 spike scene (mm): cell/model hulls + frames.yaml +
                                              scene_manifest.json; job import, D20, collision mesh, placement
   export-cell-view --step FILE --components FILE.json --out DIR --up-axis AXIS
@@ -24,6 +24,8 @@ Commands (lengths in metres, except export-view: mm per the D20 contract):
                                              hulls + head.yaml (tool0 / tcp_laser estimate, S.5c)
   pick-circle --step FILE [--component NAME | --components] --edge E<n> [--reverse] --up-axis A --out FILE.json
                                              CP-60 / CP-61: centre, axis, radius of a circular D20 edge (file mm)
+  apply-roles --step FILE --tree FILE.json --roles roles.json --axis axis_pick.json --out cad_map.yaml
+                                             CP-60 cell import: roles + axis pick -> role map for export-scene
   inspect-assembly --step FILE --out FILE.json [--no-cylinders]
                                              A18 input: component tree of a STEP assembly (paths,
                                              names, placements 4x4 and bboxes in mm, file frame)
@@ -228,6 +230,28 @@ def cmd_export_head(args) -> dict:
     return head.export_head(Path(args.step), Path(args.map), Path(args.repo), _created_by())
 
 
+def cmd_apply_roles(args) -> dict:
+    from awm_geometry import miniyaml, roles_map, scene
+
+    step, out = Path(args.step), Path(args.out)
+    digest = sha256_file(step)
+    tree_doc = json.loads(Path(args.tree).read_text(encoding='utf-8'))
+    roles = json.loads(Path(args.roles).read_text(encoding='utf-8'))
+    pick = json.loads(Path(args.axis).read_text(encoding='utf-8'))
+    jsonio.validate(roles, 'v2/cad_roles')
+    jsonio.validate(pick, 'v2/axis_pick')
+    for what, sha in (('component tree', (tree_doc.get('source') or {}).get('sha256')),
+                      ('roles', roles['source']['sha256']), ('axis pick', pick['source']['sha256'])):
+        if sha != digest:
+            raise scene.MapError(f'{what} was made from another STEP file (SHA-256 {sha} != {digest})')
+    cmap, report = roles_map.compile_cad_map(tree_doc['components'], roles, pick)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    miniyaml.dump(cmap, out, header='Cell role map compiled by awm_geometry apply-roles from roles.json and the '
+                                    'positioner-axis pick (CP-60); do not edit, edit the roles instead.')
+    scene.load_map(out, step)  # schema, coverage rules and hash, as export-scene will read it
+    return {'out': str(out), **report}
+
+
 def cmd_pick_circle(args) -> dict:
     from awm_geometry import circle_pick
 
@@ -290,7 +314,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--step', required=True, help='cell CAD STEP assembly (D21)')
     p.add_argument('--map', required=True, help='role map cad_map.yaml (component -> role, frames)')
     p.add_argument('--repo', required=True, help='repository root (cell/model and jobs/<job> are written)')
-    p.add_argument('--job', required=True, help='job folder name <PartNo>_<PartRev>')
+    p.add_argument('--job', default=None,
+                   help='job folder name <PartNo>_<PartRev>; without it only cell/model is written (CP-60)')
     p.add_argument('--chord-near-mm', type=float, default=0.1,
                    help='part collision mesh chord on the faces at joint edges (DES-001 5.4)')
     p.add_argument('--chord-far-mm', type=float, default=0.5,
@@ -301,6 +326,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--step', required=True, help='head CAD STEP assembly (robot arm + mount + LightWELD head)')
     p.add_argument('--map', required=True, help='head map cad_map_head.yaml (components, links, frame rules)')
     p.add_argument('--repo', required=True, help='repository root (cell/model/head is written)')
+    p = sub.add_parser('apply-roles')
+    p.add_argument('--step', required=True, help='cell STEP assembly')
+    p.add_argument('--tree', required=True, help='cell_components.json of inspect-assembly')
+    p.add_argument('--roles', required=True, help='roles.json (v2/cad_roles, scope cell)')
+    p.add_argument('--axis', required=True, help='axis_pick.json (v2/axis_pick) of the positioner')
+    p.add_argument('--out', required=True, help='compiled cad_map.yaml for export-scene')
     p = sub.add_parser('pick-circle')
     p.add_argument('--step', required=True)
     group = p.add_mutually_exclusive_group()
@@ -322,7 +353,7 @@ def build_parser() -> argparse.ArgumentParser:
 COMMANDS = {'info': cmd_info, 'import': cmd_import, 'sample': cmd_sample,
             'make-test-part': cmd_make_test_part, 'sample-joints': cmd_sample_joints, 'export-view': cmd_export_view,
             'inspect-assembly': cmd_inspect_assembly, 'export-scene': cmd_export_scene,
-            'export-cell-view': cmd_export_cell_view, 'pick-circle': cmd_pick_circle, 'export-head': cmd_export_head}
+            'export-cell-view': cmd_export_cell_view, 'pick-circle': cmd_pick_circle, 'apply-roles': cmd_apply_roles, 'export-head': cmd_export_head}
 
 
 def main(argv: Optional[List[str]] = None) -> int:

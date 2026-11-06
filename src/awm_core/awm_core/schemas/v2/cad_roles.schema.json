@@ -97,6 +97,22 @@
         "null"
       ],
       "minimum": 0
+    },
+    "collision": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": [
+          "hull",
+          "mesh"
+        ]
+      },
+      "description": "cell scope: instance name -> collision representation (default hull), as cad_map.collision"
+    },
+    "contact_tolerance_mm": {
+      "type": "number",
+      "minimum": 0,
+      "description": "cell scope: as cad_map.contact_tolerance_mm"
     }
   }
 }

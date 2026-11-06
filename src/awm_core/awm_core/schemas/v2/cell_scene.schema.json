@@ -234,9 +234,12 @@
             "description": "collision hull only: hull volume / solid volume; null if the component has no solid"
           },
           "part_max_depth_mm": {
-            "type": "number",
+            "type": [
+              "number",
+              "null"
+            ],
             "minimum": 0,
-            "description": "deepest part surface sample inside this object at theta = 0"
+            "description": "deepest part surface sample inside this object at theta = 0; null for a cell-only export (no part, CP-60: job-placement check 4 covers the job)"
           },
           "retried_faces": {
             "type": "array",
