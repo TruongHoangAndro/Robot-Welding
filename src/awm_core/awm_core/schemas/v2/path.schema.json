@@ -343,6 +343,22 @@
               },
               "cost": {
                 "type": "number"
+              },
+              "mode_c_residual_mm": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Mode C: largest deviation of a seam point from the rigid rotation of the first point (F8)"
+              },
+              "mode_c_residual_deg": {
+                "type": "number",
+                "minimum": 0
+              },
+              "attempts": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                },
+                "description": "planning attempts per pitch (CP-53 F1 refinement): pitch_mm, points, result, failure kind"
               }
             }
           }
@@ -443,6 +459,16 @@
                 }
               }
             }
+          },
+          "mode": {
+            "$ref": "common.schema.json#/$defs/positioner_mode"
+          },
+          "attempts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "planning attempts per pitch (CP-53 F1 refinement): pitch_mm, points, result, failure kind"
           }
         }
       }
