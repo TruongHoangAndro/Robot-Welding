@@ -1,19 +1,55 @@
-# awm_web — D20 viewer (S2-lite)
+# awm_web — Web UI front-end
 
-Read-only browser viewer of the D20 3D view model (`view.glb` + `topology.json`, contract
-`docs/generated/contracts/D20_view_model.md` v2.0). It lets you check the CAD module (M1) output: solids, B-Rep
-faces and edges with their ids, and the joints between separate solids. Pulled forward from PLAN.md WP3; no
-`awm_api` backend, no seam saving, no robot, no ROS.
+Browser front-end of the Workbench (DES-001 ADR-09, §4.5). Two parts:
+
+1. **Workbench (G1.4)** behind a login, served by `awm_api`: **S1-min** job list and "create job from STEP"
+   (upload with progress, then the import run with progress), and **S2** seam picker (below).
+2. **D20 file viewer (S2-lite)**: the read-only viewer of `view.glb` + `topology.json` without a backend
+   (`#/viewer`, or any URL with `?data=`; section "D20 file viewer" below).
+
+The browser talks only to `awm_api` (same origin, `/api/v1`); never to ROS, the robot or the PLC (DES-001 §7.3).
+It sends ids and attributes; display geometry is never used as a weld path. All values mm / degrees.
 
 Stack (DES-001 ADR-09): Vite + React + TypeScript + three + @react-three/fiber + @react-three/drei. Node and npm
 exist only in the `awm_dev` container; run every command through `scripts/dx` from the workspace root.
 
-## Run
+## Workbench: start
+
+```bash
+scripts/dx "colcon build --symlink-install --packages-up-to awm_api"   # once
+scripts/dx "src/awm_api/scripts/web.sh --repo <repo>"                   # builds dist/ on the first start
+# open http://localhost:8000/   (users file and options: src/awm_api/README.md)
+```
+
+Development with hot reload: start `awm_api` as above on port 8000, then
+`scripts/dx "cd src/awm_web && npx vite --host 127.0.0.1 --port 5173"` and open http://localhost:5173/ — the Vite
+dev server forwards `/api` (REST and WebSocket) to `AWM_API_URL` (default `http://127.0.0.1:8000`).
+
+## Workbench: screens
+
+- **Login** — user / password from the `awm_api` users file; the role (Operator / Engineer / Admin) decides what is
+  enabled. The server checks every request again.
+- **S1-min `#/jobs`** — jobs with part no., rev, status (`importing`, `draft`, `planned`, …). Engineer / Admin:
+  "Create job from STEP" (file, part no., rev, optional assembly component, up axis of the file); upload progress,
+  then the import run (A11–A14 + D20 export in the CAD process) with progress, log tail and Cancel. Operator: read only.
+- **S2 `#/jobs/<id>`** — the job's D20 model; orange = joint edges. Click an edge: its joint is selected (both edges
+  highlighted); a non-joint edge gets a note (Goal 1 welds joints between solids only). "New seam on JE<n>" adds a
+  seam; per seam: id (`S01`…), sequence, joint type, direction (reversed), start offset mm (closed seams), arcs
+  (1–12, equal lengths from the start, CP-53), arc overlap mm, positioner mode `sync` (default, CP-59) | `C` | `B`,
+  and for `B` one positioner angle per arc. "Save seams" sends the picks; M2 builds `seams.json` (and
+  `seam_axis.json` when the job has a placement). Saved seams are drawn green with the seam frame **Z** (blue arrow,
+  out of the material) and the **beam axis −Z** (dashed magenta) every 90° of the seam (quarters of the length; open
+  seams also at the end), X at the start and yellow arc start markers. Job panel: placement (a new upload has none —
+  Goal 1 uses the golden-part placement from the cell CAD), `seam_axis.json` state. "Plan all seams" starts a plan
+  run (progress, Cancel). The banner **"kinematic only — collision not checked"** is on the page header and the
+  plan panel (CP-58). Seam editing and planning are Engineer only (CP-21); other roles see the page read only.
+
+## D20 file viewer
 
 ```bash
 # from the workspace root (host); <dir> holds view.glb and topology.json, absolute path
 scripts/dx "cd src/awm_web && npm ci && AWM_VIEW_DIR=<dir> npx vite --host 127.0.0.1 --port 5173"
-# open http://localhost:5173
+# open http://localhost:5173/?data=/data/   (or http://localhost:5173/#/viewer)
 ```
 
 Examples for `<dir>`:
@@ -57,8 +93,10 @@ Data loading:
 ## Limits
 
 - Display only. The browser picks ids; display geometry is never used as a weld path (contract rule 1).
-- No seam picking / saving (S2 proper, WP3), no robot or cell, no backend; the `/data/` middleware exists only in
-  the Vite dev / preview servers and is replaced by `awm_api` `GET /jobs/{id}/view` later.
+- The file viewer has no seam picking (that is S2 in the Workbench), no robot or cell, no backend; the `/data/`
+  middleware exists only in the Vite dev / preview servers (the Workbench loads D20 from `awm_api`).
+- Not in G1.4: S4 playback (G1.6), robot / positioner / cell in the scene, scripted browser test (no headless browser
+  in `awm_dev`).
 - `topology.json` is checked for version, unit and the fields the viewer uses, not against the full JSON schema
   (the producer and `awm_core` validate that).
 - Edge picking: an edge wins over the face in front of it only within a depth slack of 1 % of the model radius
@@ -69,7 +107,7 @@ Data loading:
 
 ```bash
 scripts/dx "cd src/awm_web && npm run typecheck"   # tsc --noEmit
-scripts/dx "cd src/awm_web && npm test"            # vitest
+scripts/dx "cd src/awm_web && npm test"            # vitest (lib: seams, api, route, D20 loading)
 scripts/dx "cd src/awm_web && npm run build"       # dist/ (git-ignored)
 scripts/dx "cd src/awm_web && npm run fixture"     # regenerate fixtures/two_tubes (deterministic)
 ```

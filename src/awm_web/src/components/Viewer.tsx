@@ -1,6 +1,6 @@
 import { GizmoHelper, GizmoViewport, Grid, Line, OrbitControls } from '@react-three/drei';
 import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber';
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo, type ReactNode } from 'react';
 import { ArrowHelper, Box3, Color, PerspectiveCamera, Sphere, Vector3, type Object3D } from 'three';
 import type { Model } from '../lib/load';
 import { choosePick, niceStep, type PickTarget } from '../lib/pick';
@@ -26,9 +26,11 @@ interface Props {
   selectedFace: string | null;
   showFrames: boolean;
   focus: FocusRequest;
+  /** Extra display objects in the part frame (mm), drawn under the same up-axis rotation (e.g. saved seams). */
+  children?: ReactNode;
 }
 
-const noRaycast = () => null;
+export const noRaycast = () => null;
 
 function CameraRig({ focus }: { focus: FocusRequest }) {
   const camera = useThree((s) => s.camera) as PerspectiveCamera;
@@ -91,7 +93,7 @@ function PreviewFrames({ model, size }: { model: Model; size: number }) {
   );
 }
 
-export function Viewer({ model, hover, onHover, onPick, selectedEdges, selectedFace, showFrames, focus }: Props) {
+export function Viewer({ model, hover, onHover, onPick, selectedEdges, selectedFace, showFrames, focus, children }: Props) {
   const size = model.displayBox.getSize(new Vector3());
   const radius = Math.max(size.length() / 2, 1);
   const step = niceStep(Math.max(size.x, size.y, size.z));
@@ -150,6 +152,7 @@ export function Viewer({ model, hover, onHover, onPick, selectedEdges, selectedF
           return <EdgeLine key={id} id={id} points={pts} colour={colour} width={width} />;
         })}
         {showFrames && <PreviewFrames model={model} size={Math.max(radius * 0.15, 2)} />}
+        {children}
       </group>
       <Grid
         position={[centre.x, centre.y, model.displayBox.min.z - radius * 0.02]}
