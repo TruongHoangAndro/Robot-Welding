@@ -18,7 +18,7 @@ pytest.importorskip('xacro', reason='xacro not available (run inside awm_dev)')
 
 from conftest import auth  # noqa: E402
 from awm_api.app import create_app  # noqa: E402
-from awm_api.robot_model import API_MESHES  # noqa: E402
+from awm_api.robot_model import API_MESHES, strip_comments  # noqa: E402
 from awm_api.settings import Settings  # noqa: E402
 from g13_job import make_ring_job  # noqa: E402
 from head_fixture import write_synthetic_head_dir  # noqa: E402
@@ -40,7 +40,8 @@ def test_real_render_matches_planner_description(tmp_path, users_file):
         planner = load_planning_description(root / 'cell' / 'model' / 'frames.yaml', 'hcad', str(head.resolve())).urdf
         back = urdf.replace(f'{API_MESHES}/head/', f'file://{head.resolve()}/') \
                    .replace(f'{API_MESHES}/package/', 'package://')
-        assert back == planner.strip()
+        assert back == strip_comments(planner.strip())
+        assert '/install/' not in urdf and '<!--' not in urdf
         for link in ('tcp_laser', 'positioner_flange', 'head_body', 'wrist_3_link'):
             assert f'<link name="{link}"' in urdf
         assert str(tmp_path) not in urdf and 'file://' not in urdf

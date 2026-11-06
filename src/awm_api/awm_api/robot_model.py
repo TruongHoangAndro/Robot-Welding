@@ -32,6 +32,12 @@ API_MESHES = '/api/v1/cell/meshes'
 MESH_SUFFIXES = ('.stl', '.dae', '.obj', '.glb', '.gltf', '.png', '.jpg', '.jpeg')
 HEAD_MODEL = 'hcad'  # Goal 1 global constraint (master plan): the planner default head model
 _FILENAME_RE = re.compile(r'filename="([^"]*)"')
+_COMMENT_RE = re.compile(r'<!--.*?-->', re.S)
+
+
+def strip_comments(urdf: str) -> str:
+    """XML comments removed (the xacro banner names the machine's install path; the browser needs no comments)."""
+    return _COMMENT_RE.sub('', urdf)
 _PKG_RE = re.compile(r'^package://([A-Za-z0-9_]+)/(.+)$')
 
 
@@ -129,7 +135,7 @@ class RobotModel:
                 tail = ' | '.join([ln for ln in proc.stderr.splitlines() if ln.strip()][-4:])
                 raise ProblemError(500, 'description-failed', 'Robot description failed',
                                    detail=tail or f'exit {proc.returncode}')
-            urdf, packages = rewrite_mesh_urls(proc.stdout.strip(), head)
+            urdf, packages = rewrite_mesh_urls(strip_comments(proc.stdout.strip()), head)
             self._doc = {'urdf': urdf, 'head_model': HEAD_MODEL, 'unit': 'm, rad (URDF, REP 103)',
                          'frames_sha256': key[0], 'head_yaml_sha256': key[1],
                          'note': 'Rendered like the planner (awm_path.description, head_model hcad). Display only.'}
