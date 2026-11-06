@@ -694,3 +694,16 @@ external-axis support: synchronisation runs in ROS 2 (one controller manager, on
 relative to the part with a moving θ); §6.2 (WeldStart / WeldEnd still at rest of robot **and** positioner; the motion
 between them may be synchronised); §6.3 Phase 1 decision; §7.1 one 7-joint trajectory controller in simulation; D07 /
 D09 schemas (θ per point / per trajectory point, `positioner_mode`).
+**Follow-up decisions (Truong, 2026-11-06, after the G1.3 golden run):**
+1. *Travel speed* is an Engineer input (UI, D06 / WPS), not a hard output in Goal 1; a low speed is acceptable. The
+   requirement that matters now is that robot + positioner follow the seam defined in the STEP. Implementation (lead):
+   the planner / program generator report the maximum feasible travel speed per seam from the joint and positioner
+   speed limits (no limit raised); a requested speed above it is refused with that number shown — never slowed down
+   silently (heat input). G1.3 golden: J1 max 6.98 mm/s, J2 sync max 3.21 mm/s.
+2. *Weld position* stays a **soft** preference (weight `w_up` in the cost, D16, Assumption); no hard limit on the
+   seam-Z deviation from world +Z in Goal 1. Note: with one horizontal positioner axis J2 cannot be held flat at every
+   point (≥ 90° at the two points whose normal is parallel to the axis); the G1.3 run reached 129.8° with `w_up` 0.05.
+3. *Priority:* robot + 7th axis completing the seam in the simulation environment (G1.5 → G1.7). Lead defaults kept
+   without objection: closure of a 360° seam to its start state is not enforced; Mode C FK tolerance = F8
+   (0.05 mm / 0.1°), sync = 0.01 mm / 0.01°.
+
