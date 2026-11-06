@@ -113,6 +113,40 @@
             },
             "note": {
               "type": "string"
+            },
+            "pick": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "edge_id",
+                "radius_mm",
+                "reversed",
+                "method"
+              ],
+              "properties": {
+                "component_path": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "component the edge view was exported from; null = whole file (components mode)"
+                },
+                "edge_id": {
+                  "$ref": "common.schema.json#/$defs/edge_id"
+                },
+                "radius_mm": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "reversed": {
+                  "type": "boolean",
+                  "description": "true: axis flipped by the user (Reverse button)"
+                },
+                "method": {
+                  "const": "pick"
+                }
+              },
+              "description": "CP-60: the axis comes from a circle pick (apply-roles)"
             }
           }
         }

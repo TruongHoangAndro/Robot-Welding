@@ -53,7 +53,7 @@ from OCC.Core.TopLoc import TopLoc_Location
 from OCC.Core.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
 from OCC.Core.TopoDS import TopoDS_Shape, topods
 
-from awm_core import frames, jsonio, units
+from awm_core import axis_frame, cad_roles, frames, jsonio, units
 from awm_core.hashing import sha256_bytes, sha256_file
 from awm_core.repository import Repository
 from awm_geometry import assembly, hull, joints, meshops, miniyaml, topology, view
@@ -87,9 +87,6 @@ PART_IMPORT_ANGULAR_DEFLECTION_DEG = 10.0
 _ASSUMPTION = ('Assumption: from component placements of the cell CAD and the role map; no REF_* markers yet '
                '(OI-23)')
 
-# Fixed rotation per file up axis that brings it to +Z (right-handed).
-_UP_TO_Z = {'+Z': ([1, 0, 0], 0.0), '-Z': ([1, 0, 0], 180.0), '+Y': ([1, 0, 0], 90.0),
-            '-Y': ([1, 0, 0], -90.0), '+X': ([0, 1, 0], -90.0), '-X': ([0, 1, 0], 90.0)}
 
 
 class MapError(GeometryError):
@@ -105,11 +102,11 @@ def object_id(name: str) -> str:
 
 
 def world_R_file(up_axis: str) -> np.ndarray:
-    if up_axis not in _UP_TO_Z:
-        raise MapError(f'up axis {up_axis!r} not in {sorted(_UP_TO_Z)}')
-    axis, deg = _UP_TO_Z[up_axis]
-    rot = frames.axis_angle_to_matrix(axis, units.deg_to_rad(deg))
-    return np.where(np.abs(rot) < 1e-15, 0.0, rot)
+    """File -> world rotation (``awm_core.axis_frame``); MapError for an unknown up axis."""
+    try:
+        return axis_frame.world_R_file(up_axis)
+    except ValueError as exc:
+        raise MapError(str(exc)) from exc
 
 
 def pose_mm(t: np.ndarray) -> Dict[str, List[float]]:
@@ -152,17 +149,7 @@ def load_map(path: Path, step: Path) -> Dict[str, Any]:
     return cmap
 
 
-def _rel_paths(tree: List[Dict[str, Any]]) -> List[str]:
-    """Path of every node below its root (instance names, as in cell_components.md)."""
-    rel: List[str] = []
-    for node in tree:
-        name = node['instance_name'] or node['product_name']
-        parent = node['parent']
-        if parent is None:
-            rel.append('')
-        else:
-            rel.append(name if rel[parent] == '' else f'{rel[parent]} / {name}')
-    return rel
+_rel_paths = cad_roles.rel_paths  # path of every node below its root (instance names, cell_components.md)
 
 
 def _find(tree, rel, crit: Dict[str, Any]) -> List[int]:
@@ -242,16 +229,13 @@ def cell_frames(tree: List[Dict[str, Any]], cmap: Dict[str, Any]) -> Dict[str, A
         raise MapError('frames.positioner_axis: point_file_mm and direction_file must be finite')
     if abs(np.linalg.norm(direction) - 1.0) > 1e-6:
         raise MapError(f'frames.positioner_axis.direction_file {direction.tolist()} must have unit length')
-    p_w = (world_T_file @ np.append(point, 1.0))[:3]
-    x = rot @ direction / np.linalg.norm(direction)
-    up = np.array([0.0, 0.0, 1.0])
-    z = up - (up @ x) * x
-    if np.linalg.norm(z) < 1e-6:
-        raise MapError('positioner axis is vertical: flange frame z (world up) undefined')
-    z /= np.linalg.norm(z)
-    world_T_flange = frames.make_transform(p_w, np.column_stack([x, np.cross(z, x), z]))
+    try:
+        world_T_flange = world_T_file @ axis_frame.file_T_axis(point, direction, cmap['source']['up_axis'])
+    except ValueError as exc:
+        raise MapError(str(exc)) from exc
     return {'world_T_file': world_T_file, 'world_T_base': world_T_base, 'world_T_flange': world_T_flange,
-            'axis_point_mm': p_w, 'axis_direction': x, 'ur_component': ur_name}
+            'axis_point_mm': world_T_flange[:3, 3].copy(), 'axis_direction': world_T_flange[:3, 0].copy(),
+            'ur_component': ur_name}
 
 
 def write_frames(path: Path, fr: Dict[str, Any], step: Path, map_path: Path, cmap: Dict[str, Any],

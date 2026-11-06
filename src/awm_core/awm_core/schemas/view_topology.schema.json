@@ -70,6 +70,10 @@
             "-Z"
           ],
           "description": "Up axis of the source file; the viewer rotates it to +Z for display only"
+        },
+        "components": {
+          "type": "boolean",
+          "description": "CP-60: whole file read per assembly component; solids carry component_index / component_path"
         }
       }
     },
@@ -127,6 +131,15 @@
           },
           "bbox_max_mm": {
             "$ref": "common.schema.json#/$defs/vec3"
+          },
+          "component_index": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "index in inspect-assembly components"
+          },
+          "component_path": {
+            "type": "string",
+            "description": "component path below the root (instance names joined with ' / ')"
           }
         }
       }
@@ -147,7 +160,15 @@
             "$ref": "common.schema.json#/$defs/face_id"
           },
           "solid_id": {
-            "$ref": "common.schema.json#/$defs/solid_id"
+            "anyOf": [
+              {
+                "$ref": "common.schema.json#/$defs/solid_id"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null: face / edge of a shell that belongs to no solid (surface model)"
           },
           "surface_type": {
             "type": "string"
@@ -180,7 +201,15 @@
             "$ref": "common.schema.json#/$defs/edge_id"
           },
           "solid_id": {
-            "$ref": "common.schema.json#/$defs/solid_id"
+            "anyOf": [
+              {
+                "$ref": "common.schema.json#/$defs/solid_id"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null: face / edge of a shell that belongs to no solid (surface model)"
           },
           "curve_type": {
             "type": "string"

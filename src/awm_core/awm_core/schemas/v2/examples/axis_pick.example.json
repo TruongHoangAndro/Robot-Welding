@@ -1,0 +1,31 @@
+{
+  "schema_version": "2.0",
+  "created_by": "lead (hand-made contract example CP-60; format only)",
+  "created_at": "2026-11-06T09:00:00+07:00",
+  "inputs": [
+    {
+      "name": "model.step",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "source": {
+    "file": "model.step",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "up_axis": "+Y"
+  },
+  "component_path": null,
+  "edge_id": "E412",
+  "center_file_mm": [
+    -102.03,
+    593.4,
+    321.58
+  ],
+  "axis_file": [
+    1.0,
+    0.0,
+    0.0
+  ],
+  "radius_mm": 40.0,
+  "reversed": false,
+  "method": "pick"
+}

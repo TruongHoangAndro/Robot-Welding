@@ -1,0 +1,80 @@
+{
+  "schema_version": "2.0",
+  "created_by": "lead (hand-made contract example CP-60; format only)",
+  "created_at": "2026-11-06T09:00:00+07:00",
+  "inputs": [
+    {
+      "name": "model.step",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "status": "yellow",
+  "phi_deg": 0.0,
+  "excluded": [
+    "Fasteners:1"
+  ],
+  "unassigned_static": [
+    "Jig:1"
+  ],
+  "checks": [
+    {
+      "id": 1,
+      "name": "positioner match",
+      "status": "green",
+      "values": {
+        "radius_job_mm": 40.0,
+        "radius_cell_mm": 40.0,
+        "max_offset_mm": 0.0,
+        "max_angle_deg": 0.0,
+        "matched": [
+          "Part1:1",
+          "Part2:1"
+        ]
+      },
+      "tolerance": {
+        "mm": 0.05,
+        "deg": 0.1
+      }
+    },
+    {
+      "id": 2,
+      "name": "robot base vs cell",
+      "status": "yellow",
+      "values": {
+        "offset_mm": 0.8,
+        "angle_deg": 0.0
+      },
+      "tolerance": {
+        "mm": 0.05,
+        "deg": 0.1
+      },
+      "note": "cell robot base used"
+    },
+    {
+      "id": 3,
+      "name": "tool vs cell",
+      "status": "skipped",
+      "note": "no tool component in the job file"
+    },
+    {
+      "id": 4,
+      "name": "swept rotating set vs static",
+      "status": "green",
+      "values": {
+        "hits": 0,
+        "min_gap_mm": 2.1
+      }
+    },
+    {
+      "id": 5,
+      "name": "seam edges on part solids",
+      "status": "green",
+      "note": "enforced when seams are picked"
+    },
+    {
+      "id": 6,
+      "name": "inputs recorded",
+      "status": "green"
+    }
+  ]
+}

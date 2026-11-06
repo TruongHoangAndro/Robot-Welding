@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v2/axis_pick.schema.json",
+  "title": "axis_pick",
+  "description": "CP-60 positioner-axis pick: centre / axis / radius of a circular B-Rep edge picked in a D20 view, file frame, mm (cell/cad/axis_pick.json, jobs/<job>/axis_pick.json).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "source",
+    "component_path",
+    "edge_id",
+    "center_file_mm",
+    "axis_file",
+    "radius_mm",
+    "reversed",
+    "method"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "sha256"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "up_axis": {
+          "type": "string",
+          "enum": [
+            "+X",
+            "-X",
+            "+Y",
+            "-Y",
+            "+Z",
+            "-Z"
+          ]
+        }
+      }
+    },
+    "center_file_mm": {
+      "$ref": "common.schema.json#/$defs/vec3"
+    },
+    "axis_file": {
+      "$ref": "common.schema.json#/$defs/unit_vec3"
+    },
+    "component_path": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "component the edge view was exported from; null = whole file (components mode)"
+    },
+    "edge_id": {
+      "$ref": "common.schema.json#/$defs/edge_id"
+    },
+    "radius_mm": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "reversed": {
+      "type": "boolean",
+      "description": "true: axis flipped by the user (Reverse button)"
+    },
+    "method": {
+      "const": "pick"
+    }
+  }
+}

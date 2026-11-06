@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v2/cad_roles.schema.json",
+  "title": "cad_roles",
+  "description": "CP-60 component roles of a cell or job STEP assembly (cell/cad/roles.json, jobs/<job>/roles.json). Nodes by path below the root (instance names joined with ' / '). Unassigned nodes inherit their parent's role, the root default is static.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "source",
+    "scope",
+    "assignments"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "sha256",
+        "up_axis"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "up_axis": {
+          "type": "string",
+          "enum": [
+            "+X",
+            "-X",
+            "+Y",
+            "-Y",
+            "+Z",
+            "-Z"
+          ]
+        }
+      }
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "cell",
+        "job"
+      ]
+    },
+    "assignments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "role"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "robot",
+              "tool",
+              "rotary_fixture",
+              "part",
+              "static",
+              "exclude"
+            ]
+          }
+        }
+      }
+    },
+    "template_version": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    }
+  }
+}
