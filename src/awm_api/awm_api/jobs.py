@@ -6,7 +6,7 @@ import datetime as _dt
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from awm_core.hashing import sha256_file
 
@@ -75,17 +75,35 @@ def placement_info(job: Path) -> Optional[Dict[str, Any]]:
 
 def seam_axis_state(job: Path, repo_root: Path) -> str:
     """``missing`` | ``ok`` | ``stale`` (an input hash of seam_axis.json differs or its input is gone, CP-58 d2)."""
-    doc = read_json(job / 'seam_axis.json')
+    return document_state(job, 'seam_axis.json', repo_root)
+
+
+def document_state(job: Path, name: str, repo_root: Path, doc: Optional[Dict[str, Any]] = None) -> str:
+    """``missing`` | ``ok`` | ``stale`` for a derived job document by its recorded input hashes. Inputs that resolve
+    outside the repository (e.g. a linked head folder) are not ours to check and are skipped."""
+    if doc is None:
+        doc = read_json(job / name)
     if doc is None:
         return 'missing'
+    bases = [job, (job / name).parent]  # names are job-relative (jsonio.make_header(..., job)); doc folder fallback
     root = repo_root.resolve()
     for item in doc.get('inputs', []):
-        path = (job / item.get('name', '')).resolve()
+        cands = [(b / item.get('name', '')).resolve() for b in bases]
+        path = next((c for c in cands if c.is_file()), cands[0])
         if root not in path.parents:
             continue  # outside the repository: not ours to check
         if not path.is_file() or sha256_file(path) != item.get('sha256'):
             return 'stale'
     return 'ok'
+
+
+def latest_program(job: Path, repo_root: Path) -> Tuple[Optional[str], Optional[Dict[str, Any]], Optional[str]]:
+    """(rev, D09, state) of the newest program revision with a readable ``program.json``; state ok | stale."""
+    for rev in reversed(program_revs(job)):
+        doc = read_json(job / 'programs' / rev / 'program.json')
+        if doc is not None:
+            return rev, doc, document_state(job, f'programs/{rev}/program.json', repo_root, doc)
+    return None, None, None
 
 
 def status(job: Path, importing: bool = False) -> str:
@@ -120,6 +138,7 @@ def detail(job: Path, repo_root: Path, active_run: Optional[str]) -> Dict[str, A
         'active_run': active_run, 'placement': placement,
         'placement_note': None if placement else NO_PLACEMENT_NOTE,
         'seam_axis': seam_axis_state(job, repo_root),
+        'path': document_state(job, 'path.json', repo_root),
         'collision_checked': False,  # Goal 1 (CP-58): nothing in this backend checks collision
     })
     return out

@@ -83,6 +83,7 @@ def test_put_seams_validation_422(client, repo):
         (pick(positioner_mode='B', arcs=2, positioner_angles_deg=[0.0]), '/seams/0/positioner_angles_deg'),
         (pick(positioner_mode='sync', positioner_angles_deg=[0.0]), '/seams/0/positioner_angles_deg'),
         (pick(start_offset_mm=-2), '/seams/0/start_offset_mm'),
+        (pick(range_mm=[0.0, 10.0]), '/seams/0/range_mm'),  # contract field, not in D04 2.1: arcs + start offset
     ]
     for body, pointer in cases:
         r = put(client, h, body)

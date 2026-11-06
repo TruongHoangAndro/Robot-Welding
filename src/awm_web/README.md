@@ -44,6 +44,39 @@ dev server forwards `/api` (REST and WebSocket) to `AWM_API_URL` (default `http:
   run (progress, Cancel). The banner **"kinematic only — collision not checked"** is on the page header and the
   plan panel (CP-58). Seam editing and planning are Engineer only (CP-21); other roles see the page read only.
 
+## Workbench: S2 additions (G1.6)
+
+- **Placement** (Job panel, Engineer): a job made from a STEP upload has no `placement.json`. Enter the pose of the
+  part frame in `positioner_flange` (θ = 0; mm, roll-pitch-yaw in degrees, URDF convention) or copy the placement of
+  another job. Saved as `source: study`, not verified — an Assumption for simulation only. Afterwards
+  `seam_axis.json` is stale: save the seams again, then plan.
+- **Plan**: optional travel speed in mm/s (relative to the part, CP-59 follow-up 2026-11-06); empty = planner default
+  (Assumption, recorded in D07). Link "S4 simulation →" once a path exists.
+
+## Workbench: S4-lite simulation `#/jobs/<id>/sim` (G1.6)
+
+Display only (DES-001 §7.3): the browser plays stored joint values; it never talks to ROS, the robot or the PLC.
+
+- Robot from `GET /cell/robot_description` (the planner's URDF, head model `hcad`) through **urdf-loader**; meshes
+  from the awm_api mesh endpoints with the bearer token. The positioner joint turns with θ; the part (`view.glb`,
+  part frame) hangs on `positioner_flange` through `placement.json` `flange_T_part`.
+- Playback source: the newest current program (D09 2.1 `robot_positioner` segments or 2.0 `robot` / `positioner`
+  segments with `hold_deg`); before a program exists, the timed weld segments of D07 (no air moves between arcs —
+  the view jumps there). Joint values = the stored values at the stored times, linear between consecutive points
+  (`lib/playback.ts`); urdf-loader limit clamping is off, values beyond a URDF limit are listed as a warning.
+- Seam points coloured by D07 status (ok / ik / limit / singularity / wrist3 / step; failing points of rejected arcs
+  located on the D04 samples), TCP trail (FK of every played point; orange = weld), scrubber, play / pause, rate,
+  current segment kind / seam / mode, θ, q, cycle time (program) or path duration.
+- Banner **"Kinematic only — collision not checked"** whenever the played documents do not say
+  `collision_checked: true` (CP-58).
+- Travel speed per arc: requested vs `max_travel_speed_mm_s` / `speed_within_limits` of D07; over the limit it says
+  "max feasible X mm/s — re-plan with a lower travel speed". Re-plan with a new speed and "Generate program" (G1.5
+  CLI through awm_api) are on the page for the Engineer.
+- Focus: `part` (centre of the part bounding box on the flange) or `cell`.
+- Units: the scene unit is the metre of the URDF; every mm → scene and deg → rad conversion is in `src/lib/units.ts`.
+- Not shown yet: the static cell (`cell_view.glb` has no agreed place in the job repository and needs the role map to
+  hide the robot / part copies inside it), positioner holders.
+
 ## D20 file viewer
 
 ```bash
@@ -95,7 +128,7 @@ Data loading:
 - Display only. The browser picks ids; display geometry is never used as a weld path (contract rule 1).
 - The file viewer has no seam picking (that is S2 in the Workbench), no robot or cell, no backend; the `/data/`
   middleware exists only in the Vite dev / preview servers (the Workbench loads D20 from `awm_api`).
-- Not in G1.4: S4 playback (G1.6), robot / positioner / cell in the scene, scripted browser test (no headless browser
+- G1.6 added S4 playback with robot and positioner (above); the static cell is not shown yet. (G1.4 note: no headless browser
   in `awm_dev`).
 - `topology.json` is checked for version, unit and the fields the viewer uses, not against the full JSON schema
   (the producer and `awm_core` validate that).
@@ -110,6 +143,21 @@ scripts/dx "cd src/awm_web && npm run typecheck"   # tsc --noEmit
 scripts/dx "cd src/awm_web && npm test"            # vitest (lib: seams, api, route, D20 loading)
 scripts/dx "cd src/awm_web && npm run build"       # dist/ (git-ignored)
 scripts/dx "cd src/awm_web && npm run fixture"     # regenerate fixtures/two_tubes (deterministic)
+```
+
+S4 tests: `tests/playback.test.ts` (timeline values = program values at the program times, linear between; 2.1, 2.0
+and D07 sources), `tests/fk.test.ts` (jsdom: q + θ played through the URDF chain with urdf-loader reproduce the D07
+TCP poses in the part frame within 0.01 mm / 0.01°). The FK test uses `fixtures/s4_synthetic/` (regenerate inside
+awm_dev with `scripts/dx "python3 src/awm_web/scripts/make_s4_fixture.py"`: synthetic cell, H-BOX head, poses from the
+planner's own FK) and, when `AWM_S4_GOLDEN_DIR` names a folder with `robot_description.json`, `path.json` and
+`placement.json` of a real job, also that job (skipped otherwise).
+
+Scripted browser run (Playwright, headless Chromium inside awm_dev; browser folder git-ignored):
+
+```bash
+scripts/dx "cd src/awm_web && PLAYWRIGHT_BROWSERS_PATH=$PWD/tmp/pw-browsers npx playwright install chromium-headless-shell"   # once
+scripts/dx "cd src/awm_web && AWM_UI_URL=http://127.0.0.1:8048 AWM_UI_USER=<engineer> AWM_UI_PASSWORD=<pw> AWM_JOB=<job> \
+  AWM_SHOT_DIR=<folder> [AWM_PLAN=1 AWM_TRAVEL_SPEED_MM_S=3] PLAYWRIGHT_BROWSERS_PATH=$PWD/tmp/pw-browsers node scripts/s4_browser_run.mjs"
 ```
 
 `fixtures/two_tubes/` is a synthetic, contract-conforming D20 model made by `scripts/make_fixture.mjs`: two coaxial

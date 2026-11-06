@@ -4,6 +4,7 @@
  */
 
 import type { SeamDoc, SeamPick } from './seams';
+import type { SimulationPayload } from './simulation';
 
 export const API = '/api/v1';
 
@@ -40,6 +41,7 @@ export interface JobDetail extends JobSummary {
   placement: { source: string; verified: boolean } | null;
   placement_note: string | null;
   seam_axis: 'missing' | 'ok' | 'stale';
+  path: 'missing' | 'ok' | 'stale';
   collision_checked: boolean;
 }
 
@@ -140,12 +142,46 @@ export async function putSeams(token: string, id: string, seams: SeamPick[]): Pr
   return { doc: body, seamAxis: res.headers.get('X-AWM-Seam-Axis') ?? '' };
 }
 
-export async function startPlan(token: string, id: string, seams?: string[]): Promise<string> {
+/** Plan request; ``travelSpeedMmS`` undefined = planner default (Assumption, recorded in D07). */
+export async function startPlan(token: string, id: string, seams?: string[], travelSpeedMmS?: number): Promise<string> {
+  const req: Record<string, unknown> = {};
+  if (seams?.length) req.seams = seams;
+  if (travelSpeedMmS !== undefined) req.travel_speed_mm_s = travelSpeedMmS;
   const { body } = await call<{ run_id: string }>(`/jobs/${encodeURIComponent(id)}/plan`, token, {
     method: 'POST',
-    body: JSON.stringify(seams?.length ? { seams } : {}),
+    body: JSON.stringify(req),
   });
   return body.run_id;
+}
+
+/** D07 → D09 program run (G1.5 CLI behind awm_api). */
+export async function startProgram(token: string, id: string): Promise<string> {
+  const { body } = await call<{ run_id: string }>(`/jobs/${encodeURIComponent(id)}/program`, token, { method: 'POST', body: '{}' });
+  return body.run_id;
+}
+
+/** S4 payload, or null when nothing is planned yet (404 no-simulation). */
+export async function getSimulation(token: string, id: string): Promise<SimulationPayload | null> {
+  try {
+    return (await call<SimulationPayload>(`/jobs/${encodeURIComponent(id)}/simulation`, token)).body;
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404 && e.problem?.type === '/problems/no-simulation') return null;
+    throw e;
+  }
+}
+
+export interface RobotDescription {
+  urdf: string;
+  head_model: string;
+  unit: string;
+}
+
+export const getRobotDescription = async (token: string) => (await call<RobotDescription>('/cell/robot_description', token)).body;
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export async function putPlacement(token: string, id: string, req: Record<string, unknown>): Promise<{ doc: any; seamAxis: string }> {
+  const { body, res } = await call<any>(`/jobs/${encodeURIComponent(id)}/placement`, token, { method: 'PUT', body: JSON.stringify(req) });
+  return { doc: body, seamAxis: res.headers.get('X-AWM-Seam-Axis') ?? '' };
 }
 
 export const viewBase = (id: string) => `${API}/jobs/${encodeURIComponent(id)}/view/`;

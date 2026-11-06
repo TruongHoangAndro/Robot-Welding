@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
 import type { Run } from '../lib/api';
+import { KINEMATIC_BANNER } from '../lib/simulation';
 
 /** CP-58: every planning view says that Goal 1 results are kinematic only. */
 export function KinematicBanner() {
   return (
     <div className="banner" role="alert">
-      kinematic only — collision not checked (Goal 1, CP-58). Not releasable.
+      {KINEMATIC_BANNER} (Goal 1, CP-58). Not releasable.
     </div>
   );
 }

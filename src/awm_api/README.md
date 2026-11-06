@@ -38,7 +38,10 @@ repository with the golden part. Options of `web.sh`: `--port 8000`, `--host 127
 | users file | `--secrets` | `AWM_API_SECRETS` | `<repo>/secrets/awm_api_users.json` |
 | OCC interpreter (ADR-15) | — | `AWM_OCC_PYTHON` | set in `awm_dev` |
 | seam CLI prefix (G1.2) | — | `AWM_SEAM_CMD` | `python3 -m awm_seam.joint_cli` |
-| planner CLI prefix (G1.3) | — | `AWM_PLAN_CMD` | `python3 -m awm_path.cli` (Assumption) |
+| planner CLI prefix (G1.3) | — | `AWM_PLAN_CMD` | `python3 -m awm_path.cli` |
+| program CLI prefix (G1.5) | — | `AWM_PROGRAM_CMD` | `python3 -m awm_program.cli` |
+| description render (G1.6) | — | `AWM_DESCRIBE_CMD` | `python3 -m awm_api.describe` |
+| H-CAD head folder | — | `AWM_HEAD_DIR` | `<repo>/cell/model/head` |
 | built front-end | `--web-dist` | `AWM_WEB_DIST` | `src/awm_web/dist` via `web.sh` |
 | bind / port | `--host` / `--port` | `AWM_API_HOST` / `AWM_API_PORT` | `127.0.0.1` / `8000` |
 
@@ -58,11 +61,15 @@ Users file format (never commit a real one; `config/users.example.json` shows th
 | `GET /jobs/{id}/files/{path}` | all | job-relative files; no `..`, no symlink leaving the job (403) |
 | `GET /jobs/{id}/seams` | all | D04 as stored; 404 `/problems/no-seams` before the first save |
 | `PUT /jobs/{id}/seams` | **Engineer only** (CP-21) | picks → seam CLI → D04 (+ `seam_axis.json` when `placement.json` exists; header `X-AWM-Seam-Axis`). 422 with field pointers or the CLI message; 409 when the cell is busy |
-| `POST /jobs/{id}/plan` (`{seams?: [...]}`) | Engineer | 202 + plan run. 409 `no-seams` / `no-placement` / `seam-axis-missing` / `seam-axis-stale` / `run-busy` |
+| `PUT /jobs/{id}/placement` (`{flange_T_part: {position_mm, rpy_deg \| quat_xyzw}}` or `{copy_from}`) | **Engineer** | v2/placement with `source: study`, `verified: false`, Assumption in `created_by`; part mesh = D20 `view.glb`. Makes seam_axis.json / path.json stale (header `X-AWM-Seam-Axis`). 409 `no-view` / `no-placement` (copy source) / `run-busy` |
+| `POST /jobs/{id}/plan` (`{seams?: [...], travel_speed_mm_s?: > 0}`) | Engineer | 202 + plan run; the speed goes to `--travel-speed-mm-s` (absent = planner default, Assumption). 409 `no-seams` / `no-placement` / `seam-axis-missing` / `seam-axis-stale` / `run-busy` |
+| `POST /jobs/{id}/program` | Engineer | 202 + program run (G1.5 CLI `generate --job`); outputs = `programs/P###/program.json` from the `result ok` line; a `result refused …` reason (e.g. speed above the feasible maximum) is the run problem. 409 `no-path` / `path-stale` / `run-busy` |
+| `GET /cell/robot_description` | all | `{urdf, head_model: hcad, unit}`: rendered by `awm_path.description.load_planning_description` in a subprocess (`awm_api.describe`), comments stripped, mesh URIs → `/api/v1/cell/meshes/…`; cached by the frames.yaml / head.yaml hashes. 409 `no-cell-model`, 500 `description-failed` |
+| `GET /cell/meshes/head/{path}`, `GET /cell/meshes/package/{pkg}/{path}` | all | read-only mesh files below the head folder / a package share named by the URDF; mesh extensions only; `..`, absolute paths, symlinks leaving the folder → 403 |
 | `GET /runs/{run_id}` | all | run document of the contract |
 | `DELETE /runs/{run_id}` | Engineer, Admin | SIGTERM to the process group (SIGKILL after 10 s); 409 when finished |
 | `WS /runs/{run_id}/ws?token=…` | all | pushes the run document on every change (≤ 10 Hz) until it ends |
-| `GET /jobs/{id}/simulation` | all | 404 `/problems/no-simulation` until a v2 `path.json` and a placement exist (G1.5 / G1.6) |
+| `GET /jobs/{id}/simulation` | all | S4 payload: `source` (`program` = newest current D09, else `path`), `program`, `program_rev`, `program_state`, `path`, `path_state`, `placement`, `seams`, `collision_checked`, URLs, `notes`. A program whose inputs changed (re-planned path) is not played. 404 `/problems/no-simulation` without placement or path / program |
 
 ## Runs (T2.7)
 
@@ -79,15 +86,15 @@ Users file format (never commit a real one; `config/users.example.json` shows th
 | CLI | Owner / branch | Command used now | Status |
 |---|---|---|---|
 | seam build | seam-process, `g1-2-seam-axis` (G1.2) | `<AWM_SEAM_CMD> build --job <job> --picks <picks.json> [--no-axis]` | taken from the G1.2 CLI help; tested with a fake. Until G1.2 merges, a save answers 500 `/problems/seam-cli-missing` |
-| planner | planner, G1.3 | `<AWM_PLAN_CMD> plan --job <job> --collision off --out <run>/path.json [--seams S01 …]` | **Assumption**: module name and `--out` / `--seams`; tested with a fake. Until G1.3 exists a plan run fails with the CLI error |
+| planner | planner, G1.3 (merged) | `<AWM_PLAN_CMD> plan --job <job> --collision off --out <run>/path.json --head-dir <head> [--travel-speed-mm-s V] [--seams S01 …]` | tested with a fake and on the golden copy |
+| program | program-verify, G1.5 (not merged) | `<AWM_PROGRAM_CMD> generate --job <job>` | contract of the G1.5 brief; tested with a fake. Until G1.5 merges a program run fails (module not found) and S4 plays the path |
 
-## Contract deviations (to be folded into the OpenAPI by the lead)
+## Contract
 
-1. `SeamPick` also accepts `positioner_mode` (`sync` default | `C` | `B`), `positioner_angles_deg` (Mode B only, one
-   per arc) and `start_offset_mm` (D04 2.1 of G1.2, CP-59); `arc_overlap_mm` defaults to 2 mm (Assumption, no WPS yet).
-2. `WS /runs/{run_id}/ws` (progress push requested for G1.4); polling `GET /runs/{id}` still works.
-3. `JobDetail` extra fields `placement`, `placement_note`, `seam_axis`, `collision_checked`; login returns `username`.
-4. Response header `X-AWM-Seam-Axis` on `PUT /seams`.
+`docs/generated/contracts/awm_api_sim1.openapi.yaml` was brought to what the server serves in G1.6 (SeamPick D04 2.1
+fields with `range_mm` refused in Goal 1, run WebSocket under `x-awm-websockets`, JobDetail fields, the new endpoints;
+`/jobs/{id}/release` is marked `x-awm-implemented: false`). `test_openapi_contract.py` fails when a served route is
+missing from the contract or the other way round.
 
 ## Tests
 
@@ -96,5 +103,7 @@ scripts/dx "colcon build --symlink-install --packages-up-to awm_api && colcon te
 scripts/dx "cd src/awm_api && python3 -m pytest -q test"          # quick loop
 ```
 
-`test/fake_cli.py` stands in for the OCC, seam and planner CLIs. `test_import_occ.py` uploads a synthetic STEP made by
+`test/fake_cli.py` stands in for the OCC, seam, planner, program and description CLIs. `test_describe_real.py` renders
+the real description (synthetic head folder and cell frames of the planner tests) and checks it equals the planner's
+URDF apart from the rewritten mesh URIs. `test_import_occ.py` uploads a synthetic STEP made by
 `awm_geometry make-test-part tube_tube` through the real OCC process (skips only if `AWM_OCC_PYTHON` is unset).

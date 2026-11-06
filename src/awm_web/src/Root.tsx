@@ -5,8 +5,9 @@ import { parseRoute, type Route } from './lib/route';
 import { JobList } from './pages/JobList';
 import { JobPage } from './pages/JobPage';
 import { Login } from './pages/Login';
+import { SimPage } from './pages/SimPage';
 
-/** Routes: #/jobs (S1-min), #/jobs/<id> (S2), #/viewer or ?data= (read-only D20 file viewer, no login). */
+/** Routes: #/jobs (S1-min), #/jobs/<id> (S2), #/jobs/<id>/sim (S4-lite), #/viewer or ?data= (D20 file viewer, no login). */
 export function Root() {
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash, window.location.search));
   const [session, setSession] = useState<Session | null>(() => loadSession());
@@ -31,6 +32,7 @@ export function Root() {
     setSession(null);
   };
   if (route.page === 'job') return <JobPage key={route.jobId} session={session} jobId={route.jobId} />;
+  if (route.page === 'sim') return <SimPage key={route.jobId} session={session} jobId={route.jobId} />;
   return (
     <div className="app">
       <header>
