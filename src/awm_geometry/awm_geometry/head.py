@@ -570,7 +570,12 @@ def _assumptions(cmap: Dict[str, Any], tool0_method: str, tcp_method: str, tcp_b
                    'on the flange / mount contact plane, Z out of the robot')
         out.append(f"Assumption: tool0 yaw from the flange dowel-pin hole (radius {t0['pin_radius_mm']} mm) on tool0 "
                    f"{t0['pin_axis']} (ur_description wrist3 mesh); the head yaw on the flange is taken as modelled")
-    if tcp_method == 'map':
+    if tcp_method == 'teach_ui':
+        out.append('tcp_laser taught on the UI (CP-61): centre of the picked nozzle-mouth circle + stick-out along its '
+                   'axis, beam out of the nozzle; DES-001 §5.3 TCP at the nozzle tip (Assumption until IPG data, OI-2)')
+        out.append(f"beam_exit_tool0_mm = tcp - nozzle_len_mm ({tcp['nozzle_len_mm']} mm) * beam_axis: the parametric "
+                   'collision nozzle (CP-56) covers the last nozzle_len_mm before the TCP')
+    elif tcp_method == 'map':
         out.append('Assumption: tcp_laser from the map: frames.tcp point_file_mm = nozzle tip + stick-out (TCP), '
                    'axis_file = beam out of the nozzle (no REF_TCP marker, OI-23; UI teach later, CP-61)')
         out.append(f"beam_exit_tool0_mm = tcp - nozzle_len_mm ({tcp['nozzle_len_mm']} mm) * beam_axis: the parametric "
@@ -607,16 +612,45 @@ def _recover(root: Path) -> None:
 STAGING_PREFIX = '.staging-export-head-'
 
 
-def export_head(step: Path, map_path: Path, repo_root: Path, created_by: str) -> Dict[str, Any]:
-    """Write ``<repo>/cell/model/head/`` (see module docstring) under the repository export lock; return a summary."""
+def export_head(step: Path, map_path: Path, repo_root: Path, created_by: str,
+                teach: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Write ``<repo>/cell/model/head/`` (see module docstring) under the repository export lock; return a summary.
+
+    ``teach`` (CP-61): ``{component, edge_id, reverse, stickout_mm, taught_by}`` — the TCP comes from that nozzle-mouth
+    circle instead of the map / the beam estimate."""
     root = Path(repo_root)
     root.mkdir(parents=True, exist_ok=True)
     with scene.export_lock(root):
         _recover(root)
-        return _export_head(Path(step), Path(map_path), root, created_by)
+        return _export_head(Path(step), Path(map_path), root, created_by, teach)
 
 
-def _export_head(step: Path, map_path: Path, root: Path, created_by: str) -> Dict[str, Any]:
+def taught_tcp(step: Path, teach: Dict[str, Any], body_shape) -> Dict[str, Any]:
+    """CP-61: TCP from the nozzle-mouth circle picked on the UI (file frame, mm).
+
+    ``teach``: ``{component, edge_id, reverse, stickout_mm}``. Beam axis = circle axis pointing away from the centre of
+    the beam link's bounding box (out of the nozzle), flipped by ``reverse``; TCP = circle centre + stick-out along it.
+    """
+    from awm_geometry import circle_pick, part, topology
+
+    loaded = part.load_part(step, teach['component'])
+    try:
+        circle = circle_pick.circle_frame(circle_pick.edge_by_id(loaded.shape, teach['edge_id']))
+    except GeometryError as exc:
+        raise HeadError(f'TCP teach {teach["component"]} {teach["edge_id"]}: {exc}') from exc
+    centre, axis = np.array(circle['center_mm']), np.array(circle['axis'])
+    lo, hi = topology.bbox(body_shape)
+    if axis @ (centre - (np.asarray(lo) + np.asarray(hi)) / 2.0) < 0.0:
+        axis = -axis
+    if teach.get('reverse'):
+        axis = -axis
+    stickout = float(teach.get('stickout_mm') or 0.0)
+    return {'point_file_mm': [float(v) for v in centre + stickout * axis], 'axis_file': [float(v) for v in axis],
+            'radius_mm': circle['radius_mm']}
+
+
+def _export_head(step: Path, map_path: Path, root: Path, created_by: str,
+                 teach: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     if not step.is_file():
         raise HeadError(f'STEP file not found: {step}')
     cmap = load_head_map(map_path, step)
@@ -656,6 +690,10 @@ def _export_head(step: Path, map_path: Path, root: Path, created_by: str) -> Dic
 
     beam_shape = shapes[tcp_map['beam_link']]
     nozzle = float(tcp_map['nozzle_len_mm'])
+    taught = None
+    if teach is not None:
+        taught = taught_tcp(step, teach, beam_shape)
+        tcp_map = dict(tcp_map, point_file_mm=taught['point_file_mm'], axis_file=taught['axis_file'])
     inv = frames.invert(file_T_tool0)
     geometry_tcp = None
     try:
@@ -676,10 +714,18 @@ def _export_head(step: Path, map_path: Path, root: Path, created_by: str) -> Dic
         tool0_T_tcp = tcp_pose(point_t0, axis_t0, 0.0)
         exit_t0 = point_t0 - nozzle * axis_t0
         behind = bool(point_t0[2] < 0.0)
+        if behind and taught is not None:
+            raise HeadError(f'taught TCP lies behind the flange plane (tool0 z {point_t0[2]:.3f} mm): the picked circle '
+                            f'{teach["component"]} {teach["edge_id"]} is not the nozzle mouth (cable / connector end?)')
         if behind:
             LOG.warning('A18 frames.tcp from the map lies behind the flange plane (tool0 z %.3f mm): accepted as '
                         'set, recorded in head.yaml', point_t0[2])
         est = {'method': 'map', 'behind_flange': behind, 'tcp_z_tool0_mm': float(point_t0[2])}
+        if taught is not None:
+            est.update(method='teach_ui', component=teach['component'], edge_id=teach['edge_id'],
+                       reversed=bool(teach.get('reverse')), stickout_mm=float(teach.get('stickout_mm') or 0.0),
+                       mouth_radius_mm=float(taught['radius_mm']), taught_by=teach.get('taught_by') or 'unknown',
+                       taught_at=jsonio.utc_now_iso())
         if isinstance(geometry_tcp, tuple):
             g_tcp = tcp_pose(geometry_tcp[0], geometry_tcp[1], nozzle)
             est['geometry_estimate'] = {
