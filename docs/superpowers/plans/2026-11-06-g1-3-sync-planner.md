@@ -39,17 +39,17 @@
 
 ## Steps (TDD)
 
-- [ ] 1. Contract MINOR (lead-approved): `common` positioner_mode + `sync`; `failing_point.status`; `v2/path` 2.1
+- [x] 1. Contract MINOR (lead-approved): `common` positioner_mode + `sync`; `failing_point.status`; `v2/path` 2.1
   (`collision_checked`, point `status`, nullable `min_clearance_mm`, arc `planning`, rejected `failing_ranges`,
   planner `params`); example + `test_jsonio`.
-- [ ] 2. `core/batch_kin.py`: vectorised UR5e DH FK, labels and F6 metrics; test against `UrAnalyticKinematics.fk`
+- [x] 2. `core/batch_kin.py`: vectorised UR5e DH FK, labels and F6 metrics; test against `UrAnalyticKinematics.fk`
   and `states.label_and_metrics`.
-- [ ] 3. `core/cell_urdf.py`: cell frames, joint and positioner limits from a URDF; agreement check with frames.yaml.
-- [ ] 4. `core/sync.py`: rotation model (test: point at θ vs FK of the planned q), state generation, DP, modes
+- [x] 3. `core/cell_urdf.py`: cell frames, joint and positioner limits from a URDF; agreement check with frames.yaml.
+- [x] 4. `core/sync.py`: rotation model (test: point at θ vs FK of the planned q), state generation, DP, modes
   sync / C / B, pitch refinement, failing ranges. Tests: synthetic coaxial ring (sync and C 100 %), Mode B uses only
   the entered θ, |Δq| ≤ 5° on 7 joints, FK ≤ 0.01 mm / 0.01°, determinism.
-- [ ] 5. `core/d07.py` + `cli.py` (`python3 -m awm_path.cli plan`, entry `awm_path_cli`): progress lines, refusal of
+- [x] 5. `core/d07.py` + `cli.py` (`python3 -m awm_path.cli plan`, entry `awm_path_cli`): progress lines, refusal of
   `--collision on` and stale `seam_axis.json`, schema validation, identical payload on re-run.
-- [ ] 6. Golden run (env `AWM_SPIKE_REPO`, copy of the spike job): J1 sync + C, J2 sync; run record in
+- [x] 6. Golden run (env `AWM_SPIKE_REPO`, copy of the spike job): J1 sync + C, J2 sync; run record in
   `docs/generated/goal1/`.
 - [ ] 7. `colcon test --packages-select awm_core awm_path awm_seam`; report.
