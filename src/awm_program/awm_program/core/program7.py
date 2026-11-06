@@ -392,8 +392,9 @@ def build_program(path_doc: Mapping, sequence: Mapping[str, int], flange_t_part:
                             'velocity only)')
             continue
         label = arc['config_label']
-        app = line_states(kin, sc, targets[0], q[0], label, params.approach_mm, tol, params, f'{name} approach')
-        ret = line_states(kin, sc, targets[-1], q[-1], label, params.retract_mm, tol, params, f'{name} retract')[::-1]
+        # the line starts at the robot's own TCP pose FK(q) (= the D07 pose within the FK tolerance; Mode C: F8)
+        app = line_states(kin, sc, fk[0], q[0], label, params.approach_mm, tol, params, f'{name} approach')
+        ret = line_states(kin, sc, fk[-1], q[-1], label, params.retract_mm, tol, params, f'{name} retract')[::-1]
         prepared.append((arc, q7, s, t, v, a, vmax, amax, ramp, app, ret, (e_mm, e_deg, tol_mm, tol_deg)))
     if refusals:
         raise ProgramRefused('; '.join(refusals) + ' — the travel speed is an Engineer input: re-plan with a lower '

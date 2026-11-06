@@ -101,3 +101,16 @@ def test_params_never_raise_limits():
         ProgramParams(motion_velocity_scaling=1.5)
     with pytest.raises(ValueError):
         ProgramParams(approach_mm=60.0)
+
+
+def test_line_starts_at_the_robot_pose_not_the_d07_target(kin, mode_b):
+    """Mode C keeps the robot at rest, so FK(q) differs from the D07 poses by the accepted F8 residual; approach /
+    retract must start from FK(q) (regression: golden J1 in Mode C was refused)."""
+    doc, pcell = mode_b
+    bad = copy.deepcopy(doc)
+    for k in (0, -1):
+        bad['seams'][0]['points'][k]['pose_mm']['position_mm'][1] += 0.005     # inside the 0.01 mm D07 tolerance
+    body = build_program(bad, {'S01': 1}, np.eye(4), pcell, kin)
+    for seg, at in ((body['segments'][1], -1), (body['segments'][3], 0)):
+        q = np.array([p['positions_deg'] for p in seg['points']])
+        assert q[at].tolist() == bad['seams'][0]['points'][0 if at == -1 else -1]['q_deg'] + [35.0]
