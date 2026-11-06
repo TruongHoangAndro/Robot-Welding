@@ -67,8 +67,8 @@ All lengths mm, angles deg (ADR-14); headers with `inputs` SHA-256 (rule 2).
 
 | # | Check | Tolerance | Result |
 |---|---|---|---|
-| 1 | Job positioner = cell positioner. The job file has its own origin, so only quantities relative to the picked axis are compared: (a) radius of the picked circle, job vs cell; (b) after placing the job axis pick on the cell axis pick, the pose of every `rotary_fixture` component present in both files (matched by instance name) relative to the axis. Catches a wrong pick (other circle, other end of the shaft) and an older / different positioner model | **Open** (proposal 0.05 mm / 0.1°, = F8: both sides are nominal CAD, an identical model differs by ~1e-6 mm; real placement error belongs to calibration A52 / A53, not to this check) | red, Plan blocked |
-| 2 | Robot in the job file: base → axis transform vs cell | **Open** (proposal 0.05 mm / 0.1°, as 1) | yellow, cell used |
+| 1 | Job positioner = cell positioner. The job file has its own origin, so only quantities relative to the picked axis are compared: (a) radius of the picked circle, job vs cell; (b) after placing the job axis pick on the cell axis pick, the pose of every `rotary_fixture` component present in both files (matched by instance name) relative to the axis. Catches a wrong pick (other circle, other end of the shaft) and an older / different positioner model | 0.05 mm / 0.1° (decided 2026-11-06, = F8: both sides are nominal CAD, an identical model differs by ~1e-6 mm; real placement error belongs to calibration A52 / A53, not to this check) | red, Plan blocked |
+| 2 | Robot in the job file: base → axis transform vs cell | 0.05 mm / 0.1° (as 1) | yellow, cell used |
 | 3 | Tool in the job file: TCP vs cell TCP | same as 2 | yellow, info |
 | 4 | `rotary_fixture` + `part` around the axis; swept over the θ limits they do not intersect `static` | mesh distance > 0 | red |
 | 5 | Picked seam edges belong to `part` solids and lie between two of them | — | refused at pick |
@@ -105,7 +105,7 @@ STL import (A16).
 
 ## 9. Open
 
-1. Tolerances of checks 1–2 (§5), proposal 0.05 mm / 0.1°.
+None (all decided 2026-11-06; tolerances of checks 1–2 = 0.05 mm / 0.1°).
 
 Decided 2026-11-06 (Truong): θ = 0 without a marker = positioner pose in the file; test data = job STEP
 "positioner + fixture + 564082" extracted by the software from the cell CAD (git-ignored, like every STEP), until the
