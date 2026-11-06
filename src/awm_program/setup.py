@@ -20,6 +20,7 @@ setup(
     entry_points={
         'console_scripts': [
             'generate = awm_program.node:main',
+            'generate_7axis = awm_program.cli:entry',
         ],
     },
 )
