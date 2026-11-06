@@ -9,13 +9,15 @@
 
   <exec_depend>awm_core</exec_depend>
   <exec_depend>awm_path</exec_depend>
+  <exec_depend>awm_seam</exec_depend>
+  <exec_depend>awm_bringup</exec_depend>
+  <exec_depend>awm_description</exec_depend>
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
 
   <test_depend>python3-pytest</test_depend>
-  <test_depend>awm_bringup</test_depend>
   <test_depend>awm_cad</test_depend>
-  <test_depend>awm_seam</test_depend>
   <test_depend>awm_process</test_depend>
 
   <export>

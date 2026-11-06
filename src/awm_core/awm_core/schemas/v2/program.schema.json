@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "v2/program.schema.json",
   "title": "program",
-  "description": "D09 program v2 (A61\u2013A64, B-15): one segment per controller with the trajectory exactly as commanded (awm_motion converts deg \u2192 rad for the controllers), hold values of the other axes, weld events only at rest of robot and positioner, context record. Self-contained (B-09).",
+  "description": "D09 program v2 (A61\u2013A64, B-15): one segment per controller with the trajectory exactly as commanded (awm_motion converts deg \u2192 rad for the controllers), hold values of the other axes, weld events only at rest of robot and positioner, context record. Self-contained (B-09). MINOR 2.1 (G1.5, CP-58 / CP-59): controller robot_positioner = one synchronised 7-joint trajectory (positions / velocities / accelerations in the order joint_names.robot then joint_names.positioner, hold_deg empty), positioner_mode on robot_positioner weld segments, collision_checked (required from 2.1; false = kinematic only, every release gate refuses it), optional generator record, event wps_id / preset null = no process assignment (no D06 yet; every release gate refuses it).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -116,8 +116,10 @@
             "type": "string",
             "enum": [
               "robot",
-              "positioner"
-            ]
+              "positioner",
+              "robot_positioner"
+            ],
+            "description": "robot_positioner (MINOR 2.1): one 7-joint trajectory, robot joints then positioner joint"
           },
           "kind": {
             "type": "string",
@@ -199,8 +201,101 @@
               }
             },
             "minItems": 2
+          },
+          "positioner_mode": {
+            "type": "string",
+            "enum": [
+              "sync",
+              "C",
+              "B"
+            ],
+            "description": "MINOR 2.1, weld segments of controller robot_positioner: sync = robot and positioner move together (CP-59), C = robot at rest, B = positioner at rest"
+          },
+          "collision_checked": {
+            "type": "boolean",
+            "description": "MINOR 2.1: false = this segment was not collision-checked (e.g. joint-interpolated air move in Goal 1)"
+          },
+          "arc_index": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "MINOR 2.1: arc of the seam (D04 arcs, CP-53) for approach / weld / retract segments"
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "controller": {
+                  "const": "robot_positioner"
+                }
+              },
+              "required": [
+                "controller"
+              ]
+            },
+            "then": {
+              "properties": {
+                "hold_deg": {
+                  "maxItems": 0
+                },
+                "points": {
+                  "items": {
+                    "properties": {
+                      "positions_deg": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 7,
+                        "maxItems": 7
+                      },
+                      "velocities_deg_s": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 7,
+                        "maxItems": 7
+                      },
+                      "accelerations_deg_s2": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 7,
+                        "maxItems": 7
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "controller": {
+                  "const": "robot_positioner"
+                },
+                "kind": {
+                  "enum": [
+                    "weld",
+                    "positioner_weld"
+                  ]
+                }
+              },
+              "required": [
+                "controller",
+                "kind"
+              ]
+            },
+            "then": {
+              "required": [
+                "positioner_mode"
+              ]
+            }
+          }
+        ]
       },
       "minItems": 1
     },
@@ -237,13 +332,28 @@
             "pattern": "^G[0-9]{3}$"
           },
           "wps_id": {
-            "type": "string",
-            "minLength": 1
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null (MINOR 2.1 only) = no process assignment yet (no D06); release gates refuse it"
           },
           "preset": {
-            "type": "integer",
-            "minimum": 0,
-            "description": "LightWELD preset number (PLC selects it)"
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "LightWELD preset number (PLC selects it); null (MINOR 2.1 only) = no process assignment yet"
           }
         }
       }
@@ -251,6 +361,54 @@
     "cycle_time_s": {
       "type": "number",
       "minimum": 0
+    },
+    "collision_checked": {
+      "type": "boolean",
+      "description": "false = kinematic only, collision not evaluated (Goal 1, CP-58); every release gate refuses it. Required from MINOR 2.1"
+    },
+    "generator": {
+      "type": "object",
+      "required": [
+        "params",
+        "params_sha256"
+      ],
+      "properties": {
+        "params": {
+          "type": "object"
+        },
+        "params_sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        }
+      },
+      "description": "program generator record (MINOR 2.1): parameters (Assumptions), source D07, travel speeds and their source, limits used, checks"
     }
+  },
+  "if": {
+    "properties": {
+      "schema_version": {
+        "const": "2.0"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "events": {
+        "items": {
+          "properties": {
+            "wps_id": {
+              "type": "string"
+            },
+            "preset": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    }
+  },
+  "else": {
+    "required": [
+      "collision_checked"
+    ]
   }
 }
