@@ -46,6 +46,10 @@
                     + str(hy['unit']) + ', frame ' + str(hy['frame']) + ', schema ' + str(hy['schema']))}
     </xacro:unless>
 
+    <xacro:if value="${hy.get('beam_exit_tool0_mm') is None or hy.get('beam_axis_tool0') is None}">
+      ${xacro.fatal(hdir + '/head.yaml: beam_exit_tool0_mm / beam_axis_tool0 missing or null (written by an older '
+                    + 'export-head with a map TCP override); re-run awm_geometry export-head')}
+    </xacro:if>
     <!-- Beam axis (unit), beam exit and tcp_laser in tool0, mm. -->
     <xacro:property name="ax_raw" value="${[float(v) for v in hy['beam_axis_tool0']]}"/>
     <xacro:property name="ax_n" value="${sqrt(ax_raw[0]**2 + ax_raw[1]**2 + ax_raw[2]**2)}"/>

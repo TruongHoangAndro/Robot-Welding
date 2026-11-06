@@ -27,7 +27,14 @@ the map, then recorded as ``method: map`` with the geometric estimate kept for c
   farthest point of the link on that line (line / B-Rep intersection, and the group's own face vertices). Reach =
   largest distance from tool0 of the group's B-Rep vertices and face centroids.
 * ``tcp_laser`` = beam exit + ``nozzle_len_mm`` along the beam (parametric nozzle beyond the CAD, CP-56; 0 if the
-  nozzle is part of the CAD); Z = beam direction, X = tool0 X made orthogonal (ψ sweep absorbs the yaw).
+  nozzle is part of the CAD); Z = beam direction, X = tool0 X made orthogonal (ψ sweep absorbs the yaw). An automatic
+  estimate whose TCP lies behind the flange plane (tool0 z < 0) is refused: that is a cable / connector end, not the
+  nozzle (bug of 2026-11-06); the map must then name the TCP.
+* map override ``frames.tcp.point_file_mm`` / ``axis_file`` (file frame): the TCP itself (nozzle tip + stick-out) and
+  the beam direction out of the nozzle (later taught on the UI, CP-61 draft). It is accepted wherever it lies
+  (recorded, ``behind_flange``); head.yaml then holds ``beam_exit_tool0_mm = tcp - nozzle_len_mm * beam_axis`` so
+  the rule ``tcp = beam_exit + nozzle_len_mm * beam_axis`` (xacro) holds and the parametric collision nozzle ends at
+  the TCP. The automatic estimate is kept beside it for comparison.
 """
 
 from __future__ import annotations
@@ -553,7 +560,7 @@ def extent_behind_body(body: np.ndarray, mount: np.ndarray, exit_tool0: np.ndarr
     return out
 
 
-def _assumptions(cmap: Dict[str, Any], tool0_method: str, tcp_method: str) -> List[str]:
+def _assumptions(cmap: Dict[str, Any], tool0_method: str, tcp_method: str, tcp_behind: bool) -> List[str]:
     t0, tcp = cmap['frames']['tool0'], cmap['frames']['tcp']
     out = []
     if tool0_method == 'map':
@@ -564,7 +571,13 @@ def _assumptions(cmap: Dict[str, Any], tool0_method: str, tcp_method: str) -> Li
         out.append(f"Assumption: tool0 yaw from the flange dowel-pin hole (radius {t0['pin_radius_mm']} mm) on tool0 "
                    f"{t0['pin_axis']} (ur_description wrist3 mesh); the head yaw on the flange is taken as modelled")
     if tcp_method == 'map':
-        out.append('Assumption: tcp_laser from the map (frames.tcp point_file_mm / axis_file); nozzle_len_mm not added')
+        out.append('Assumption: tcp_laser from the map: frames.tcp point_file_mm = nozzle tip + stick-out (TCP), '
+                   'axis_file = beam out of the nozzle (no REF_TCP marker, OI-23; UI teach later, CP-61)')
+        out.append(f"beam_exit_tool0_mm = tcp - nozzle_len_mm ({tcp['nozzle_len_mm']} mm) * beam_axis: the parametric "
+                   'collision nozzle (CP-56) covers the last nozzle_len_mm before the TCP')
+        if tcp_behind:
+            out.append('Warning: the map TCP lies behind the flange plane (tool0 z < 0); accepted because it was set '
+                       'explicitly')
     else:
         out.append('Assumption: beam axis = axis line of the revolved faces of the head body that reach farthest from '
                    'tool0; beam exit = farthest point of the body on that line (no REF_TCP marker, OI-23)')
@@ -655,17 +668,27 @@ def _export_head(step: Path, map_path: Path, root: Path, created_by: str) -> Dic
             raise
         geometry_tcp = exc
     if 'point_file_mm' in tcp_map:
+        # Explicit TCP (later taught on the UI, CP-61 draft): point = nozzle tip + stick-out, axis = beam out of the
+        # nozzle. The beam exit is put nozzle_len_mm behind it, so the head.yaml / xacro rule
+        # tcp = beam_exit + nozzle_len_mm * beam_axis holds and the parametric nozzle ends at the TCP (CP-56).
         point_t0 = (inv @ np.append(_vec3(tcp_map['point_file_mm'], 'frames.tcp.point_file_mm'), 1.0))[:3]
         axis_t0 = inv[:3, :3] @ _unit(tcp_map['axis_file'], 'frames.tcp.axis_file')
         tool0_T_tcp = tcp_pose(point_t0, axis_t0, 0.0)
-        exit_t0 = None
-        est = {'method': 'map'}
+        exit_t0 = point_t0 - nozzle * axis_t0
+        behind = bool(point_t0[2] < 0.0)
+        if behind:
+            LOG.warning('A18 frames.tcp from the map lies behind the flange plane (tool0 z %.3f mm): accepted as '
+                        'set, recorded in head.yaml', point_t0[2])
+        est = {'method': 'map', 'behind_flange': behind, 'tcp_z_tool0_mm': float(point_t0[2])}
         if isinstance(geometry_tcp, tuple):
             g_tcp = tcp_pose(geometry_tcp[0], geometry_tcp[1], nozzle)
             est['geometry_estimate'] = {
+                'tcp_tool0_mm': [float(v) for v in g_tcp[:3, 3]],
+                'beam_axis_tool0': [float(v) for v in geometry_tcp[1]],
                 'tcp_offset_mm': float(np.linalg.norm(g_tcp[:3, 3] - tool0_T_tcp[:3, 3])),
                 'axis_angle_deg': _angle_deg(g_tcp[:3, 2], axis_t0) if g_tcp[:3, 2] @ axis_t0 >= 0
                 else 180.0 - _angle_deg(g_tcp[:3, 2], axis_t0),
+                'behind_flange': bool(g_tcp[2, 3] < 0.0),
                 'residuals': geometry_tcp[2]['residuals']}
         else:
             est['geometry_estimate'] = {'error': str(geometry_tcp)}
@@ -673,8 +696,16 @@ def _export_head(step: Path, map_path: Path, root: Path, created_by: str) -> Dic
     else:
         exit_t0, axis_t0, beam = geometry_tcp
         tool0_T_tcp = tcp_pose(exit_t0, axis_t0, nozzle)
+        if tool0_T_tcp[2, 3] < 0.0:
+            raise HeadError(
+                f'automatic beam estimate puts tcp_laser behind the flange plane (tool0 z {tool0_T_tcp[2, 3]:.3f} mm, '
+                f'beam exit {np.round(exit_t0, 3).tolist()} mm, axis {np.round(axis_t0, 5).tolist()} in tool0): the '
+                'farthest revolved faces are a cable / connector end, not the nozzle. Set the nozzle tip explicitly '
+                'in the map: frames.tcp point_file_mm (TCP, file mm) and axis_file (beam out of the nozzle, file '
+                'frame); later taught on the UI (CP-61)')
         beam_axis = axis_t0
         est = {'method': 'beam_axis', 'beam_link': tcp_map['beam_link'], 'residuals': beam['residuals'],
+               'behind_flange': False,
                'beam_to_tool0_z_deg': float(units.rad_to_deg(np.arccos(np.clip(axis_t0[2], -1.0, 1.0)))),
                'beam_exit_offset_from_tool0_z_mm': float(np.hypot(exit_t0[0], exit_t0[1]))}
         if beam['runner_up'] is not None:
@@ -682,9 +713,8 @@ def _export_head(step: Path, map_path: Path, root: Path, created_by: str) -> Dic
     estimates['tcp'] = est
 
     meshes = {link: link_meshes(shapes[link], file_T_tool0, link) for link in LINKS}
-    reference_exit = exit_t0 if exit_t0 is not None else tool0_T_tcp[:3, 3]
     extent = extent_behind_body(meshes[tcp_map['beam_link']]['verts'], meshes['head_mount']['verts'],
-                                reference_exit, beam_axis)
+                                exit_t0, beam_axis)
 
     # --- all computed and checked: write into a staging folder, then move into place ---------------------------
     out_dir = root / 'cell' / 'model' / HEAD_DIR
@@ -722,12 +752,13 @@ def _export_head(step: Path, map_path: Path, root: Path, created_by: str) -> Dic
             'file_T_tool0_mm': _pose(file_T_tool0),
             'tool0_T_tcp_mm': _pose(tool0_T_tcp),
             'beam_axis_tool0': [float(v) for v in beam_axis],
-            'beam_exit_tool0_mm': None if exit_t0 is None else [float(v) for v in exit_t0],
+            'beam_exit_tool0_mm': [float(v) for v in exit_t0],
             'nozzle_len_mm': nozzle,
             'tcp_rule': 'tcp = beam_exit + nozzle_len_mm * beam_axis (for another nozzle length use the same rule)',
             'links': link_docs,
             'estimates': estimates,
-            'assumptions': _assumptions(cmap, estimates['tool0']['method'], estimates['tcp']['method']),
+            'assumptions': _assumptions(cmap, estimates['tool0']['method'], estimates['tcp']['method'],
+                                        estimates['tcp']['behind_flange']),
             'extent_behind_body_mm': extent,
         })
         miniyaml.dump(doc, stage / 'head.yaml',
