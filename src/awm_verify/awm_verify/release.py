@@ -10,6 +10,7 @@ same, unchanged program.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import stat
@@ -40,6 +41,35 @@ def _lock_tree(root: Path) -> None:
                  stat.S_IROTH | stat.S_IXOTH)
 
 
+#: ADR-17 scopes as amended 2026-11-03 (v2 common.schema scope)
+GATE_SCOPES = ('simulation', 'trial', 'production')
+
+
+def release_gate(program: Dict, scope: str) -> None:
+    """Refuse a v2 program (D09 2.x) that may not be released in ``scope`` — for **every** scope (CP-58, G1.5):
+
+    * ``collision_checked`` not ``true`` (``false`` = kinematic only, Goal 1; absent = never attested);
+    * any segment with ``collision_checked: false`` (e.g. a joint-interpolated air move);
+    * any weld event without a process assignment (``wps_id`` / ``preset`` null: no D06 yet).
+
+    v1 programs (schema 1.x) are not affected: their collision check is the A71 report. Raises ReleaseError."""
+    if scope not in GATE_SCOPES:
+        raise ReleaseError(f'scope must be one of {GATE_SCOPES}, got {scope!r}')
+    if not str(program.get('schema_version', '')).startswith('2.'):
+        return
+    rev = program.get('program_rev', '?')
+    if program.get('collision_checked') is not True:
+        raise ReleaseError(f'program {rev} has collision_checked: {program.get("collision_checked", "absent")} — '
+                           f'kinematic only, collision not checked; no {scope} release (DES-001 rule 4, CP-58)')
+    unchecked = [s['segment_id'] for s in program.get('segments', []) if s.get('collision_checked') is False]
+    if unchecked:
+        raise ReleaseError(f'program {rev}: segments {unchecked} are not collision-checked; no {scope} release')
+    missing = [e['event_id'] for e in program.get('events', []) if e.get('wps_id') is None or e.get('preset') is None]
+    if missing:
+        raise ReleaseError(f'program {rev}: events {missing} have no process assignment (wps_id / preset); '
+                           f'no {scope} release')
+
+
 def is_locked(job: JobPaths, rev: str) -> bool:
     return not os.access(job.program_json(rev), os.W_OK)
 
@@ -54,6 +84,11 @@ def release(job: JobPaths, rev: str, approved_by: str, scope: str, note: str = '
         raise ReleaseError(f'program {rev} not found')
     if is_locked(job, rev):
         raise ReleaseError(f'program {rev} is already released (read-only)')
+    try:
+        raw = json.loads(program.read_text(encoding='utf-8'))
+    except json.JSONDecodeError as exc:
+        raise ReleaseError(f'program {rev} is not valid JSON: {exc}') from exc
+    release_gate(raw, scope)
     jsonio.read_json(program, 'program', base_dir=job.dir)  # inputs unchanged
     program_sha = sha256_file(program)
     report_path = job.report_json(rev)
