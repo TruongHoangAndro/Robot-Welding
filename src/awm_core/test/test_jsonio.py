@@ -199,3 +199,72 @@ def test_v2_path_minor_2_1_sync_and_kinematic_only():
     for pt in old['seams'][0]['points']:
         del pt['status']
     jsonio.validate(old, 'v2/path')
+
+
+def _program_2_1():
+    """2.1 program built from the 2.0 example: one 7-joint robot_positioner trajectory per segment (G1.5)."""
+    import copy
+    v2 = jsonio.SCHEMA_DIR / 'v2' / 'examples'
+    doc = copy.deepcopy(json.loads((v2 / 'program_v2_0.example.json').read_text()))
+    doc['schema_version'] = '2.1'
+    doc['collision_checked'] = False
+    for seg in doc['segments']:
+        hold = seg['hold_deg']
+        seg['controller'] = 'robot_positioner'
+        seg['collision_checked'] = False
+        for pt in seg['points']:
+            if len(pt['positions_deg']) == 1:
+                pt['positions_deg'] = hold + pt['positions_deg']
+            else:
+                pt['positions_deg'] = pt['positions_deg'] + hold
+            pt['velocities_deg_s'] = [0.0] * 7
+            pt['accelerations_deg_s2'] = [0.0] * 7
+        seg['hold_deg'] = []
+        if seg['kind'] in ('weld', 'positioner_weld'):
+            seg['positioner_mode'] = 'C'
+    for ev in doc['events']:
+        ev['wps_id'] = None
+        ev['preset'] = None
+    return doc
+
+
+def test_v2_program_minor_2_1_robot_positioner():
+    """G1.5 (CP-59): controller robot_positioner = 7 values, hold_deg empty, positioner_mode on weld segments,
+    collision_checked required from 2.1, process fields nullable; 2.0 documents stay valid (MINOR)."""
+    import copy
+    v2 = jsonio.SCHEMA_DIR / 'v2' / 'examples'
+    jsonio.validate(json.loads((v2 / 'program_v2_0.example.json').read_text()), 'v2/program')
+    example = json.loads((v2 / 'program.example.json').read_text())
+    assert example['schema_version'] == '2.1' and example['collision_checked'] is False
+    assert {s['controller'] for s in example['segments']} == {'robot_positioner'}
+    jsonio.validate(example, 'v2/program')
+    doc = _program_2_1()
+    jsonio.validate(doc, 'v2/program')
+    bad = copy.deepcopy(doc)
+    del bad['collision_checked']
+    with pytest.raises(SchemaValidationError):
+        jsonio.validate(bad, 'v2/program')
+    bad = copy.deepcopy(doc)
+    bad['segments'][1]['points'][0]['positions_deg'] = bad['segments'][1]['points'][0]['positions_deg'][:6]
+    with pytest.raises(SchemaValidationError):
+        jsonio.validate(bad, 'v2/program')
+    bad = copy.deepcopy(doc)
+    bad['segments'][1]['points'][0]['velocities_deg_s'].append(0.0)
+    with pytest.raises(SchemaValidationError):
+        jsonio.validate(bad, 'v2/program')
+    bad = copy.deepcopy(doc)
+    bad['segments'][1]['hold_deg'] = [0.0]
+    with pytest.raises(SchemaValidationError):
+        jsonio.validate(bad, 'v2/program')
+    bad = copy.deepcopy(doc)
+    weld = next(s for s in bad['segments'] if s['kind'] == 'positioner_weld')
+    del weld['positioner_mode']
+    with pytest.raises(SchemaValidationError):
+        jsonio.validate(bad, 'v2/program')
+    weld['positioner_mode'] = 'robot_only'
+    with pytest.raises(SchemaValidationError):
+        jsonio.validate(bad, 'v2/program')
+    old = json.loads((v2 / 'program_v2_0.example.json').read_text())
+    old['events'][0]['preset'] = None   # null process data only from 2.1
+    with pytest.raises(SchemaValidationError):
+        jsonio.validate(old, 'v2/program')
