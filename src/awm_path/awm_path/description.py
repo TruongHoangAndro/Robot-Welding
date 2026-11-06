@@ -10,7 +10,7 @@ Needs the ROS overlay (xacro, ament index): not part of the pure core (B-06). No
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Dict, Mapping, Optional
 
@@ -23,6 +23,7 @@ from awm_path.core.head import HeadGeometry, head_from_urdf
 from awm_path.core.sync import SyncCell
 
 HEAD_MODELS = ('hcad', 'hbox')
+HEAD_DIR_PLACEHOLDER = '<head_dir>'
 
 
 @dataclass(frozen=True)
@@ -40,11 +41,21 @@ class PlanningDescription:
     kinematics_file: Path
 
     def as_record(self) -> Dict:
-        return {'robot_description_sha256': sha256_text(self.urdf), 'head_model': self.head_model,
-                'xacro_args': dict(sorted(self.mappings.items())), 'head': self.head.as_record(),
+        """Provenance for run records, independent of where the head folder lives (the head content is covered by
+        the head.yaml hash; the folder path is machine-specific)."""
+        args = dict(sorted(self.mappings.items()))
+        if 'head_dir' in args:
+            args['head_dir'] = HEAD_DIR_PLACEHOLDER
+        return {'robot_description_sha256': location_free_urdf_sha256(self.urdf, self.mappings.get('head_dir')),
+                'head_model': self.head_model, 'xacro_args': args, 'head': self.head.as_record(),
                 'cell': self.cell.as_record(), 'frames_yaml_check': self.frame_check,
                 'positioner_limits_sha256': sha256_file(self.positioner_limits_file),
                 'ur_kinematics_sha256': sha256_file(self.kinematics_file)}
+
+
+def location_free_urdf_sha256(urdf: str, head_dir: Optional[str]) -> str:
+    """SHA-256 of the URDF text with the head folder path replaced by a placeholder."""
+    return sha256_text(urdf.replace(head_dir, HEAD_DIR_PLACEHOLDER) if head_dir else urdf)
 
 
 def _share(pkg: str) -> Path:
@@ -78,6 +89,7 @@ def load_planning_description(frames_yaml: Path, head_model: str, head_dir: Opti
         mappings['head_dir'] = str(head_dir)
     urdf = render_cell_urdf(mappings)
     head = head_from_urdf(urdf)
+    head = replace(head, robot_description_sha256=location_free_urdf_sha256(urdf, mappings.get('head_dir')))
     cell = cell_from_urdf(urdf)
     frame_check = check_against_frames(cell, frames_doc)
     lim_file = positioner_limits_path()
