@@ -213,7 +213,8 @@ def write_tree_assembly(path: Union[str, Path], root_name: str, nodes: List[Dict
 
     ``nodes``: list of ``{'name', 'shape' (TopoDS_Shape in mm, leaf) | 'children' (list of nodes),
     'placement_mm' (optional 4x4 rigid transform in the parent, translation in mm)}``. Each instance is named
-    ``<name>:<k>`` (k counts equal names under one parent) and each product ``<name>``, as a Fusion export does.
+    ``<name>:<k>`` (k counts equal names under one parent; a node's ``instance_name`` overrides it) and each
+    product ``<name>``, as a Fusion export does.
     A leaf shape may be a solid or a compound of open faces (surface model).
     """
     from OCC.Core.IFSelect import IFSelect_RetDone
@@ -245,7 +246,7 @@ def write_tree_assembly(path: Union[str, Path], root_name: str, nodes: List[Dict
             inst = tool.AddComponent(parent, label, TopLoc_Location() if placement is None
                                      else TopLoc_Location(_trsf(placement)))
             seen[node['name']] = seen.get(node['name'], 0) + 1
-            name(inst, f"{node['name']}:{seen[node['name']]}")
+            name(inst, node.get('instance_name') or f"{node['name']}:{seen[node['name']]}")
 
     root = tool.NewShape()
     name(root, root_name)
@@ -309,3 +310,41 @@ def job_assembly_nodes(group_placement_mm: Optional[Sequence[Sequence[float]]] =
             {'name': 'Holder', 'shape': box_mm((100.0, c[1] - 70.0, 140.0), (110.0, c[1] - 50.0, 160.0))}]},
         {'name': 'Robot', 'shape': box_mm((-300.0, 0.0, 0.0), (-200.0, 100.0, 400.0))},
     ]
+
+
+def make_job_step(cell_step: Union[str, Path], names: Sequence[str], out: Union[str, Path],
+                  transform_mm: Optional[Sequence[Sequence[float]]] = None) -> Dict:
+    """Test / demo data (CP-60): a job STEP with the named top components of a cell STEP, keeping instance names,
+    the component tree and the file placements; ``transform_mm`` (4x4) moves the whole file (another origin / up axis).
+    Output STEP files are inputs: never committed.
+    """
+    import numpy as np
+    from OCC.Core.TopLoc import TopLoc_Location
+
+    from awm_geometry import assembly
+
+    tree, _unit = assembly.component_tree(cell_step, cylinders=False, shapes=True)
+    kids: Dict[int, List[int]] = {}
+    for n in tree:
+        if n['parent'] is not None:
+            kids.setdefault(n['parent'], []).append(n['index'])
+
+    def build(i: int, placement) -> Dict:
+        n = tree[i]
+        node = {'name': n['product_name'] or n['instance_name'].split(':')[0], 'instance_name': n['instance_name'],
+                'placement_mm': placement}
+        if n['is_assembly']:
+            node['children'] = [build(c, tree[c]['local_placement_mm']) for c in kids.get(i, [])]
+        else:
+            node['shape'] = n['_shape'].Located(TopLoc_Location())
+        return node
+
+    t = np.eye(4) if transform_mm is None else np.asarray(transform_mm, dtype=float)
+    nodes = []
+    for name in names:
+        hits = [n['index'] for n in tree if n['parent'] is not None and n['instance_name'] == name]
+        if len(hits) != 1:
+            raise GeometryError(f'{name!r} matches {len(hits)} components of {cell_step} (expected 1)')
+        nodes.append(build(hits[0], (t @ np.asarray(tree[hits[0]]['placement_mm'], dtype=float)).tolist()))
+    write_tree_assembly(out, 'job', nodes)
+    return {'out': str(out), 'components': list(names)}

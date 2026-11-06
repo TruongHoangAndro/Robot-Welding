@@ -21,7 +21,9 @@ import numpy as np
 from OCC.Core.BRep import BRep_Tool
 from OCC.Core.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
 from OCC.Core.BRepGProp import BRepGProp_Face, brepgprop
+from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeFace
 from OCC.Core.BRepMesh import BRepMesh_IncrementalMesh
+from OCC.Core.BRepTools import breptools
 from OCC.Core.GCPnts import GCPnts_AbscissaPoint, GCPnts_QuasiUniformDeflection
 from OCC.Core.GProp import GProp_GProps
 from OCC.Core.TopAbs import (TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED, TopAbs_SOLID,
@@ -46,6 +48,9 @@ FACE_LINEAR_DEFLECTION_MM = 0.05
 FACE_ANGULAR_DEFLECTION_DEG = 5.0
 EDGE_CHORD_MM = 0.05            # contract maximum (D20: chord <= 0.05 mm)
 JOINT_TOL_MM = 0.05             # coincidence tolerance of joint edges (as test_joints_occ)
+#: Face-alone retries of a face the shape mesher left empty (same chord, coarser angle), as the scene export.
+RETRY_ANGULAR_DEG = (20.0, 30.0, 45.0, 60.0)
+REBUILD_AREA_REL = 0.01         # a face rebuilt from its UV bounds must keep its area within 1 %
 JOINT_PROBE_MM = 0.5            # probe distance for the exterior-face test of a joint
 G1_TOL_DEG = 1.0                # tangent continuity between edges at a shared vertex
 PREVIEW_FRACTIONS = (0.0, 0.25, 0.5, 0.75)
@@ -118,6 +123,46 @@ def face_mesh(face) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         norm = np.linalg.norm(normal)
         normals[i] = normal / norm if norm > 0 else (0.0, 0.0, 1.0)
     return pos, normals, idx.astype(np.uint32)
+
+
+def _rebuilt_mesh(face) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """Mesh of a face rebuilt on its own surface from its UV bounds (real CAD: full-turn cones BRepMesh never
+    meshes); None unless the rebuilt face keeps the area."""
+    from awm_geometry import topology as topo_mod
+
+    umin, umax, vmin, vmax = breptools.UVBounds(face)
+    maker = BRepBuilderAPI_MakeFace(BRep_Tool.Surface(face), umin, umax, vmin, vmax, 1e-10)
+    if not maker.IsDone():
+        return None
+    rebuilt = maker.Face()
+    rebuilt.Orientation(face.Orientation())
+    area, area_new = topo_mod.face_area(face), topo_mod.face_area(rebuilt)
+    if area <= 0 or abs(area_new - area) > REBUILD_AREA_REL * area:
+        return None
+    BRepMesh_IncrementalMesh(rebuilt, units.mm_to_m(FACE_LINEAR_DEFLECTION_MM), False,
+                             units.deg_to_rad(FACE_ANGULAR_DEFLECTION_DEG), False).Perform()
+    try:
+        return face_mesh(rebuilt)
+    except GeometryError:
+        return None
+
+
+def mesh_face(face) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """Display mesh of a face: the shape mesh, else the face alone at the same chord with coarser angles, else the
+    face rebuilt from its UV bounds; None if none works."""
+    try:
+        return face_mesh(face)
+    except GeometryError:
+        pass
+    for deg in RETRY_ANGULAR_DEG:
+        breptools.Clean(face)
+        BRepMesh_IncrementalMesh(face, units.mm_to_m(FACE_LINEAR_DEFLECTION_MM), False, units.deg_to_rad(deg),
+                                 False).Perform()
+        try:
+            return face_mesh(face)
+        except GeometryError:
+            continue
+    return _rebuilt_mesh(face)
 
 
 def edge_polyline(edge: TopoDS_Edge, chord: float) -> np.ndarray:
@@ -290,6 +335,7 @@ def export(loaded: LoadedPart, step: Path, component_name: Optional[str], up_axi
         return shells[0]
 
     face_docs = []
+    gaps: List[str] = []
     for i in range(1, model.faces.Size() + 1):
         face = topods.Face(model.faces.FindKey(i))
         owner = face_owner.get(i)
@@ -298,10 +344,16 @@ def export(loaded: LoadedPart, step: Path, component_name: Optional[str], up_axi
         area_mm2 = units.m_to_mm(units.m_to_mm(topology.face_area(face)))
         face_docs.append({'face_id': fid, 'solid_id': sid, 'surface_type': stype,
                           'area_mm2': area_mm2})
-        try:
-            pos, nor, idx = face_mesh(face)
-        except GeometryError as exc:
-            raise GeometryError(f'{fid}: {exc}') from exc
+        meshed = mesh_face(face)
+        if meshed is None:
+            if comps is None:
+                raise GeometryError(f'{fid}: face has no triangulation')
+            LOG.warning('%s (%s): no display mesh after retries; listed in display_gaps', fid,
+                        solid_docs[owner - 1].get('component_path') if owner else 'shell')
+            gaps.append(fid)
+            glb.add_node(fid, _parent(owner), None, extras={'face_id': fid, 'solid_id': sid})
+            continue
+        pos, nor, idx = meshed
         mesh = glb.add_triangles(fid, units.m_to_mm(pos), nor, idx)
         glb.add_node(fid, _parent(owner), mesh, extras={'face_id': fid, 'solid_id': sid})
 
@@ -339,6 +391,8 @@ def export(loaded: LoadedPart, step: Path, component_name: Optional[str], up_axi
                          'edge_chord_mm': EDGE_CHORD_MM},
         'solids': solid_docs, 'faces': face_docs, 'edges': edge_docs, 'joints': joint_docs,
     })
+    if gaps:
+        doc['display_gaps'] = gaps
     jsonio.validate(doc, 'view_topology')
     out_dir.mkdir(parents=True, exist_ok=True)
     glb_path = out_dir / 'view.glb'

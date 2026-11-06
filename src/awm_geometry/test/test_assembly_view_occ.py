@@ -61,3 +61,30 @@ def test_shell_faces_exported_with_null_solid(tmp_path, occ):
     topo = json.loads((out / 'topology.json').read_text())
     assert any(f['solid_id'] is None for f in topo['faces'])
     assert any(e['solid_id'] is None and e['curve_type'] == 'circle' for e in topo['edges'])
+
+
+def test_untriangulated_face_is_a_listed_display_gap(job_assembly, tmp_path, monkeypatch):
+    """A face BRepMesh cannot mesh (real CAD: small full-turn cones of the pulleys) is exported without a display
+    mesh and listed in display_gaps in components mode; edges and ids are unchanged."""
+    from awm_geometry import cli, view
+    from awm_geometry.occ_io import GeometryError
+
+    job, topo, _tree = job_assembly
+    real = view.face_mesh
+    calls = {'n': 0}
+
+    def flaky(face):
+        calls['n'] += 1
+        if calls['n'] == 2:                                   # the second face never meshes
+            raise GeometryError('face has no triangulation')
+        return real(face)
+
+    monkeypatch.setattr(view, 'face_mesh', flaky)
+    monkeypatch.setattr(view, 'RETRY_ANGULAR_DEG', ())       # no retry succeeds either
+    monkeypatch.setattr(view, '_rebuilt_mesh', lambda face: None)
+    out = tmp_path / 'view'
+    assert cli.main(['export-view', '--step', str(job.model_step), '--components', '--up-axis', '+Z',
+                     '--out', str(out)]) == 0
+    doc = json.loads((out / 'topology.json').read_text())
+    assert doc['display_gaps'] == ['F2']
+    assert [e['edge_id'] for e in doc['edges']] == [e['edge_id'] for e in topo['edges']]

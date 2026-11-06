@@ -298,6 +298,13 @@
           }
         }
       }
+    },
+    "display_gaps": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/face_id"
+      },
+      "description": "CP-60 components mode: faces exported without a display mesh (BRepMesh failed after retries); display only, ids unchanged"
     }
   }
 }

@@ -96,3 +96,20 @@ def test_template_round_trip_skips_ambiguous_names(tree_dup):
     assert tpl['version'] == 1 and tpl['roles'] == {'X': 'rotary_fixture'}   # Holder:1 occurs twice
     assert apply_template(tree_dup, {'version': 1, 'roles': {'X': 'rotary_fixture', 'Holder:1': 'part'}}) == [
         {'path': 'X', 'role': 'rotary_fixture'}]
+
+
+def test_uniform_nodes_skip_mixed_assemblies(tree_small):
+    from awm_core.cad_roles import uniform_nodes
+
+    eff = effective_roles(tree_small, [{'path': 'A / B', 'role': 'part'}])   # A static (default), B part, C static
+    assert [rel_paths(tree_small)[i] for i in uniform_nodes(tree_small, eff, 'static')] == ['R', 'A / C', 'D', 'E']
+
+
+def test_role_of_path_longest_prefix():
+    from awm_core.cad_roles import role_of_path
+
+    a = [{'path': 'Fix:1', 'role': 'rotary_fixture'}, {'path': 'Fix:1 / Pipe:1', 'role': 'part'}]
+    assert role_of_path('Fix:1 / Pipe:1 / body', a) == 'part'
+    assert role_of_path('Fix:1 / Holder:1', a) == 'rotary_fixture'
+    assert role_of_path('Fix:10 / X', a) == 'static'          # no prefix match on 'Fix:1'
+    assert role_of_path('Other:1', a) == 'static'

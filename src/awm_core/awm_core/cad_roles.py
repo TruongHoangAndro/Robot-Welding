@@ -63,6 +63,42 @@ def nodes_with_role(tree: Tree, eff: Dict[int, str], role: str) -> List[int]:
             and (tree[n['parent']]['parent'] is None or eff[n['parent']] != role)]
 
 
+def role_of_path(path: str, assignments: List[Dict[str, str]]) -> str:
+    """Effective role of a component path from the assignments alone (longest assigned ancestor path, else
+    ``static``); used where only D20 component paths are at hand (awm_seam)."""
+    best, role = -1, 'static'
+    for a in assignments:
+        p = a['path']
+        if (path == p or path.startswith(p + ' / ')) and len(p) > best:
+            best, role = len(p), a['role']
+    return role
+
+
+def uniform_nodes(tree: Tree, eff: Dict[int, str], role: str) -> List[int]:
+    """Top-most nodes whose whole subtree has ``role`` (an assembly with mixed descendants is split)."""
+    kids: Dict[int, List[int]] = {}
+    for n in tree:
+        if n['parent'] is not None:
+            kids.setdefault(n['parent'], []).append(n['index'])
+
+    def uniform(i: int) -> bool:
+        return eff[i] == role and all(uniform(c) for c in kids.get(i, []))
+
+    out: List[int] = []
+
+    def walk(i: int) -> None:
+        if uniform(i):
+            out.append(i)
+        else:
+            for c in kids.get(i, []):
+                walk(c)
+
+    for n in tree:
+        if n['parent'] is not None and tree[n['parent']]['parent'] is None:
+            walk(n['index'])
+    return out
+
+
 def robot_node(tree: Tree, eff: Dict[int, str]) -> Optional[int]:
     """The single top-most ``robot`` node, None if there is none (validate_roles reports more than one)."""
     hits = nodes_with_role(tree, eff, 'robot')
@@ -168,3 +204,18 @@ def from_cad_map(tree: Tree, cmap: Dict[str, Any]) -> List[Dict[str, str]]:
             raise ValueError(f'frames.ur_base.component {robot!r} matches {len(hits)} components (expected 1)')
         out[rel[hits[0]]] = 'robot'
     return [{'path': p, 'role': r} for p, r in out.items()]
+
+
+# --- file layout of the CP-60 imports (relative to the repository root / the job folder) -------------------------
+CELL_CAD_DIR = ('cell', 'cad')
+CELL_STEP = 'cell.step'
+CELL_TREE = 'cell_components.json'
+ROLES_FILE = 'roles.json'
+AXIS_FILE = 'axis_pick.json'
+CELL_MAP = 'cad_map.yaml'
+TEMPLATE_FILE = ('cell', 'roles_template.json')
+JOB_TREE = ('cache', 'components.json')
+CHECK_FILE = 'cad_check.json'
+#: Cross-check tolerances of checks 1-3 (decided 2026-11-06, = F8: both sides are nominal CAD).
+CHECK_TOL_MM = 0.05
+CHECK_TOL_DEG = 0.1

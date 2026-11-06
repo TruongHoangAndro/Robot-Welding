@@ -72,8 +72,8 @@ def compile_cad_map(tree: List[Dict[str, Any]], roles: Dict[str, Any], pick: Dic
         if n['parent'] is not None and tree[n['parent']]['parent'] is None:
             emit(n['index'])
     own = {a['path'] for a in assignments}
-    report = {'excluded': [rel[i] for i in cad_roles.nodes_with_role(tree, eff, cad_roles.EXCLUDE)],
-              'unassigned_static': [rel[i] for i in cad_roles.nodes_with_role(tree, eff, 'static')
+    report = {'excluded': [rel[i] for i in cad_roles.uniform_nodes(tree, eff, cad_roles.EXCLUDE)],
+              'unassigned_static': [rel[i] for i in cad_roles.uniform_nodes(tree, eff, 'static')
                                     if rel[i] not in own]}
     src = roles['source']
     cmap: Dict[str, Any] = {

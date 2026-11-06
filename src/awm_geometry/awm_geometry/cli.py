@@ -19,13 +19,17 @@ Commands (lengths in metres, except export-view: mm per the D20 contract):
   export-cell-view --step FILE --components FILE.json --out DIR --up-axis AXIS
                                              S10-lite display model DIR/cell_view.glb (one node per leaf
                                              component, file frame, mm; contract S10_lite_cell_model.md)
-  export-head --step FILE --map MAP.yaml --repo DIR
+  export-head --step FILE --map MAP.yaml --repo DIR [--tcp-component NAME --tcp-edge E<n> [--tcp-reverse]
+              [--stickout-mm 0] [--taught-by USER]]
                                              A18 H-CAD head (mm, tool0 frame): cell/model/head/ meshes +
                                              hulls + head.yaml (tool0 / tcp_laser estimate, S.5c)
   pick-circle --step FILE [--component NAME | --components] --edge E<n> [--reverse] --up-axis A --out FILE.json
                                              CP-60 / CP-61: centre, axis, radius of a circular D20 edge (file mm)
   apply-roles --step FILE --tree FILE.json --roles roles.json --axis axis_pick.json --out cad_map.yaml
                                              CP-60 cell import: roles + axis pick -> role map for export-scene
+  job-placement --repo DIR --job JOB          CP-60 job import: placement.json (source job_cad) + cad_check.json
+  make-job-step --step CELL --components NAME... --out F.step [--transform x y z rx ry rz]
+                                             CP-60 test / demo data: job STEP cut from the cell CAD
   inspect-assembly --step FILE --out FILE.json [--no-cylinders]
                                              A18 input: component tree of a STEP assembly (paths,
                                              names, placements 4x4 and bboxes in mm, file frame)
@@ -227,7 +231,13 @@ def cmd_export_scene(args) -> dict:
 def cmd_export_head(args) -> dict:
     from awm_geometry import head
 
-    return head.export_head(Path(args.step), Path(args.map), Path(args.repo), _created_by())
+    teach = None
+    if args.tcp_edge or args.tcp_component:
+        if not (args.tcp_edge and args.tcp_component):
+            raise ValueError('TCP teach needs --tcp-component and --tcp-edge')
+        teach = {'component': args.tcp_component, 'edge_id': args.tcp_edge, 'reverse': args.tcp_reverse,
+                 'stickout_mm': args.stickout_mm, 'taught_by': args.taught_by}
+    return head.export_head(Path(args.step), Path(args.map), Path(args.repo), _created_by(), teach)
 
 
 def cmd_apply_roles(args) -> dict:
@@ -250,6 +260,24 @@ def cmd_apply_roles(args) -> dict:
                                     'positioner-axis pick (CP-60); do not edit, edit the roles instead.')
     scene.load_map(out, step)  # schema, coverage rules and hash, as export-scene will read it
     return {'out': str(out), **report}
+
+
+def cmd_job_placement(args) -> dict:
+    from awm_geometry import job_placement
+
+    return job_placement.run(Path(args.repo), args.job, _created_by(), chord_near_mm=args.chord_near_mm,
+                             chord_far_mm=args.chord_far_mm, padding_mm=args.padding_mm)
+
+
+def cmd_make_job_step(args) -> dict:
+    from awm_core import frames as fr
+    from awm_geometry import testparts
+
+    t = None
+    if args.transform:
+        x, y, z, rx, ry, rz = args.transform
+        t = fr.xyz_rpy_to_matrix([x, y, z], [units.deg_to_rad(v) for v in (rx, ry, rz)]).tolist()
+    return testparts.make_job_step(Path(args.step), args.components, Path(args.out), t)
 
 
 def cmd_pick_circle(args) -> dict:
@@ -326,6 +354,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--step', required=True, help='head CAD STEP assembly (robot arm + mount + LightWELD head)')
     p.add_argument('--map', required=True, help='head map cad_map_head.yaml (components, links, frame rules)')
     p.add_argument('--repo', required=True, help='repository root (cell/model/head is written)')
+    p.add_argument('--tcp-component', default=None, help='CP-61 teach: component of the nozzle-mouth circle')
+    p.add_argument('--tcp-edge', default=None, help='CP-61 teach: edge id E<n> of export-view --component')
+    p.add_argument('--tcp-reverse', action='store_true', help='CP-61 teach: flip the beam axis')
+    p.add_argument('--stickout-mm', type=float, default=0.0, help='CP-61 teach: TCP beyond the mouth along the beam')
+    p.add_argument('--taught-by', default=None, help='CP-61 teach: user name recorded in head.yaml')
+    p = sub.add_parser('job-placement')
+    p.add_argument('--repo', required=True, help='repository root (cell/cad, cell/model, jobs/<job>)')
+    p.add_argument('--job', required=True, help='job folder name <PartNo>_<PartRev>')
+    p.add_argument('--chord-near-mm', type=float, default=0.1)
+    p.add_argument('--chord-far-mm', type=float, default=0.5)
+    p.add_argument('--padding-mm', type=float, default=3.0, help='padding of the job rotary_fixture hulls (D16)')
+    p = sub.add_parser('make-job-step')
+    p.add_argument('--step', required=True, help='cell STEP assembly')
+    p.add_argument('--components', nargs='+', required=True, help='instance names of the top components to copy')
+    p.add_argument('--out', required=True, help='job STEP (test / demo data, never committed)')
+    p.add_argument('--transform', nargs=6, type=float, metavar=('X', 'Y', 'Z', 'RX', 'RY', 'RZ'),
+                   help='move the whole file: mm and deg (URDF rpy)')
     p = sub.add_parser('apply-roles')
     p.add_argument('--step', required=True, help='cell STEP assembly')
     p.add_argument('--tree', required=True, help='cell_components.json of inspect-assembly')
@@ -353,7 +398,8 @@ def build_parser() -> argparse.ArgumentParser:
 COMMANDS = {'info': cmd_info, 'import': cmd_import, 'sample': cmd_sample,
             'make-test-part': cmd_make_test_part, 'sample-joints': cmd_sample_joints, 'export-view': cmd_export_view,
             'inspect-assembly': cmd_inspect_assembly, 'export-scene': cmd_export_scene,
-            'export-cell-view': cmd_export_cell_view, 'pick-circle': cmd_pick_circle, 'apply-roles': cmd_apply_roles, 'export-head': cmd_export_head}
+            'export-cell-view': cmd_export_cell_view, 'pick-circle': cmd_pick_circle, 'apply-roles': cmd_apply_roles, 'job-placement': cmd_job_placement,
+            'make-job-step': cmd_make_job_step, 'export-head': cmd_export_head}
 
 
 def main(argv: Optional[List[str]] = None) -> int:

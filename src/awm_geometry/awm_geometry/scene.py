@@ -39,7 +39,7 @@ import os
 import re
 import shutil
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
 
 import numpy as np
 from OCC.Core.BRep import BRep_Tool
@@ -386,13 +386,21 @@ def _solid_volume_mm3(shape: TopoDS_Shape) -> float:
     return abs(float(props.Mass()))
 
 
-def part_collision_mesh(shape_m: TopoDS_Shape, chord_near_mm: float, chord_far_mm: float
-                        ) -> Tuple[np.ndarray, np.ndarray, List[Dict[str, Any]]]:
+def part_collision_mesh(shape_m: TopoDS_Shape, chord_near_mm: float, chord_far_mm: float,
+                        solids: Optional[Set[int]] = None) -> Tuple[np.ndarray, np.ndarray, List[Dict[str, Any]]]:
     """Part collision mesh in mm with the chord ``chord_near_mm`` on the faces at joint edges and
     ``chord_far_mm`` elsewhere. Returns ``(vertices, triangles, face records)``; triangles are grouped per face in
     ``F<n>`` order (D20 ids), each record ``{face_id, first_triangle, triangle_count, near_joint, deflection_mm}``.
+    ``solids`` (1-based B ids, CP-60 job file): only the faces of these solids, keeping the ids of the whole shape.
     """
     faces = topology.index_map(shape_m, TopAbs_FACE)
+    keep: Optional[Set[int]] = None
+    if solids is not None:
+        smap = topology.index_map(shape_m, TopAbs_SOLID)
+        keep = set()
+        for b in solids:
+            sub = topology.index_map(smap.FindKey(b), TopAbs_FACE)
+            keep.update(faces.FindIndex(sub.FindKey(k)) for k in range(1, sub.Size() + 1))
     ancestors = TopTools_IndexedDataMapOfShapeListOfShape()
     topexp.MapShapesAndAncestors(shape_m, TopAbs_EDGE, TopAbs_FACE, ancestors)
     near = set()
@@ -412,6 +420,8 @@ def part_collision_mesh(shape_m: TopoDS_Shape, chord_near_mm: float, chord_far_m
     verts, tris, records = [], [], []
     n_verts = n_tris = 0
     for i in range(1, faces.Size() + 1):
+        if keep is not None and i not in keep:
+            continue
         pos, idx, deflection = _face_triangles(topods.Face(faces.FindKey(i)))
         count = 0 if idx is None else len(idx)
         if count == 0:
