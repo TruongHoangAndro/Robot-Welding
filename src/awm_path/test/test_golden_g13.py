@@ -3,7 +3,9 @@
 Golden data only through environment variables (skipped with the reason when unset): ``AWM_SPIKE_REPO`` (repository
 root with cell/model/frames.yaml, cell/model/head/ and jobs/<job>/), ``AWM_SPIKE_JOB`` (default 564082_A),
 ``AWM_SPIKE_J1`` / ``AWM_SPIKE_J2`` (joint edge ids, default JE2 / JE4 = the spike record) and ``AWM_OCC_PYTHON``
-(OCC sampler for the seams). The spike files are linked into a temporary repository, never written.
+(OCC sampler for the seams). The spike files are linked into a temporary repository, never written; the files a
+D07 / D09 records as inputs (part.json, placement.json, the head folder) are copied instead, because inputs that
+resolve outside the repository are refused (G1.17, ``awm_core.staleness``).
 
 Acceptance (master plan G1.3): every arc 100 % in its mode or rejected with failing s ranges and reasons; |Δq| ≤ 5°
 on all 7 joints; FK of q reproduces the planned TCP pose (sync ≤ 0.01 mm / 0.01°, Mode C within the F8 tolerance of
@@ -27,8 +29,10 @@ from awm_core import frames, jsonio, occ_bridge, units  # noqa: E402
 
 pytest.importorskip('xacro', reason='xacro not available (run inside awm_dev)')
 
-_JOB_FILES = ('model.step', 'part.json', 'placement.json', 'cache/model.brep', 'cache/collision.stl',
-              'cache/collision_faces.json', 'cache/view/topology.json')
+_JOB_FILES = ('model.step', 'cache/model.brep', 'cache/collision.stl', 'cache/collision_faces.json',
+              'cache/view/topology.json')
+#: Recorded as inputs of seam_axis.json / D07 / D09: copied into the temporary repository (G1.17).
+_JOB_COPIES = ('part.json', 'placement.json')
 
 
 def _repo(tmp_path: Path, modes):
@@ -45,10 +49,12 @@ def _repo(tmp_path: Path, modes):
     (dst / 'cache' / 'view').mkdir(parents=True)
     for rel in _JOB_FILES:
         os.symlink(src / rel, dst / rel)
+    for rel in _JOB_COPIES:
+        shutil.copyfile(src / rel, dst / rel)
     model = tmp_path / 'repo' / 'cell' / 'model'
     model.mkdir(parents=True)
     shutil.copyfile(src_repo / 'cell' / 'model' / 'frames.yaml', model / 'frames.yaml')
-    os.symlink(src_repo / 'cell' / 'model' / 'head', model / 'head')
+    shutil.copytree(src_repo / 'cell' / 'model' / 'head', model / 'head')
     topo = json.loads((dst / 'cache' / 'view' / 'topology.json').read_text())
     joints = {j['joint_edge_id']: j for j in topo['joints']}
     ids = (os.environ.get('AWM_SPIKE_J1', 'JE2'), os.environ.get('AWM_SPIKE_J2', 'JE4'))

@@ -10,7 +10,15 @@ Contract agreed with the web agent (``awm_api`` planner adapter, G1.4)::
   exit 1 = refused, nothing written, one ``error: …`` message on stderr. Refusals: ``--collision on`` (Goal 2),
   stale ``seam_axis.json`` (``awm_seam.seam_axis.read_seam_axis``), unknown seam id, description / limits
   disagreement, H-CAD head folder missing;
-* ``--out`` receives D07 v2 MINOR 2.1 with ``collision_checked: false`` (validated before it is written).
+* ``--out`` receives D07 v2 MINOR 2.1 with ``collision_checked: false`` (validated before it is written) and
+  ``planner.params.record_version`` = ``awm_core.staleness.PLANNER_RECORD_VERSION`` (G1.17);
+* inputs (seam_axis.json, seams.json, placement.json, frames.yaml, head.yaml) must resolve inside the repository
+  root, symlinks followed: an input outside it (e.g. a head folder linked to another repository) is refused before
+  planning (G1.17, ``awm_core.staleness``), so every reader gives the same verdict.
+
+``python3 -m awm_path.cli check --job <dir> [--path <file>]`` prints the problems and ``state <ok|stale|missing>`` of
+a D07 by the shared staleness rule (``awm_core.staleness.document_verdict``; the same rule ``awm_program`` and
+``awm_api`` use); exit 0 = ok, 1 = stale or missing.
 
 The robot description is rendered from xacro with the ``frames.yaml`` pose arguments and ``head_model`` /
 ``head_dir`` (no running simulation, no rclpy). Defaults (recorded in ``planner.params``): head model ``hcad``
@@ -30,7 +38,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
-from awm_core import jsonio
+from awm_core import jsonio, staleness
 from awm_core.hashing import sha256_file, sha256_text
 from awm_core.repository import JobPaths
 
@@ -94,7 +102,22 @@ def _parser() -> argparse.ArgumentParser:
     pl.add_argument('--head-dir', default=None, help='H-CAD head folder (default <repo>/cell/model/head)')
     pl.add_argument('--travel-speed-mm-s', type=float, default=DEFAULT_TRAVEL_SPEED_MM_S,
                     help='travel speed relative to the part (Assumption default until D06 v2)')
+    ck = sub.add_parser('check', help='staleness verdict of a D07 by the shared rule (awm_core.staleness)')
+    ck.add_argument('--job', required=True, help='job folder <repo>/jobs/<part>_<rev>')
+    ck.add_argument('--path', default=None, help='D07 file (default <job>/path.json)')
     return p
+
+
+def check(args: argparse.Namespace) -> int:
+    """Print the shared staleness verdict of a D07; exit 0 = ok, 1 = stale or missing."""
+    job = JobPaths(Path(args.job).resolve())
+    path_file = Path(args.path).resolve() if args.path else job.path_json
+    verdict = staleness.document_verdict(job.dir, str(path_file), job.repo.root)
+    for problem in verdict.problems:
+        sys.stdout.write(f'problem {problem}\n')
+    sys.stdout.write(f'state {verdict.state}\n')
+    sys.stdout.flush()
+    return EXIT_OK if verdict.ok else EXIT_REFUSED
 
 
 def _context(desc, frames_yaml: Path, head_hash: str, git: Dict) -> Dict:
@@ -128,6 +151,11 @@ def plan(args: argparse.Namespace) -> int:
     if not job.dir.is_dir():
         raise Refused(f'job folder not found: {job.dir}')
     progress(0.0, 'reading seam_axis.json')
+    axis_verdict = staleness.document_verdict(job.dir, 'seam_axis.json', job.repo.root)
+    if axis_verdict.state == staleness.STALE:
+        raise Refused('seam_axis.json is stale (seams, placement or cell frames changed since it was built, or an '
+                      f'input outside the repository): {"; ".join(axis_verdict.problems)}\n'
+                      'rebuild seam_axis.json (save the seams again) and re-plan')
     try:
         axis_doc = seam_axis.read_seam_axis(job)
         seams_doc = joint_seams.load_seams(job)
@@ -149,6 +177,15 @@ def plan(args: argparse.Namespace) -> int:
 
     frames_yaml = seam_axis.frames_path(job)
     head_dir = args.head_dir or (str(job.repo.cell_dir / 'model' / 'head') if args.head_model == 'hcad' else None)
+    inputs = [job.dir / 'seam_axis.json', job.seams_json, seam_axis.placement_path(job), frames_yaml]
+    if args.head_model == 'hcad':
+        inputs.append(Path(head_dir) / 'head.yaml')
+    outside = staleness.outside_repo(inputs, job.repo.root)
+    if outside:
+        raise Refused('input(s) outside the repository ' + str(job.repo.root.resolve()) + ': '
+                      + ', '.join(f'{p} -> {p.resolve()}' for p in outside)
+                      + '; a D07 records only inputs inside the repository so that every reader (awm_program, '
+                        'awm_api) can check them; replace the link by a copy (e.g. cp -rL) and plan again')
     progress(0.02, f'rendering the robot description (head_model {args.head_model})')
     from awm_path.description import load_planning_description
     try:
@@ -183,15 +220,12 @@ def plan(args: argparse.Namespace) -> int:
         cb(1.0, f'{seam["seam_id"]} arc {arc.index}/{arc.of}: '
                 + ('accepted' if res.ok else f'rejected ({res.reason})'))
 
-    inputs = [job.dir / 'seam_axis.json', job.seams_json, seam_axis.placement_path(job), frames_yaml]
     head_hash = sha256_text(json.dumps(desc.head.as_record(), sort_keys=True, default=str))
     if args.head_model == 'hcad':
-        head_yaml = Path(head_dir) / 'head.yaml'
-        inputs.append(head_yaml)
-        head_hash = sha256_file(head_yaml)
+        head_hash = sha256_file(Path(head_dir) / 'head.yaml')
     header = jsonio.make_header(CREATED_BY, inputs, job.dir)
     header['run_id'] = _run_id(header['created_at'])
-    run_params = {'collision': 'off', 'travel_speed_mm_s': args.travel_speed_mm_s,
+    run_params = {staleness.RECORD_VERSION_KEY: staleness.PLANNER_RECORD_VERSION, 'collision': 'off', 'travel_speed_mm_s': args.travel_speed_mm_s,
                   'travel_speed_source': 'cli default (Assumption)'
                   if args.travel_speed_mm_s == DEFAULT_TRAVEL_SPEED_MM_S else 'cli argument',
                   'head_model': args.head_model, 'seams': wanted, 'sync': params.record(),
@@ -215,7 +249,7 @@ def plan(args: argparse.Namespace) -> int:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = _parser().parse_args(list(argv) if argv is not None else None)
     try:
-        return plan(args)
+        return check(args) if args.cmd == 'check' else plan(args)
     except Refused as exc:
         sys.stderr.write(f'error: {exc}\n')
         sys.stderr.flush()

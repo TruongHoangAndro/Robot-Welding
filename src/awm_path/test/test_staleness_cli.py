@@ -1,0 +1,146 @@
+"""G1.17 (close-out A3): the planner CLI and the shared staleness rule (``awm_core.staleness``).
+
+* inputs that resolve outside the repository (a head folder linked out of it, ``--head-dir`` outside) are refused
+  at plan time, nothing written;
+* a D07 records ``planner.params.record_version`` and is ``ok`` by the shared rule right after planning;
+* ``awm_path.cli check`` prints the shared verdict;
+* guard: the head / description / sync record key sets are pinned to ``PLANNER_RECORD_VERSION``.
+Needs the robot description (xacro, ament share): runs inside awm_dev (``scripts/dx``)."""
+import contextlib
+import io
+import json
+import os
+import shutil
+import sys
+from pathlib import Path
+
+import pytest
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parents[1] / 'awm_description' / 'test'))
+
+from awm_core import staleness  # noqa: E402
+from awm_core.staleness import PLANNER_RECORD_VERSION  # noqa: E402
+from awm_path import cli  # noqa: E402
+from g13_job import make_ring_job  # noqa: E402
+from head_fixture import write_synthetic_head_dir  # noqa: E402
+
+pytest.importorskip('xacro', reason='xacro not available (run inside awm_dev)')
+
+#: Record key sets per PLANNER_RECORD_VERSION. A change of these sets changes what a D07 means: bump
+#: awm_core.staleness.PLANNER_RECORD_VERSION and add the new sets here (never edit an old entry).
+RECORD_FORMATS = {
+    1: {
+        'head': ['chain', 'conduit_source', 'conduit_source_assumption', 'contact_standoff_mm', 'nozzle_geometry',
+                 'nozzle_link', 'nozzle_radius_mm', 'nozzle_tip_length_mm', 'robot_description_sha256', 'source',
+                 'tool0_T_tcp_mm'],
+        'description': ['acceleration_deg_s2', 'cell', 'frames_yaml_check', 'head', 'head_model',
+                        'joint_limits_sha256', 'positioner_limits_sha256', 'robot_description_sha256',
+                        'ur_kinematics_sha256', 'xacro_args'],
+    },
+}
+
+
+def _run(args):
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        rc = cli.main(args)
+    return rc, out.getvalue(), err.getvalue()
+
+
+def _plan(job_dir: Path, out: Path, *extra):
+    return _run(['plan', '--job', str(job_dir), '--collision', 'off', '--out', str(out), *extra])
+
+
+@pytest.fixture(scope='module')
+def planned(tmp_path_factory):
+    job = make_ring_job(tmp_path_factory.mktemp('repo'))
+    rc, out, err = _plan(job.dir, job.path_json, '--head-model', 'hbox')
+    assert rc == 0, out + err
+    return job
+
+
+def test_d07_records_the_planner_record_version(planned):
+    doc = json.loads(planned.path_json.read_text())
+    assert doc['planner']['params']['record_version'] == PLANNER_RECORD_VERSION
+    v = staleness.document_verdict(planned.dir, 'path.json', planned.repo.root)
+    assert v.state == 'ok', v.problems
+
+
+def test_check_subcommand(planned, tmp_path):
+    rc, out, err = _run(['check', '--job', str(planned.dir)])
+    assert rc == 0 and out.strip().splitlines()[-1] == 'state ok', out + err
+    doc = json.loads(planned.path_json.read_text())
+    del doc['planner']['params']['record_version']
+    old = tmp_path / 'old.json'
+    old.write_text(json.dumps(doc))
+    rc, out, err = _run(['check', '--job', str(planned.dir), '--path', str(old)])
+    assert rc == 1 and out.strip().splitlines()[-1] == 'state stale'
+    assert 'planned with an older planner; re-plan' in out
+    rc, out, err = _run(['check', '--job', str(planned.dir), '--path', str(tmp_path / 'none.json')])
+    assert rc == 1 and out.strip().splitlines()[-1] == 'state missing'
+
+
+def _link_head_out(tmp_path: Path, job) -> Path:
+    outside = write_synthetic_head_dir(tmp_path / 'elsewhere' / 'head')
+    model = job.repo.cell_dir / 'model'
+    model.mkdir(parents=True, exist_ok=True)
+    os.symlink(outside, model / 'head')
+    return outside
+
+
+def test_head_folder_linked_out_of_the_repository_is_refused(tmp_path):
+    job = make_ring_job(tmp_path / 'repo')
+    _link_head_out(tmp_path, job)
+    out = tmp_path / 'p.json'
+    rc, stdout, err = _plan(job.dir, out, '--head-model', 'hcad')
+    assert rc == 1 and 'outside the repository' in err and 'head.yaml' in err, err
+    assert not out.exists()
+
+
+def test_head_dir_outside_the_repository_is_refused(tmp_path):
+    job = make_ring_job(tmp_path / 'repo')
+    head = write_synthetic_head_dir(tmp_path / 'elsewhere' / 'head')
+    out = tmp_path / 'p.json'
+    rc, stdout, err = _plan(job.dir, out, '--head-model', 'hcad', '--head-dir', str(head))
+    assert rc == 1 and 'outside the repository' in err
+    assert not out.exists()
+
+
+def test_head_folder_linked_inside_the_repository_is_accepted(tmp_path):
+    job = make_ring_job(tmp_path / 'repo')
+    model = job.repo.cell_dir / 'model'
+    real = write_synthetic_head_dir(model / 'heads' / 'v1')
+    os.symlink(real, model / 'head')
+    rc, stdout, err = _plan(job.dir, job.path_json, '--head-model', 'hcad')
+    assert rc in (0, 2), err
+    doc = json.loads(job.path_json.read_text())
+    assert '../../cell/model/heads/v1/head.yaml' in {i['name'] for i in doc['inputs']}
+    assert staleness.document_state(job.dir, 'path.json', job.repo.root) == 'ok'
+
+
+def test_seam_axis_with_an_input_outside_the_repository_is_refused(tmp_path):
+    job = make_ring_job(tmp_path / 'repo')
+    pl = job.dir / 'placement.json'
+    moved = tmp_path / 'elsewhere' / 'placement.json'
+    moved.parent.mkdir(parents=True)
+    shutil.move(pl, moved)
+    os.symlink(moved, pl)
+    rc, stdout, err = _plan(job.dir, tmp_path / 'p.json', '--head-model', 'hbox')
+    assert rc == 1 and 'outside the repository' in err and 're-plan' in err
+    assert not (tmp_path / 'p.json').exists()
+
+
+def test_record_formats_are_pinned_to_the_record_version(planned):
+    """Fails when the head / description record changes without a PLANNER_RECORD_VERSION bump (c01ba5b case)."""
+    from awm_path.description import load_planning_description
+    frames = planned.repo.cell_dir / 'model' / 'frames.yaml'
+    head = write_synthetic_head_dir(planned.repo.cell_dir / 'model' / 'head_guard')
+    expected = RECORD_FORMATS.get(PLANNER_RECORD_VERSION)
+    assert expected is not None, 'add the record key sets of the new PLANNER_RECORD_VERSION to RECORD_FORMATS'
+    for model, head_dir in (('hbox', None), ('hcad', str(head))):
+        desc = load_planning_description(frames, model, head_dir)
+        got = {'head': sorted(desc.head.as_record()), 'description': sorted(desc.as_record())}
+        assert got == expected, (f'{model}: head / description record format changed: bump '
+                                 'awm_core.staleness.PLANNER_RECORD_VERSION and add the new key sets')
