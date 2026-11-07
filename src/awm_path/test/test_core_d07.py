@@ -110,3 +110,23 @@ def test_speed_record_is_acceleration_aware_and_params_recorded_are_used(plans, 
     with pytest.raises(ValueError, match='differs'):
         build_path_doc(plans, _cell(), FLANGE_T_PART, _info(kin), HEADER, CONTEXT,
                        SyncParams(weld_ramp_accel_mm_s2=50.0))
+
+
+def test_speed_record_is_computed_on_the_values_written_to_d07(plans, kin, monkeypatch):
+    """Review minor 2: the speed record is timed on the s / q / θ stored in D07 (rounded to 9 decimals), so a reader
+    who re-times the stored path gets the same answer."""
+    import awm_path.core.d07 as d07
+    seen = []
+    real = d07.speed_record
+
+    def spy(s, q7, *a, **k):
+        seen.append((np.array(s), np.array(q7)))
+        return real(s, q7, *a, **k)
+
+    monkeypatch.setattr(d07, 'speed_record', spy)
+    doc = _doc(plans, kin)
+    pts = doc['seams'][0]['points']
+    assert len(seen) == 1
+    s, q7 = seen[0]
+    assert np.array_equal(s, [p['s_mm'] for p in pts])
+    assert np.array_equal(q7, [p['q_deg'] + [p['theta_deg']] for p in pts])

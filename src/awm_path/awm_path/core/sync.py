@@ -917,11 +917,20 @@ def timing(res: ArcResult, travel_speed_mm_s: float, cell: SyncCell,
     s = np.array([p.s_mm for p in res.points])
     t = (s - s[0]) / travel_speed_mm_s
     q7 = np.array([list(p.q_deg) + [p.theta_deg] for p in res.points])
-    rep = speed_report(s, q7, travel_speed_mm_s, cell.velocity_limits_deg_s, cell.acceleration_limits_deg_s2,
+    return [float(v) for v in t], speed_record(s, q7, travel_speed_mm_s, cell, params)
+
+
+def speed_record(s_mm: np.ndarray, q7_deg: np.ndarray, travel_speed_mm_s: float, cell: SyncCell,
+                 params: SyncParams = SyncParams()) -> Dict:
+    """D07 speed record (``max_joint_speed_deg_s``, ``speed_within_limits``, ``max_travel_speed_mm_s``) of the 7-joint
+    states ``q7_deg`` at seam arc lengths ``s_mm`` (G1.9; see :func:`timing`). The D07 builder passes the values it
+    writes (rounded), so the record holds for the stored path."""
+    if travel_speed_mm_s <= 0.0:
+        raise ValueError('travel speed must be > 0')
+    rep = speed_report(s_mm, q7_deg, travel_speed_mm_s, cell.velocity_limits_deg_s, cell.acceleration_limits_deg_s2,
                        params.weld_ramp_accel_mm_s2, params.speed_search_resolution_mm_s)
-    return [float(v) for v in t], {k: rep[k] for k in ('max_joint_speed_deg_s', 'speed_within_limits',
-                                                        'max_travel_speed_mm_s')}
+    return {k: rep[k] for k in ('max_joint_speed_deg_s', 'speed_within_limits', 'max_travel_speed_mm_s')}
 
 
 __all__ = ['MODES', 'SyncParams', 'SyncCell', 'ArcSpec', 'ArcGeometry', 'ArcResult', 'PlannedPoint', 'rot_x',
-           'flange_point_at', 'tcp_target', 'seam_z_up_deg', 'arc_geometry', 'plan_arc', 'timing']
+           'flange_point_at', 'tcp_target', 'seam_z_up_deg', 'arc_geometry', 'plan_arc', 'timing', 'speed_record']

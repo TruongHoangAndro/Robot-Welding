@@ -24,7 +24,7 @@ import numpy as np
 
 from awm_core import frames, units
 from awm_core.hashing import sha256_text
-from awm_path.core.sync import ArcResult, SyncCell, SyncParams, timing
+from awm_path.core.sync import ArcResult, SyncCell, SyncParams, speed_record
 
 SCHEMA_VERSION = '2.1'
 SCENE_BACKEND_OFF = 'none (collision not evaluated, Goal 1 / CP-58)'
@@ -107,7 +107,13 @@ def _accepted(plan: ArcPlan, cell: SyncCell, flange_t_part: np.ndarray, sync_par
         pts.append({'s_mm': _f(p.s_mm), 'pose_mm': _pose(part_tcp_pose(flange_t_part, p.frame_flange, p.psi_deg)),
                     'psi_deg': _f(p.psi_deg), 'theta_deg': _f(p.theta_deg), 'q_deg': [_f(v) for v in p.q_deg],
                     'min_clearance_mm': None, 'status': p.status})
-    t, speed = timing(res, plan.travel_speed_mm_s, cell, sync_params)
+    # time the values that are written (rounded by _f), so the record holds for the stored path (review minor 2)
+    if plan.travel_speed_mm_s <= 0.0:
+        raise ValueError('travel speed must be > 0')
+    s = np.array([p['s_mm'] for p in pts])
+    q7 = np.array([p['q_deg'] + [p['theta_deg']] for p in pts])
+    t = (s - s[0]) / plan.travel_speed_mm_s
+    speed = speed_record(s, q7, plan.travel_speed_mm_s, cell, sync_params)
     kind = 'positioner_weld' if res.mode == 'C' else 'weld'
     timed = [{'kind': kind, 'points': [{'t_s': _f(ti), 'q_deg': [_f(v) for v in p.q_deg],
                                         'theta_deg': _f(p.theta_deg)} for ti, p in zip(t, res.points)]}]
