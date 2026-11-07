@@ -114,3 +114,23 @@ def test_line_starts_at_the_robot_pose_not_the_d07_target(kin, mode_b):
     for seg, at in ((body['segments'][1], -1), (body['segments'][3], 0)):
         q = np.array([p['positions_deg'] for p in seg['points']])
         assert q[at].tolist() == bad['seams'][0]['points'][0 if at == -1 else -1]['q_deg'] + [35.0]
+
+
+def test_refuses_d07_weld_timing_params_other_than_the_program(kin, mode_b):
+    """G1.12: the D07 maximum travel speed was found with planner.params.sync weld_ramp_accel_mm_s2 /
+    speed_search_resolution_mm_s; a program with another ramp or resolution would judge the speed differently."""
+    doc, pcell = mode_b
+    with pytest.raises(ProgramRefused, match=r'weld_ramp_accel_mm_s2 .*5\.0.*6\.0.*re-plan'):
+        build_program(doc, {'S01': 1}, np.eye(4), pcell, kin, ProgramParams(weld_ramp_accel_mm_s2=6.0))
+    with pytest.raises(ProgramRefused, match=r'speed_search_resolution_mm_s .*re-plan'):
+        build_program(doc, {'S01': 1}, np.eye(4), pcell, kin, ProgramParams(speed_search_resolution_mm_s=0.1))
+
+
+@pytest.mark.parametrize('key', ['weld_ramp_accel_mm_s2', 'speed_search_resolution_mm_s'])
+def test_refuses_d07_without_weld_timing_params(kin, mode_b, key):
+    """A D07 planned before G1.9 has no weld ramp / resolution record: its maximum is velocity-only → re-plan."""
+    doc, pcell = mode_b
+    bad = copy.deepcopy(doc)
+    del bad['planner']['params']['sync'][key]
+    with pytest.raises(ProgramRefused, match=rf'{key}.*older D07.*re-plan'):
+        build_program(bad, {'S01': 1}, np.eye(4), pcell, kin)

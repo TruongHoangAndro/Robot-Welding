@@ -11,8 +11,8 @@ Per accepted D07 arc (seam order, then arc index), every segment one ``robot_pos
    ``awm_path.core.batch_kin``), |Δq| ≤ Δq_max of the D07 run per step, joint limits, wrist-3 ±270°, F6 margins;
 3. ``weld`` (Mode C: ``positioner_weld``) with ``positioner_mode``: the D07 joint states (robot q and θ) unchanged,
    timed along the D07 arc length s at the travel speed **relative to the part** (A47) with a speed ramp at both
-   ends (:func:`awm_program.core.spline.weld_times`); WeldStart before it and WeldEnd after it, both while robot and
-   positioner are at rest (segment boundaries, velocity 0);
+   ends (:func:`awm_path.core.weld_timing.weld_times`, the planner's model); WeldStart before it and WeldEnd
+   after it, both while robot and positioner are at rest (segment boundaries, velocity 0);
 4. ``retract`` like the approach, away from the weld end; finally ``air`` back to home.
 
 A61 frame chain (part frame → base_link with θ): ``base_link_T_tcp = base_link_T_axis · Rx(θ) · flange_T_part ·
@@ -20,8 +20,15 @@ part_T_tcp`` (the positioner axis is +X of ``positioner_axis``; DES-001 §5.3 wr
 The generator checks that FK(q) · tool0_T_tcp reproduces every D07 weld pose through this chain (sync / B: the D07
 tolerance ``fk_tol``; Mode C: the F8 tolerance ``mode_c_tol``, decision 2026-11-06).
 
+One weld timing model (G1.12, decision Truong 2026-11-07): the weld spline, its limit check and the largest feasible
+travel speed are those of the planner (``awm_path.core.weld_timing``), with the weld ramp and the speed resolution
+recorded in D07 ``planner.params.sync``. The program refuses a D07 whose values differ from :class:`ProgramParams`
+(or that has none: planned before G1.9, re-plan) instead of adopting them silently — the parameters are recorded in
+every D09 as the ones the program used, and a different ramp would make the D07 speed verdict invalid.
+
 Refusals (:class:`ProgramRefused`, nothing written): a rejected arc (no partial programs, DES-001 rule 4), an arc
-whose D07 travel speed is above its feasible maximum (``speed_within_limits: false``), a weld segment whose spline
+whose D07 travel speed is above its feasible maximum (``speed_within_limits: false``), a D07 weld ramp / speed
+resolution other than the program's or missing, a weld segment whose spline
 breaks a joint / positioner velocity or acceleration limit (the largest feasible travel speed is reported; the
 weld is **never slowed down silently** and **no limit is raised**), an approach / retract that is not reachable on
 the weld IK branch, a D07 pose that FK does not reproduce.
@@ -49,8 +56,10 @@ from awm_path.core.batch_kin import batch_fk, ik_by_label
 from awm_path.core.kinematics import pose_error
 from awm_path.core.states import (LABELS, SingularityThresholds, nearest_representative, singular_reason,
                                   singularity_metrics)
+from awm_path.core import weld_timing
 from awm_path.core.sync import SyncCell, rot_x
-from awm_program.core.spline import TimingError, clamped_cubic, max_abs, rest_to_rest, weld_times
+from awm_path.core.weld_timing import TimingError
+from awm_program.core.spline import rest_to_rest
 
 SCHEMA_VERSION = '2.1'
 WELD_KINDS = ('weld', 'positioner_weld')
@@ -99,6 +108,12 @@ class ProgramCell:
     robot_joints: Tuple[str, ...]
     positioner_joints: Tuple[str, ...]
 
+    def __post_init__(self) -> None:
+        # one source for the limits (G1.12): the acceleration limits are the planner cell's (SyncCell, G1.9)
+        if not np.array_equal(np.asarray(self.acceleration_deg_s2, float), self.sync.acceleration_limits_deg_s2):
+            raise ValueError(f'program acceleration limits {list(self.acceleration_deg_s2)} differ from the planner '
+                             f'cell acceleration limits {self.sync.acceleration_limits_deg_s2.tolist()} deg/s²')
+
     @property
     def velocity_deg_s(self) -> np.ndarray:
         return np.array(list(self.sync.joint_velocity_deg_s) + [self.sync.theta_velocity_deg_s], float)
@@ -131,6 +146,23 @@ class D07Tolerances:
         except (KeyError, TypeError) as exc:
             raise ProgramRefused(f'D07 has no planner.params.sync record ({exc}): not a G1.3 kinematic 7-axis path; '
                                  're-plan with awm_path.cli plan') from exc
+
+
+WELD_TIMING_KEYS = ('weld_ramp_accel_mm_s2', 'speed_search_resolution_mm_s')
+
+
+def check_weld_timing_params(path_doc: Mapping, params: 'ProgramParams') -> None:
+    """G1.12: the weld ramp and speed resolution of D07 ``planner.params.sync`` (with which the planner found
+    ``speed_within_limits`` / ``max_travel_speed_mm_s``) must equal the program's; refuses a D07 without them."""
+    sync = path_doc['planner']['params']['sync']
+    for key in WELD_TIMING_KEYS:
+        if key not in sync:
+            raise ProgramRefused(f'D07 planner.params.sync has no {key}: older D07 (planned before G1.9, maximum travel '
+                                 'speed from the velocity limits only); re-plan with awm_path.cli plan')
+        d07, prog = float(sync[key]), float(getattr(params, key))
+        if d07 != prog:
+            raise ProgramRefused(f'D07 was planned with {key} = {d07} but the program uses {prog}: the D07 travel speed '
+                                 'check and maximum do not hold for this program; re-plan with the program value')
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -232,30 +264,49 @@ def joint_line(a: np.ndarray, b: np.ndarray, step_deg: float) -> np.ndarray:
 # ---------------------------------------------------------------------------------------------------------------
 
 def weld_spline(s: np.ndarray, q7: np.ndarray, speed: float, params: ProgramParams):
-    t, ramp = weld_times(s, speed, params.weld_ramp_accel_mm_s2)
-    v, a = clamped_cubic(t, q7)
-    vmax, amax = max_abs(t, q7, v, a)
+    """``(t, v, a, vmax, amax, ramp_mm)`` of the weld spline at ``speed`` — the planner's model
+    (:mod:`awm_path.core.weld_timing`): trapezoidal arc-length timing with the weld ramp, clamped C2 cubic, exact
+    maxima."""
+    t, ramp = weld_timing.weld_times(s, speed, params.weld_ramp_accel_mm_s2)
+    v, a = weld_timing.clamped_cubic(t, q7)
+    vmax, amax = weld_timing.max_abs(t, v, a)
     return t, v, a, vmax, amax, ramp
 
 
-def _within(vmax: np.ndarray, amax: np.ndarray, cell: ProgramCell) -> bool:
-    return bool(np.all(vmax <= cell.velocity_deg_s * (1 + 1e-9)) and np.all(amax <= cell.accel_deg_s2 * (1 + 1e-9)))
+def speed_within_limits(s: np.ndarray, q7: np.ndarray, speed: float, cell: ProgramCell, params: ProgramParams) -> bool:
+    """The planner's verdict (:func:`awm_path.core.weld_timing.within_limits`) for the weld at ``speed``."""
+    return weld_timing.within_limits(s, q7, speed, cell.velocity_deg_s, cell.accel_deg_s2,
+                                     params.weld_ramp_accel_mm_s2)
 
 
 def max_feasible_speed(s: np.ndarray, q7: np.ndarray, speed: float, cell: ProgramCell, params: ProgramParams
                        ) -> float:
-    """Largest travel speed ≤ ``speed`` (resolution ``speed_search_resolution_mm_s``, rounded down) whose weld
-    spline stays inside the velocity and acceleration limits (bisection)."""
-    lo, hi = 0.0, float(speed)
-    while hi - lo > params.speed_search_resolution_mm_s / 4.0:
-        mid = 0.5 * (lo + hi)
-        try:
-            ok = _within(*weld_spline(s, q7, mid, params)[3:5], cell)
-        except TimingError:
-            ok = False
-        lo, hi = (mid, hi) if ok else (lo, mid)
-    res = params.speed_search_resolution_mm_s
-    return math.floor(lo / res + 1e-9) * res
+    """Largest feasible travel speed (velocity **and** acceleration limits, resolution
+    ``speed_search_resolution_mm_s``, rounded down) — the planner's :func:`awm_path.core.weld_timing.max_feasible_speed`
+    called exactly as the D07 speed record calls it (``speed`` passed as the request only when it is feasible), so the
+    value equals D07 ``max_travel_speed_mm_s`` for the same points."""
+    ok = speed_within_limits(s, q7, speed, cell, params)
+    return weld_timing.max_feasible_speed(s, q7, cell.velocity_deg_s, cell.accel_deg_s2, params.weld_ramp_accel_mm_s2,
+                                          params.speed_search_resolution_mm_s, float(speed) if ok else None)
+
+
+#: Advice of every travel-speed refusal. The maximum can lie above a refused request (feasibility is not monotonic in
+#: the speed, :mod:`awm_path.core.weld_timing`), so "a lower speed" would be wrong advice (review 1.a, G1.12).
+SPEED_ADVICE = (' — the travel speed is an Engineer input: re-plan with a travel speed ≤ the maximum (feasibility is not '
+                'monotonic in the travel speed, so not every lower speed is feasible; the software never slows a weld '
+                'down and never raises a limit)')
+
+
+def weld_speed_refusal(name: str, s: np.ndarray, q7: np.ndarray, speed: float, cell: ProgramCell,
+                       params: ProgramParams, d07_max: float) -> str:
+    """Refusal text of one weld whose spline at ``speed`` breaks a limit: the limits broken, the largest feasible
+    travel speed (same model as D07) and the D07 record (``d07_max``). Join with :data:`SPEED_ADVICE`."""
+    _, _, _, vmax, amax, _ = weld_spline(s, q7, speed, params)
+    vmx = max_feasible_speed(s, q7, speed, cell, params)
+    return (f'{name}: at travel speed {speed} mm/s the weld motion breaks {_limit_text(vmax, amax, cell)}; '
+            f'max feasible travel speed {vmx:.2f} mm/s with velocity and acceleration limits '
+            f'(D07 max_travel_speed_mm_s {d07_max:.2f}, same timing model awm_path.core.weld_timing; D07 said within '
+            'limits, so its speed record does not match this path or these limits)')
 
 
 def _limit_text(vmax, amax, cell: ProgramCell) -> str:
@@ -334,8 +385,7 @@ def check_path(path_doc: Mapping) -> None:
             slow.append(f'{_arc_name(arc)}: travel speed {arc["travel_speed_mm_s"]} mm/s needs joint speeds above the '
                         f'limits; max_travel_speed_mm_s = {float(pl.get("max_travel_speed_mm_s", float("nan"))):.2f}')
     if slow:
-        raise ProgramRefused('; '.join(slow) + ' — the travel speed is an Engineer input: re-plan with a travel speed '
-                             '≤ the maximum (the software never slows a weld down and never raises a limit)')
+        raise ProgramRefused('; '.join(slow) + SPEED_ADVICE)
 
 
 def build_program(path_doc: Mapping, sequence: Mapping[str, int], flange_t_part: np.ndarray, cell: ProgramCell,
@@ -347,6 +397,7 @@ def build_program(path_doc: Mapping, sequence: Mapping[str, int], flange_t_part:
     null and every release gate refuses the program). Raises :class:`ProgramRefused`."""
     check_path(path_doc)
     tol = D07Tolerances.from_path(path_doc)
+    check_weld_timing_params(path_doc, params)
     sc = cell.sync
     ftp = np.asarray(flange_t_part, float)
     home = np.asarray(cell.home_deg, float)
@@ -384,12 +435,9 @@ def build_program(path_doc: Mapping, sequence: Mapping[str, int], flange_t_part:
             t, v, a, vmax, amax, ramp = weld_spline(s, q7, speed, params)
         except TimingError as exc:
             raise ProgramRefused(f'{name}: {exc}') from exc
-        if not _within(vmax, amax, cell):
-            vmx = max_feasible_speed(s, q7, speed, cell, params)
-            refusals.append(f'{name}: at travel speed {speed} mm/s the weld motion breaks {_limit_text(vmax, amax, cell)}; '
-                            f'max feasible travel speed {vmx:.2f} mm/s with velocity and acceleration limits '
-                            f'(D07 max_travel_speed_mm_s {arc["planning"].get("max_travel_speed_mm_s", float("nan")):.2f}, '
-                            'velocity only)')
+        if not speed_within_limits(s, q7, speed, cell, params):
+            refusals.append(weld_speed_refusal(name, s, q7, speed, cell, params,
+                                               float(arc['planning'].get('max_travel_speed_mm_s', float('nan')))))
             continue
         label = arc['config_label']
         # the line starts at the robot's own TCP pose FK(q) (= the D07 pose within the FK tolerance; Mode C: F8)
@@ -397,8 +445,7 @@ def build_program(path_doc: Mapping, sequence: Mapping[str, int], flange_t_part:
         ret = line_states(kin, sc, fk[-1], q[-1], label, params.retract_mm, tol, params, f'{name} retract')[::-1]
         prepared.append((arc, q7, s, t, v, a, vmax, amax, ramp, app, ret, (e_mm, e_deg, tol_mm, tol_deg)))
     if refusals:
-        raise ProgramRefused('; '.join(refusals) + ' — the travel speed is an Engineer input: re-plan with a lower '
-                             'travel speed (the software never slows a weld down and never raises a limit)')
+        raise ProgramRefused('; '.join(refusals) + SPEED_ADVICE)
     for arc, q7, s, t, v, a, vmax, amax, ramp, app, ret, fkr in prepared:
         sid = arc['seam_id']
         idx = int(arc['arc']['index'])
@@ -431,4 +478,5 @@ def build_program(path_doc: Mapping, sequence: Mapping[str, int], flange_t_part:
 
 __all__ = ['SCHEMA_VERSION', 'WELD_KINDS', 'ProgramRefused', 'ProgramParams', 'ProgramCell', 'D07Tolerances',
            'pose_matrix', 'part_to_base_link', 'tcp_in_part', 'params_sha256', 'line_states', 'joint_line',
-           'weld_spline', 'max_feasible_speed', 'arc_order', 'check_path', 'build_program']
+           'weld_spline', 'speed_within_limits', 'max_feasible_speed', 'SPEED_ADVICE', 'weld_speed_refusal', 'WELD_TIMING_KEYS', 'check_weld_timing_params',
+           'arc_order', 'check_path', 'build_program']
