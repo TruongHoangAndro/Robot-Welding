@@ -42,7 +42,7 @@ limits. Golden J2: D07 says 3.21 mm/s, the program accepts only ≤ 2.39 mm/s �
 - [x] T3 Implement `weld_timing.py`, `SyncCell` fields, `SyncParams` fields, `timing()`, description loader.
 - [x] T4 Update the existing synthetic `SyncCell` builders in `awm_path` tests.
 - [x] T5 Golden (if `AWM_SPIKE_REPO`): J1 / J2 max speed planner vs program.
-- [ ] T6 `scripts/dx "colcon build --symlink-install --packages-select awm_core awm_path && colcon test
+- [x] T6 `scripts/dx "colcon build --symlink-install --packages-select awm_core awm_path && colcon test
   --packages-select awm_path && colcon test-result --verbose"`; report.
 
 ## Result (2026-11-07)
@@ -50,3 +50,8 @@ limits. Golden J2: D07 says 3.21 mm/s, the program accepts only ≤ 2.39 mm/s �
 Golden (spike repo, H-CAD, collision off, requested 3.0 mm/s): J2 `sync` planner max 2.39 mm/s (was 3.21,
 velocity only) = program max 2.39; J1 `sync` and J1 `C` planner 6.96, program bisection 6.95 — the program accepts
 6.96 and refuses 6.98 (difference = the program's bisection floor, within the 0.01 mm/s resolution).
+
+T6: `colcon test --packages-select awm_path` → awm_path 247 tests, 0 errors, 0 failures, 2 skipped
+(`AWM_SPIKE_REPO not set`); `colcon test-result` summary 398 / 0 / 0 / 3 includes older result files of awm_core,
+awm_bringup, awm_seam (1 skip `AWM_SPIKE_REPO not set`) and awm_description in this worktree's build folder.
+With `AWM_SPIKE_REPO`: golden g13 + g15 4 passed.
