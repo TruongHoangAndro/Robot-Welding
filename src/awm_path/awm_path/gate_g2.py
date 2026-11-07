@@ -120,6 +120,8 @@ def _contact_dict(c) -> Optional[Dict[str, Any]]:
             'samples': c.samples, 'triangles': c.triangles}
 
 
+#: sim_mock args set by head_launch_args (--head-model / --head-dir), never through --head-arg (review minor 5).
+RESERVED_HEAD_ARGS = ('head_model', 'head_dir')
 _HEAD_ARG = re.compile(r'^[a-z][a-z0-9_]*=[-+0-9.eE ]+$')
 
 
@@ -129,6 +131,9 @@ def parse_head_args(items: Optional[Sequence[str]]) -> Dict[str, str]:
     The values reach the planner only through the robot description they produce (S.5c Task 0: one source)."""
     out: Dict[str, str] = {}
     for it in items or ():
+        if it.split('=', 1)[0].strip() in RESERVED_HEAD_ARGS:
+            raise ValueError(f'head arg {it!r}: head_model / head_dir are set with --head-model / --head-dir, not '
+                             '--head-arg')
         if not _HEAD_ARG.match(it):
             raise ValueError(f'head arg {it!r}: expected key=<number(s)>')
         k, v = it.split('=', 1)
