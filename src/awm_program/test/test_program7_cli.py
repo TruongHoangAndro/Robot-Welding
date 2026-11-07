@@ -316,6 +316,10 @@ def test_refuses_acceleration_over_the_limit_with_the_number(ring):
     with pytest.raises(ProgramRefused, match=r'positioner_joint acceleration .* max feasible travel speed \d+\.\d\d'):
         build_program(path, {'S01': 1}, _ftp(job), pcell, UrAnalyticKinematics(),
                       ProgramParams(weld_ramp_accel_mm_s2=500.0))
+    with pytest.raises(ProgramRefused) as exc:                     # review 1.a: no "lower travel speed" advice
+        build_program(path, {'S01': 1}, _ftp(job), pcell, UrAnalyticKinematics(),
+                      ProgramParams(weld_ramp_accel_mm_s2=500.0))
+    assert '≤ the maximum' in str(exc.value) and 'lower travel speed' not in str(exc.value)
 
 
 def test_refuses_when_an_active_calibration_exists(tmp_path):

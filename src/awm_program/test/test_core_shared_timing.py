@@ -84,3 +84,17 @@ def test_program_cell_refuses_acceleration_limits_other_than_the_planner_cell():
     pc = _pcell()
     with pytest.raises(ValueError, match='acceleration limits'):
         program7.ProgramCell(pc.sync, tuple(AL * 2.0), pc.home_deg, pc.robot_joints, pc.positioner_joints)
+
+
+def test_refusal_advice_on_a_maximum_above_the_refused_request():
+    """Review 1.a, seed 8: 3.0 mm/s is refused but the maximum is 3.67 mm/s (feasibility not monotonic). The advice
+    must be 'a travel speed ≤ the maximum', never 'a lower travel speed'."""
+    s, q = _random_path(8)
+    pcell = _pcell()
+    assert not program7.speed_within_limits(s, q, 3.0, pcell, PARAMS)
+    vmax = program7.max_feasible_speed(s, q, 3.0, pcell, PARAMS)
+    assert vmax > 3.0
+    text = program7.weld_speed_refusal('S01 arc 1/1', s, q, 3.0, pcell, PARAMS, 3.67) + program7.SPEED_ADVICE
+    assert f'max feasible travel speed {vmax:.2f} mm/s' in text
+    assert '≤ the maximum' in text and 'not monotonic' in text
+    assert 'lower travel speed' not in text and 're-plan with a lower' not in text
