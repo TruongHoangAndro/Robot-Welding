@@ -11,7 +11,6 @@ import contextlib
 import io
 import json
 import os
-import re
 import shutil
 import sys
 from pathlib import Path
@@ -60,15 +59,11 @@ def _canonical(value):
 
 
 def _record_sha256(desc, head_dir) -> str:
-    """SHA-256 of the description record, floats rounded to 1e-6, independent of the checkout: the URDF hash is
-    recomputed without XML comments (xacro writes the absolute path of the source file into one) and with the head
-    folder replaced by its placeholder."""
+    """SHA-256 of the description record, floats rounded to 1e-6. The record is independent of the checkout: its URDF
+    hash (``location_free_urdf_sha256``) drops XML comments (xacro writes the install path of its source into one)
+    and replaces the head folder by a placeholder."""
     from awm_core.hashing import sha256_text
-    from awm_path.description import location_free_urdf_sha256
     record = json.loads(json.dumps(desc.as_record(), default=str))
-    urdf_sha = location_free_urdf_sha256(re.sub(r'<!--.*?-->', '', desc.urdf, flags=re.S), head_dir)
-    record['robot_description_sha256'] = urdf_sha
-    record['head']['robot_description_sha256'] = urdf_sha
     return sha256_text(json.dumps(_canonical(record), sort_keys=True, separators=(',', ':')))
 
 
@@ -179,3 +174,14 @@ def test_record_formats_are_pinned_to_the_record_version(planned):
         assert sha == expected['sha256'][model], (
             f'{model}: description record value changed ({sha}): if an older D07 is now wrong, bump '
             'awm_core.staleness.PLANNER_RECORD_VERSION and add a new RECORD_FORMATS entry with this value')
+
+
+def test_d07_context_d14_hash_is_the_location_free_description_hash(tmp_path):
+    """D07 ``context.d14_sha256`` = the location-free description hash (the one D09 records), not the raw URDF
+    (which holds the head folder and the install prefix)."""
+    job = make_ring_job(tmp_path / 'repo')
+    write_synthetic_head_dir(job.repo.cell_dir / 'model' / 'head')
+    rc, out, err = _plan(job.dir, job.path_json, '--head-model', 'hcad')
+    assert rc in (0, 2), err
+    doc = json.loads(job.path_json.read_text())
+    assert doc['context']['d14_sha256'] == doc['planner']['params']['description']['robot_description_sha256']

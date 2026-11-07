@@ -130,7 +130,7 @@ def _context(desc, frames_yaml: Path, head_hash: str, git: Dict) -> Dict:
                   'positioner_limits': sha256_file(desc.positioner_limits_file), f'tcp/{desc.head_model}': head_hash}
     frames_sha = sha256_file(frames_yaml)
     return {'cell_id': CELL_ID, 'cell_rev': f'frames-{frames_sha[:12]}',
-            'd14_sha256': sha256_text(desc.urdf), 'cell_config_sha256': sha256_file(desc.positioner_limits_file),
+            'd14_sha256': desc.as_record()['robot_description_sha256'], 'cell_config_sha256': sha256_file(desc.positioner_limits_file),
             'calibration': {'calibration_id': 'CAL-NOMINAL-FRAMES', 'status': 'NOMINAL',
                             'sha256': params_sha256(components), 'components': components},
             'robot_serial': 'SIM', 'kinematics_sha256': components['kinematics'],

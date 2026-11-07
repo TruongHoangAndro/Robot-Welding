@@ -146,3 +146,25 @@ def test_no_nozzle_heads_with_estimated_conduit_sources(tmp_path, variant, sourc
     assert rec['conduit_source'] == source and rec['conduit_source_assumption'] is True
     with pytest.raises(NoNozzleError):
         contact_params_for(desc.head)
+
+
+@pytest.mark.parametrize('head_model', ['hbox', 'hcad'])
+def test_urdf_hash_is_independent_of_the_install_prefix(tmp_path, head_model):
+    """G1.17 follow-up: xacro writes the absolute path of its source file (install prefix of the checkout) into an XML
+    comment; the record hash must not change with it, so a D07 planned in one checkout generates in another."""
+    import re
+    from awm_path.description import load_planning_description, location_free_urdf_sha256
+    job = make_ring_job(tmp_path / 'repo')
+    head = str(write_synthetic_head_dir(tmp_path / 'head')) if head_model == 'hcad' else None
+    desc = load_planning_description(job.repo.cell_dir / 'model' / 'frames.yaml', head_model, head)
+    prefixes = set(re.findall(r'(/\S*?)/install/awm_description/share', desc.urdf))
+    assert prefixes, 'expected the xacro source path of awm_description in the rendered URDF'
+    other = desc.urdf
+    for prefix in prefixes:
+        other = other.replace(prefix, '/elsewhere/other_checkout')
+    assert other != desc.urdf
+    assert location_free_urdf_sha256(other, head) == location_free_urdf_sha256(desc.urdf, head)
+    assert location_free_urdf_sha256(desc.urdf + '<!-- note -->', head) == location_free_urdf_sha256(desc.urdf, head)
+    # a real change outside comments still changes the hash
+    changed = desc.urdf.replace('</robot>', '<link name="extra"/></robot>')
+    assert location_free_urdf_sha256(changed, head) != location_free_urdf_sha256(desc.urdf, head)

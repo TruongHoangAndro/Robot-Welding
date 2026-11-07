@@ -57,6 +57,11 @@ Write scope (named by the lead, AGENT_TEAM.md §1 exception): `src/awm_path`, `s
   checkout; review I2). Any change of those two rendered records (xacro, head reading, limits, UR kinematics) fails
   until a new version with a new entry is added. It does not cover changes invisible in these two records and cannot
   tell whether a change matters for existing D07 files.
+  **Lands together with record_version 1 (lead, 2026-11-07):** `awm_path.description.location_free_urdf_sha256`
+  now drops XML comments before hashing (xacro writes the install path of its source file into one, so the
+  description hash depended on the checkout / install and a D07 planned in one checkout was refused by generate in
+  another), and D07 `context.d14_sha256` is that location-free hash (the value D09 records) instead of the raw URDF
+  hash. Every D07 without record_version 1 is already stale, so no further version bump.
 * **D4 — D09 inherits D07 staleness.** For a program document (`program_rev` present), each JSON input that is a D07
   is checked with the same rule; its problems are reported as `<name>: <problem>`. A program generated from an old or
   stale D07 is stale.
