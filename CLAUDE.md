@@ -52,7 +52,9 @@ Function owners (2026-10-29): all functions = software agent (Claude Code); Truo
 - **TCP and nozzle contact (OI-13, wiki L-001): left to the software team.** Chosen in the change proposal; treat it as an
   Assumption until IPG automation documentation (OI-2) confirms it.
 - **Rotary positioner (1 axis) is in Phase 1** (CP-20; supersedes ADR-11 "Phase 2 slot"). Phase 1 modes: C = robot at
-  rest, positioner turns during emission (coaxial seams); B = rotate, stop, weld. No synchronised 7-axis motion.
+  rest, positioner turns during emission (coaxial seams); B = rotate, stop, weld. **Synchronised 7-axis motion
+  (`positioner_mode: sync`, default) is planned and simulated in Phase 1** (CP-59, Truong 2026-11-05; Option A1, one
+  7-joint trajectory); before real hardware it needs the timing spike and the common speed-scaling rule of CP-59.
   ROS 2 controls the positioner motor (`awm_positioner`, ros2_control, same controller manager as the UR driver).
 - **Cell and fixture geometry come from Fusion STEP assemblies** with marker components `REF_*` (CP-23). The UR5e
   model itself always comes from `ur_description`.
