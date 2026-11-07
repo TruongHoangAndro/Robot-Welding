@@ -52,4 +52,6 @@
     replay_speed_scale: 1.0
     max_tracking_error_rad: 0.02
     start_state_tolerance_rad: 0.001
+    # Exists only with sim.launch.py or sim_mock.launch.py trajectory_controllers:=split (default); with
+    # trajectory_controllers:=robot_positioner only /robot_positioner_trajectory_controller runs (G1.7).
     controller_action: /joint_trajectory_controller/follow_joint_trajectory

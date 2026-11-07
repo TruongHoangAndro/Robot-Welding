@@ -3,9 +3,9 @@
 Test data only (no part or cell data): two boxes as STL meshes and hulls, and a beam axis that is deliberately tilted
 and offset so the tests do not depend on the real CAD values. Two variants: the automatic beam estimate
 (``write_synthetic_head_dir``) and a map TCP override (``write_map_override_head_dir``: TCP given, beam exit derived).
-Cable exit (G1.8): the synthetic variant carries the explicit keys ``cable_exit_tool0_mm`` / ``cable_axis_tool0``
-(proposed to cad-geometry), the map variant only the refused automatic rear estimate
-(``estimates.tcp.geometry_estimate`` with ``behind_flange: true``), as export-head writes it today. ``real_head_dir()`` returns the folder named by the
+Cable exit (G1.8, g1-11 keys): the synthetic variant carries ``cable_exit_tool0_mm`` / ``cable_axis_tool0`` with
+``cable_exit_source: map``; the map variant has these three keys null (an older export) and only the refused
+automatic rear estimate (``estimates.tcp.geometry_estimate`` with ``behind_flange: true``). ``real_head_dir()`` returns the folder named by the
 environment variable ``AWM_HEAD_DIR`` (the real export, e.g. ``<repo_root>/cell/model/head``) or None.
 """
 
@@ -62,7 +62,8 @@ def write_synthetic_head_dir(folder: Path, tilt_deg: float = 20.0, nozzle_len_mm
     a = (math.pi + t) / 2.0
     quat = [math.sin(a), 0.0, 0.0, math.cos(a)]
     # Cable leaves the rear (tool0 -X) side of the head body box, near its top: away from the nozzle.
-    cable = {'cable_exit_tool0_mm': [-120.0, 0.0, 150.0], 'cable_axis_tool0': [-1.0, 0.0, 0.0]}
+    cable = {'cable_exit_tool0_mm': [-120.0, 0.0, 150.0], 'cable_axis_tool0': [-1.0, 0.0, 0.0],
+             'cable_exit_source': 'map'}
     return _write_head_dir(folder, tcp, quat, beam, exit_mm, nozzle_len_mm, {'method': 'beam_axis'}, cable)
 
 
@@ -83,7 +84,8 @@ def write_map_override_head_dir(folder: Path, tilt_deg: float = 55.0, nozzle_len
     est = {'method': 'map', 'behind_flange': False, 'geometry_estimate': {
         'tcp_tool0_mm': [e + nozzle_len_mm * a for e, a in zip(rear_end, rear_axis)],
         'beam_axis_tool0': rear_axis, 'behind_flange': True}}
-    return _write_head_dir(folder, tcp, quat, beam, exit_mm, nozzle_len_mm, est)
+    nulls = {'cable_exit_tool0_mm': None, 'cable_axis_tool0': None, 'cable_exit_source': None}
+    return _write_head_dir(folder, tcp, quat, beam, exit_mm, nozzle_len_mm, est, nulls)
 
 
 def _write_head_dir(folder: Path, tcp, quat, beam, exit_mm, nozzle_len_mm, tcp_estimate, extra=None) -> Path:

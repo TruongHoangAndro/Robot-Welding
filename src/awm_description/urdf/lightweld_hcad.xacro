@@ -25,7 +25,8 @@
        conduit                 capsule (dia / len = conduit_dia_mm / conduit_len_mm args, Assumption TST-002 §3.1; the
                                fiber / wire conduit is not in the head CAD) starting at the head cable exit and running
                                outward along the cable axis (G1.8). Cable exit from head.yaml, in this order:
-                               (1) cable_exit_tool0_mm + cable_axis_tool0 (explicit, proposed export-head keys);
+                               (1) cable_exit_tool0_mm + cable_axis_tool0 (export-head keys, g1-11); label from
+                                   cable_exit_source: map / null -> explicit, rear_estimate -> rear_estimate;
                                (2) estimates.tcp.geometry_estimate with behind_flange true = the automatic beam estimate
                                    export-head refused because it found the fiber / cable connector end (bug of
                                    2026-11-06): exit = its tcp_tool0_mm - head.yaml nozzle_len_mm * its axis.
@@ -106,18 +107,29 @@
 
     <!-- Cable exit (point mm, unit outward axis) in tool0, see header. -->
     <xacro:property name="g_est" value="${((hy.get('estimates') or dict()).get('tcp') or dict()).get('geometry_estimate') or dict()}"/>
-    <xacro:property name="ce_src" value="${'explicit' if hy.get('cable_exit_tool0_mm') is not None
+    <!-- ce_pos = where the point / axis come from; ce_src = recorded label. With the cable keys the label follows
+         head.yaml cable_exit_source (g1-11: map -> explicit, rear_estimate -> rear_estimate, absent / null ->
+         explicit); same rule as awm_bringup.cell_config.conduit_source. -->
+    <xacro:property name="ce_pos" value="${'keys' if hy.get('cable_exit_tool0_mm') is not None
                                            and hy.get('cable_axis_tool0') is not None
-                                           else ('rear_estimate' if g_est.get('behind_flange') is True
+                                           else ('estimate' if g_est.get('behind_flange') is True
                                                  and g_est.get('tcp_tool0_mm') is not None
                                                  and g_est.get('beam_axis_tool0') is not None else 'parametric')}"/>
-    <xacro:property name="ce_a_raw" value="${[float(v) for v in (hy['cable_axis_tool0'] if ce_src == 'explicit'
+    <xacro:property name="ce_label" value="${hy.get('cable_exit_source')}"/>
+    <xacro:if value="${ce_pos == 'keys' and ce_label not in (None, 'map', 'rear_estimate')}">
+      ${xacro.fatal(hdir + '/head.yaml: cable_exit_source ' + str(ce_label) + ' unknown (expected map, rear_estimate '
+                    + 'or null)')}
+    </xacro:if>
+    <xacro:property name="ce_src" value="${('rear_estimate' if ce_label == 'rear_estimate' else 'explicit')
+                                           if ce_pos == 'keys'
+                                           else ('rear_estimate' if ce_pos == 'estimate' else 'parametric')}"/>
+    <xacro:property name="ce_a_raw" value="${[float(v) for v in (hy['cable_axis_tool0'] if ce_pos == 'keys'
                                                                   else g_est.get('beam_axis_tool0', [0, 0, 1]))]}"/>
     <xacro:property name="ce_a_n" value="${sqrt(ce_a_raw[0]**2 + ce_a_raw[1]**2 + ce_a_raw[2]**2)}"/>
     <xacro:property name="ce_a" value="${[v / ce_a_n for v in ce_a_raw]}"/>
-    <xacro:property name="ce_p" value="${[float(v) for v in hy['cable_exit_tool0_mm']] if ce_src == 'explicit'
+    <xacro:property name="ce_p" value="${[float(v) for v in hy['cable_exit_tool0_mm']] if ce_pos == 'keys'
                                          else [float(g_est['tcp_tool0_mm'][i]) - float(hy['nozzle_len_mm']) * ce_a[i]
-                                               for i in python.range(3)] if ce_src == 'rear_estimate'
+                                               for i in python.range(3)] if ce_pos == 'estimate'
                                          else [0.0, 0.0, 0.0]}"/>
     <!-- Rotation taking +Z to the cable axis (shortest arc; 180 deg about X when the axis is -Z). -->
     <xacro:property name="ce_q" value="${[-ce_a[1], ce_a[0], 0.0, 1.0 + ce_a[2]] if 1.0 + ce_a[2] > 1e-12

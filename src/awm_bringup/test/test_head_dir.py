@@ -86,3 +86,29 @@ def test_conduit_position_args_allowed_for_parametric_hcad(tmp_path):
     (folder / 'head.yaml').write_text(yaml.safe_dump(doc))
     assert conduit_source(str(folder)) == 'parametric'
     check_conduit_args('hcad', str(folder), list(CONDUIT_POSITION_ARGS))
+
+
+# --- g1-15: cable_exit_source label, same rule as lightweld_hcad.xacro -------------------------------------------
+
+@pytest.mark.parametrize('edit, label', [
+    ({}, 'explicit'), ({'cable_exit_source': 'rear_estimate'}, 'rear_estimate'), ({'cable_exit_source': None}, 'explicit'),
+    ({'cable_exit_tool0_mm': None, 'cable_axis_tool0': None, 'cable_exit_source': None}, 'parametric')])
+def test_conduit_source_label(tmp_path, edit, label):
+    from awm_bringup.cell_config import conduit_source
+    folder = write_synthetic_head_dir(tmp_path / 'h')
+    doc = yaml.safe_load((folder / 'head.yaml').read_text())
+    doc.update(edit)
+    (folder / 'head.yaml').write_text(yaml.safe_dump(doc))
+    assert conduit_source(str(folder)) == label
+
+
+def test_conduit_source_null_keys_and_unknown_label(tmp_path):
+    from awm_bringup.cell_config import conduit_source
+    from head_fixture import write_map_override_head_dir
+    assert conduit_source(str(write_map_override_head_dir(tmp_path / 'r'))) == 'rear_estimate'
+    folder = write_synthetic_head_dir(tmp_path / 'u')
+    doc = yaml.safe_load((folder / 'head.yaml').read_text())
+    doc['cable_exit_source'] = 'guess'
+    (folder / 'head.yaml').write_text(yaml.safe_dump(doc))
+    with pytest.raises(ValueError, match='cable_exit_source'):
+        conduit_source(str(folder))
