@@ -349,12 +349,21 @@ def create_app(settings: Settings) -> FastAPI:
         picks = [p.model_dump() for p in body.seams]
         try:
             with runs.slot('seams', job_id):
+                cad_api.cad_gate(job, settings.repo_root)  # again inside the slot (review minor 3)
                 doc = adapters.build_seams(settings, job, picks, work, build_axis=has_placement)
         except RunBusyError as exc:
             raise _busy(exc) from exc
         response.headers['X-AWM-Seam-Axis'] = (
             'built' if has_placement else 'not built: no placement.json (' + jobs.placement_hint(job) + ')')
         return doc
+
+    def promote_gated(run_dir: Path, job: Path, collision: str, override: Optional[Dict[str, Any]]) -> Dict[str, str]:
+        """Plan promotion with the CP-60 / CP-62 gate evaluated again while the run still holds the slot (review
+        minor 3): a cross-check or override that became stale, red or void during the run is never promoted."""
+        again = cad_api.cad_gate(job, settings.repo_root, collision)
+        if again != override:
+            raise RuntimeError('the CP-62 override changed during the run; nothing promoted')
+        return adapters.promote_plan(run_dir, job, override)
 
     @api.post('/jobs/{job_id}/plan', status_code=202)
     def plan(job_id: str, response: Response, body: Optional[PlanRequest] = None,
@@ -390,7 +399,7 @@ def create_app(settings: Settings) -> FastAPI:
         speed = body.travel_speed_mm_s if body else None
         try:
             run = runs.start(job_id, 'plan', lambda d: adapters.plan_steps(settings, d, job, subset, speed),
-                             on_success=lambda d: adapters.promote_plan(d, job, override))
+                             on_success=lambda d: promote_gated(d, job, collision, override))
         except RunBusyError as exc:
             raise _busy(exc) from exc
         response.headers['Location'] = f'/api/v1/runs/{run["run_id"]}'

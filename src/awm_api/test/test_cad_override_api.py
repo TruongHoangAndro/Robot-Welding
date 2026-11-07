@@ -222,3 +222,48 @@ def test_reference_survives_delete_of_the_override(client, repo, monkeypatch):
     assert client.delete(URL, headers=auth(client, 'adm')).status_code == 204
     ref = json.loads((job / 'path.json').read_text())['cad_check_override']
     assert ref['by'] == 'adm' and ref['reason'] == REASON['reason'] and ref['created_at']
+
+
+def test_seam_gate_runs_inside_the_slot(client, repo, monkeypatch):
+    """Minor 3: the gate is evaluated again while the seam save holds the run slot."""
+    from awm_api import cad_api
+    _job, h = overridden_job(client, repo, monkeypatch)
+    seen, real = [], cad_api.cad_gate
+
+    def spy(*a, **kw):
+        active = client.app.state.runs.active()
+        seen.append(active['kind'] if active else None)
+        return real(*a, **kw)
+
+    monkeypatch.setattr(cad_api, 'cad_gate', spy)
+    assert client.put('/api/v1/jobs/J1_A/seams', headers=h, json={'seams': [pick()]}).status_code == 200
+    assert 'seams' in seen
+
+
+def _plan_running(client, repo, monkeypatch):
+    job, h = overridden_job(client, repo, monkeypatch)
+    assert client.put('/api/v1/jobs/J1_A/seams', headers=h, json={'seams': [pick()]}).status_code == 200
+    monkeypatch.setenv('FAKE_SLEEP_S', '1.5')
+    r = plan(client, h)
+    assert r.status_code == 202, r.text
+    return job, h, r.json()['run_id']
+
+
+def test_cad_check_change_during_plan_run_is_not_promoted(client, repo, monkeypatch):
+    """Minor 3 / 8: cad_check.json rewritten during the run (same inputs, other findings) voids the override."""
+    job, h, run_id = _plan_running(client, repo, monkeypatch)
+    doc = json.loads((job / 'cad_check.json').read_text())
+    doc['checks'][1]['values']['hits'] = doc['checks'][1]['values']['hits'][:1]
+    (job / 'cad_check.json').write_text(json.dumps(doc))
+    run = wait_run(client, h, run_id)
+    assert run['state'] == 'failed' and 'void' in json.dumps(run['problem']), run
+    assert not (job / 'path.json').exists()
+
+
+def test_stale_check_during_plan_run_is_not_promoted(client, repo, monkeypatch):
+    """Minor 3: an input of cad_check.json changing during the run (stale check) refuses the promotion."""
+    job, h, run_id = _plan_running(client, repo, monkeypatch)
+    (job / 'model.step').write_text('ISO-10303-21; changed')
+    run = wait_run(client, h, run_id)
+    assert run['state'] == 'failed' and 'run the cross-check again' in run['problem']['detail'], run
+    assert not (job / 'path.json').exists()
