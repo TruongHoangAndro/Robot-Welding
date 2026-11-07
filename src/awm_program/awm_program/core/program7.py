@@ -273,10 +273,6 @@ def weld_spline(s: np.ndarray, q7: np.ndarray, speed: float, params: ProgramPara
     return t, v, a, vmax, amax, ramp
 
 
-def _within(vmax: np.ndarray, amax: np.ndarray, cell: ProgramCell) -> bool:
-    return bool(np.all(vmax <= cell.velocity_deg_s * (1 + 1e-9)) and np.all(amax <= cell.accel_deg_s2 * (1 + 1e-9)))
-
-
 def speed_within_limits(s: np.ndarray, q7: np.ndarray, speed: float, cell: ProgramCell, params: ProgramParams) -> bool:
     """The planner's verdict (:func:`awm_path.core.weld_timing.within_limits`) for the weld at ``speed``."""
     return weld_timing.within_limits(s, q7, speed, cell.velocity_deg_s, cell.accel_deg_s2,

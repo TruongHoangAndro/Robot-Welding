@@ -86,6 +86,24 @@ def test_program_cell_refuses_acceleration_limits_other_than_the_planner_cell():
         program7.ProgramCell(pc.sync, tuple(AL * 2.0), pc.home_deg, pc.robot_joints, pc.positioner_joints)
 
 
+@pytest.mark.parametrize('seed', [8, 178])
+def test_program_feasibility_equals_planner_feasibility_over_a_speed_sweep(seed):
+    """Replaces awm_path test_same_model_as_the_program_generator (review 1.b): the program's verdict is the planner's,
+    exactly, at every speed of a sweep across the non-monotonic range, and so is the reported maximum."""
+    s, q = _random_path(seed)
+    pcell = _pcell()
+    for speed in np.round(np.arange(0.25, 6.01, 0.05), 6):
+        planner = wt.speed_report(s, q, float(speed), VL, AL, RAMP, RES)
+        assert program7.speed_within_limits(s, q, float(speed), pcell, PARAMS) is planner['speed_within_limits']
+        assert program7.speed_within_limits(s, q, float(speed), pcell, PARAMS) is \
+            wt.within_limits(s, q, float(speed), VL, AL, RAMP)
+    assert program7.max_feasible_speed(s, q, 3.0, pcell, PARAMS) == wt.max_feasible_speed(s, q, VL, AL, RAMP, RES)
+
+
+def test_program_has_no_private_limit_check_left():
+    assert not hasattr(program7, '_within')
+
+
 def test_refusal_advice_on_a_maximum_above_the_refused_request():
     """Review 1.a, seed 8: 3.0 mm/s is refused but the maximum is 3.67 mm/s (feasibility not monotonic). The advice
     must be 'a travel speed ≤ the maximum', never 'a lower travel speed'."""
