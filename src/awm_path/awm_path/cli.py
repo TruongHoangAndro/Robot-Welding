@@ -198,8 +198,8 @@ def plan(args: argparse.Namespace) -> int:
                   'description': desc.as_record()}
     info = PlannerInfo(kinematics_backend=kin.name, head_model=args.head_model, params=run_params)
     flange_t_part = seam_axis.pose_mm_to_matrix(axis_doc['flange_T_part'], 'seam_axis.json flange_T_part')
-    doc = build_path_doc(plans, desc.sync_cell, flange_t_part, info, header, _context(desc, frames_yaml, head_hash,
-                                                                                         git))
+    doc = build_path_doc(plans, desc.sync_cell, flange_t_part, info, header,
+                         _context(desc, frames_yaml, head_hash, git), params)
     out = Path(args.out)
     jsonio.write_json(out, doc, 'v2/path')
     n_ok, n_bad = len(doc['seams']), len(doc['rejected'])

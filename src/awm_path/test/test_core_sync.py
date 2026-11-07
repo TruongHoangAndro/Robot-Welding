@@ -30,7 +30,7 @@ def _cell(theta_limits=(-400.0, 400.0)):
     lims = ((-360.0, 360.0), (-360.0, 360.0), (-180.0, 180.0), (-360.0, 360.0), (-360.0, 360.0), (-360.0, 360.0))
     return SyncCell(base_link_T_axis=axis, world_z_base=np.array([0.0, 0.0, 1.0]), tool0_T_tcp=tcp,
                     joint_limits_deg=lims, theta_limits_deg=theta_limits, joint_velocity_deg_s=(180.0,) * 6,
-                    theta_velocity_deg_s=30.0)
+                    theta_velocity_deg_s=30.0, joint_acceleration_deg_s2=(286.0,) * 6, theta_acceleration_deg_s2=50.0)
 
 
 def _ring_seam(closed=True, offset=(0.0, 0.0, 0.0), axis='x', n=N_RING, r=R_RING):

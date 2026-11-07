@@ -98,3 +98,15 @@ def test_same_input_same_doc(plans, kin):
     assert a['planner']['params_sha256'] != build_path_doc(
         plans, _cell(), FLANGE_T_PART, PlannerInfo(kin.name, 'hbox', b['planner']['params']), HEADER,
         CONTEXT)['planner']['params_sha256']
+
+
+def test_speed_record_is_acceleration_aware_and_params_recorded_are_used(plans, kin):
+    """G1.9: the accepted arc carries the spline-based speed record; a sync record that differs from the parameters
+    used to time the arcs is refused (what is recorded is what was used)."""
+    doc = _doc(plans, kin)
+    pl = doc['seams'][0]['planning']
+    assert pl['max_travel_speed_mm_s'] > 0.0 and len(pl['max_joint_speed_deg_s']) == 7
+    assert pl['speed_within_limits'] is (8.0 <= pl['max_travel_speed_mm_s'])
+    with pytest.raises(ValueError, match='differs'):
+        build_path_doc(plans, _cell(), FLANGE_T_PART, _info(kin), HEADER, CONTEXT,
+                       SyncParams(weld_ramp_accel_mm_s2=50.0))
