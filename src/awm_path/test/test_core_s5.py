@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from awm_path.core.ladder import NodeScore, solve
-from awm_path.core.s5 import (classify_points, longest_window, max_label_steps, path_metrics, point_classes,
+from awm_path.core.s5 import (POINT_CLASSES, classify_points, longest_window, max_label_steps, path_metrics, point_classes,
                               refine_pitch)
 from awm_path.core.sweep import Candidate, PlannerParams
 
@@ -83,7 +83,7 @@ def test_classify_points_gives_a_class_and_the_colliding_pairs():
     cols['clearance_blocking'][2] = ['conduit<->part']
     pts = classify_points(layers, cols)
     assert [p['valid_nodes'] for p in pts] == [1, 0, 0, 0, 0]
-    assert point_classes(pts) == [None, 'F4', 'clearance', 'IK', 'contact']
+    assert point_classes(pts) == [None, 'F4', 'clearance', 'IK', 'nozzle']   # F9 at point 4 → nozzle (CP-56)
     assert pts[1]['pairs'] == {'head_body<->jig_1': 1, 'nozzle_body<->part': 1}
     assert pts[2]['pairs'] == {'conduit<->part': 1}
     assert pts[3]['counts'] == {'singular_wrist': 1}
@@ -159,3 +159,33 @@ def test_refine_pitch_closed_uses_pitch_length_over_n_and_doubles_n():
     # an open ramp that does not return to its start fails the closing step at every pitch
     bad = refine_pitch(10.0, 1.0, lambda n: _ramp_layers(n, 40.0 / n), params, 0.5, closed=True)
     assert not bad.ok and bad.max_step_deg == pytest.approx(40.0 - 40.0 / bad.points)
+
+
+def test_point_classes_give_the_cause_nozzle_for_f4_on_the_nozzle_only():
+    """Review I3 / CP-56 decision 2: F4 failures only on nozzle_tip / nozzle_body (and F9) → cause 'nozzle'; a point
+    where another head link also collides stays 'F4'."""
+    layers = [[_c(0, 0, 'S+E+W+', [0] * 6), _c(0, 1, 'S+E+W+', [0] * 6)], [_c(1, 0, 'S+E+W+', [0] * 6)]]
+    valid = [[False, False], [False]]
+    f4 = [[False, False], [False]]
+    cols = _cols(layers, valid, f4=f4, clr=[[None, None], [None]])
+    cols['scene_contacts'][0] = ['nozzle_body<->part', 'jig_1<->nozzle_tip']
+    cols['scene_contacts'][1] = ['nozzle_body<->part;head_body<->jig_1']
+    pts = classify_points(layers, cols)
+    assert point_classes(pts) == ['nozzle', 'F4']
+    assert point_classes(pts, nozzle_links=('nozzle_tip',)) == ['F4', 'F4']
+    assert POINT_CLASSES[0] == 'nozzle'
+
+
+def test_coverage_reject_reason_names_the_causes():
+    from awm_path.core.s5 import coverage_reject_reason
+    r = coverage_reject_reason([None, 'nozzle', 'F4', 'nozzle', None])
+    assert r == 'no path: C2 fails at 3 of 5 points (causes: nozzle 2, F4 1)'
+    assert coverage_reject_reason([None, None]) is None
+
+
+def test_unreachable_point_is_ik_even_when_f9_fails():
+    """Review minor 7: no kinematically valid candidate → 'IK' (unreachable), even if F9 also fails there."""
+    layers = [[_c(0, 0, None, None, reason='no_ik_unreachable')]]
+    cols = _cols(layers, [[False]], f4=[[None]], clr=[[None]], contact=[[False]])
+    pts = classify_points(layers, cols)
+    assert point_classes(pts) == ['IK']

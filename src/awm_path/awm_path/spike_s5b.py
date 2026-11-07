@@ -35,7 +35,7 @@ import numpy as np
 
 from awm_core import jsonio, units
 from awm_path.core.mode_b import circular_runs
-from awm_path.gate_g2 import add_head_cli
+from awm_path.gate_g2 import add_head_cli, head_assumption
 from awm_path.core.s5 import PITCH_RULES
 
 CREATED_BY = 'awm_path.spike_s5b'
@@ -130,19 +130,24 @@ def theta_invariant_blocking(rows, psi_all: Sequence[float], head_links, rotatin
     With work / travel angle fixed, the head pose relative to the part and to every object that turns with it
     depends only on (s, ψ), not on θ or the IK branch. A contact between a head link and the rotating set is
     therefore the same at every θ. ``rows`` = (s_mm, ψ_deg, kinematic reason, F4 contacts) of the candidates of all
-    screened θ. A bin is ``blocked`` when every ψ of ``psi_all`` was kinematically valid somewhere in the bin at some
-    θ and every such candidate had a head ↔ rotating-set contact (F4, 3 mm padding). ψ never kinematically valid in
-    the bin are listed (``psi_unseen``): for them the screening has no evidence and the bin is not marked blocked.
+    screened θ. A bin is ``blocked`` when **at every sampled point of the bin** (every s of ``rows`` in the bin) every
+    ψ of ``psi_all`` was kinematically valid at that point at some θ and every such candidate had a head ↔
+    rotating-set contact (F4, 3 mm padding). ψ never kinematically valid at a point of the bin are listed
+    (``psi_unseen``, union over the points): for them the screening has no evidence and the bin is not marked blocked
+    (review M3: ψ seen at different points of a bin are no evidence for one point).
     """
     nb = max(1, int(np.ceil(length_mm / bin_mm - 1e-9)))
-    seen = [set() for _ in range(nb)]
-    free = [set() for _ in range(nb)]
+    seen: List[Dict[float, set]] = [{} for _ in range(nb)]
+    free: List[Dict[float, set]] = [{} for _ in range(nb)]
     pairs: Counter = Counter()
     head, rot = set(head_links), set(rotating_ids)
     for s_mm, psi, reason, contacts in rows:
+        b = min(nb - 1, int(float(s_mm) // bin_mm))
+        key = round(float(s_mm), 6)
+        seen[b].setdefault(key, set())
+        free[b].setdefault(key, set())
         if reason:
             continue
-        b = min(nb - 1, int(float(s_mm) // bin_mm))
         hp = []
         for pair in (contacts or '').split(';'):
             if not pair:
@@ -150,17 +155,19 @@ def theta_invariant_blocking(rows, psi_all: Sequence[float], head_links, rotatin
             a, c = pair.split('<->')
             if (a in rot and c in head) or (c in rot and a in head):
                 hp.append(pair)
-        seen[b].add(float(psi))
+        seen[b][key].add(float(psi))
         if hp:
             pairs.update(hp)
         else:
-            free[b].add(float(psi))
+            free[b][key].add(float(psi))
     psi_all = sorted(float(x) for x in psi_all)
     bins = []
     for b in range(nb):
-        unseen = [p for p in psi_all if p not in seen[b]]
-        bins.append({'s_from_mm': b * bin_mm, 's_to_mm': min((b + 1) * bin_mm, length_mm),
-                     'blocked': not unseen and not free[b], 'psi_unseen': unseen, 'psi_free': sorted(free[b])})
+        unseen = sorted({p for pts in seen[b].values() for p in psi_all if p not in pts})
+        free_b = sorted(set().union(*free[b].values())) if free[b] else []
+        blocked = bool(seen[b]) and not unseen and not free_b
+        bins.append({'s_from_mm': b * bin_mm, 's_to_mm': min((b + 1) * bin_mm, length_mm), 'blocked': blocked,
+                     'psi_unseen': unseen if seen[b] else psi_all, 'psi_free': free_b, 'points': len(seen[b])})
     runs = []
     for b in bins:
         if b['blocked'] and runs and abs(runs[-1]['s_to_mm'] - b['s_from_mm']) < 1e-9:
@@ -376,7 +383,7 @@ def _cmd_run(args) -> int:
     from awm_path.core.scoring import SceneScoreParams
     from awm_path.core.sweep import PlannerParams, required_points
     from awm_path.core.head import contact_params_for
-    from awm_path.gate_g2 import _git, _rel, launch_args_from_frames, parse_head_args
+    from awm_path.gate_g2 import _git, _rel, launch_args_from_frames, parse_head_args, head_launch_args
     from awm_path.spike_s5 import _rotation_rate_deg_per_mm
 
     t_run = time.perf_counter()
@@ -416,6 +423,7 @@ def _cmd_run(args) -> int:
     while length / (2 * n_max) >= inp['pitch_min_mm']:
         n_max *= 2
     launch_args = dict(launch_args_from_frames(frames_file), cell_manifest=str(cell_manifest.resolve()),
+                       **head_launch_args(args.head_model, args.head_dir, repo),
                        **parse_head_args(args.head_arg))
     results: Dict[str, Any] = {}
     not_run: List[str] = []
@@ -521,9 +529,10 @@ def _cmd_run(args) -> int:
             'modelled (OI-27)',
             'all holders on positioner_flange, i.e. they rotate with the part (I3 / OI-27 open)',
             'part and robot base poses from CAD component placements, no REF_* markers (OI-23, scene decisions D1–D3)',
-            'H-BOX head (TST-002 §3.1), nozzle Ø20 x 40 mm, s_c 0.3 mm, TCP at the nozzle tip, conduit at the head '
-            'side (scene decision D7)',
-            'F9 point tolerance 0.15 mm (TST-002 gives no value); F6 elbow 5° / shoulder 50 mm',
+            head_assumption(args.head_model, contact_params, scene.head.as_record()) + '; conduit at the head side '
+            '(scene decision D7)',
+            f'F9 point tolerance {contact_params.point_tolerance_mm:g} mm (TST-002 gives no value); F6 elbow 5° / '
+            'shoulder 50 mm',
             'Ψ-WIRE window centre 0° (= seam X, wire-leading direction unknown, I5 / E-05) ± 15° in 5° steps',
             f'join overlap {join_ov} mm between Mode B segments = seam arc_overlap_mm (T0.5 example value; welding '
             'engineer to confirm, OI-11 / OI-16)',

@@ -95,7 +95,7 @@ def test_theta_invariant_blocking_marks_bins_blocked_for_every_psi():
     from awm_path.spike_s5b import theta_invariant_blocking
     head, rot = {'head_body', 'nozzle_tip'}, {'part', 'holder'}
     rows = [  # (s_mm, psi_deg, kinematic reason, scene_contacts) from all θ
-        (0.5, 0.0, None, 'part<->nozzle_tip'), (0.6, 10.0, None, 'holder<->head_body;jig<->forearm_link'),
+        (0.5, 0.0, None, 'part<->nozzle_tip'), (0.5, 10.0, None, 'holder<->head_body;jig<->forearm_link'),
         (1.5, 0.0, None, 'part<->nozzle_tip'), (1.5, 10.0, None, 'jig<->head_body'),   # ψ 10 free of the set
         (2.5, 0.0, None, 'part<->nozzle_tip'),                                         # ψ 10 never seen
         (3.2, 0.0, 'no_ik_unreachable', ''), (3.4, 10.0, None, ''),
@@ -106,3 +106,24 @@ def test_theta_invariant_blocking_marks_bins_blocked_for_every_psi():
     assert r['bins'][2]['psi_unseen'] == [10.0]
     assert r['blocked_runs'] == [{'s_from_mm': 0.0, 's_to_mm': 1.0}]
     assert r['pairs'] == {'holder<->head_body': 1, 'part<->nozzle_tip': 3}
+
+
+def test_theta_invariant_blocking_needs_every_psi_at_every_point_of_the_bin():
+    """Review M3: ψ seen at different points of a bin is no evidence that one point is blocked for every ψ."""
+    from awm_path.spike_s5b import theta_invariant_blocking
+    head, rot = {'head_body'}, {'part'}
+    rows = [(2.0, 0.0, None, 'part<->head_body'), (8.0, 10.0, None, 'part<->head_body')]
+    r = theta_invariant_blocking(rows, psi_all=[0.0, 10.0], head_links=head, rotating_ids=rot, bin_mm=10.0,
+                                 length_mm=10.0)
+    assert r['bins'][0]['blocked'] is False
+    assert r['bins'][0]['psi_unseen'] == [0.0, 10.0]
+    # both ψ at both points, all contacting → blocked
+    rows += [(2.0, 10.0, None, 'part<->head_body'), (8.0, 0.0, None, 'part<->head_body')]
+    r = theta_invariant_blocking(rows, psi_all=[0.0, 10.0], head_links=head, rotating_ids=rot, bin_mm=10.0,
+                                 length_mm=10.0)
+    assert r['bins'][0]['blocked'] is True and r['bins'][0]['psi_unseen'] == []
+    # a point with only kinematically invalid candidates has no evidence → not blocked
+    rows.append((5.0, 0.0, 'no_ik_unreachable', ''))
+    r = theta_invariant_blocking(rows, psi_all=[0.0, 10.0], head_links=head, rotating_ids=rot, bin_mm=10.0,
+                                 length_mm=10.0)
+    assert r['bins'][0]['blocked'] is False

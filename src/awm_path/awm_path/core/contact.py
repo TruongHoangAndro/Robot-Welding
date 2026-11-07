@@ -58,6 +58,13 @@ RULE_B = ('rising', 'unsigned')
 _CHUNK = 64
 
 
+def min_rim_samples(radius_mm: float, standoff_mm: float, ring_samples: int) -> int:
+    """Smallest multiple of ``ring_samples`` with rim spacing 2π·r / n ≤ 2·s_c (multiple: the sample set keeps the
+    rotation invariance of the rings, 360° / ``ring_samples``)."""
+    need = math.ceil(math.pi * float(radius_mm) / float(standoff_mm) - 1e-9)
+    return int(ring_samples * max(1, math.ceil(need / ring_samples)))
+
+
 @dataclass(frozen=True)
 class ContactParams:
     """Contact check parameters (mm).
@@ -65,9 +72,17 @@ class ContactParams:
     * ``nozzle_radius_mm`` 10, ``standoff_mm`` (s_c) 0.3: TST-002 §3.1 / F9 — Assumption until IPG data (I2);
     * ``point_tolerance_mm`` 0.15: "within tolerance" of F9 is not given a value by TST-002; chosen here as the part
       chord near the seams (0.1 mm, B-Rep → mesh) + 0.05 mm — Assumption, recorded with every result;
-    * sample density: the rim spacing (2π·10 / 360 = 0.17 mm) is below 2·s_c, so a face crossing the rim is never
-      missed; ``point_tolerance_mm`` is also the seam-edge tolerance of rule (b) and the height tolerance of the
-      contact plane (CP-56: "allowing the contact tolerance"); ``tie_mm`` is numerical only;
+    * sample density: the rim spacing 2π·r / ``rim_samples`` must be ≤ 2·s_c (checked here; H-BOX 2π·10 / 360 =
+      0.17 mm), so a face crossing the rim is never missed; :func:`awm_path.core.head.contact_params_for` derives
+      ``rim_samples`` from the configured r and s_c (review M1). ``point_tolerance_mm`` is also the seam-edge tolerance
+      of rule (b) and the height tolerance of the contact plane (CP-56: "allowing the contact tolerance");
+      ``tie_mm`` is numerical only;
+    * **interior blind spot (Assumption, review M1):** inside the rim the disc is sampled on rings every
+      ``ring_spacing_mm`` (2 mm) with ``ring_samples`` points, much coarser than 2·s_c. A non-seam feature that rises
+      into the nozzle footprint by h ∈ (``point_tolerance_mm``, s_c) and stays farther than s_c from every disc
+      sample (between two rings, not reaching the rim) is not seen by F9. Features rising by h ≥ s_c inside the
+      footprint hit the ``nozzle_tip`` collision cylinder (F4, it stops s_c short of ``tcp_laser``), so the blind
+      spot is limited to that height band; denser rings would close it at a higher sample cost;
     * ``rule_b``: ``'rising'`` (CP-56 decision 1, default) or ``'unsigned'`` (S.4 rule, reproduction only).
 
     The nozzle values (radius, s_c) are cell data (CP-56 decision 2): runners build them from the robot description
@@ -86,6 +101,13 @@ class ContactParams:
     def __post_init__(self) -> None:
         if self.rule_b not in RULE_B:
             raise ValueError(f'rule_b must be one of {RULE_B}, got {self.rule_b!r}')
+        if self.nozzle_radius_mm <= 0.0 or self.standoff_mm <= 0.0 or self.rim_samples < 3:
+            raise ValueError('nozzle radius and standoff must be > 0 and rim_samples ≥ 3')
+        spacing = 2.0 * math.pi * self.nozzle_radius_mm / self.rim_samples
+        if spacing > 2.0 * self.standoff_mm + 1e-12:
+            raise ValueError(f'rim sample spacing {spacing:.4f} mm > 2·s_c = {2.0 * self.standoff_mm:.4f} mm: a face '
+                             f'crossing the rim could be missed; use rim_samples ≥ '
+                             f'{min_rim_samples(self.nozzle_radius_mm, self.standoff_mm, self.ring_samples)}')
 
     def as_record(self) -> dict:
         """Parameters as a plain dict (run records)."""

@@ -56,3 +56,15 @@ def test_acceleration_limits_come_from_the_program_sources(tmp_path):
     rec = desc.as_record()
     assert rec['joint_limits_sha256'] == sha256_file(joint_limits_file())
     assert rec['acceleration_deg_s2'] == want
+
+
+def test_rendered_descriptions_match_their_head_model(tmp_path):
+    """Review I1: hbox renders a box head_body, hcad a mesh head_body (the label check of the runners)."""
+    from awm_seam import seam_axis
+    from awm_path.core.head import head_model_of_urdf
+    from awm_path.description import load_planning_description
+    job = make_ring_job(tmp_path / 'repo')
+    frames = seam_axis.frames_path(job)
+    head = write_synthetic_head_dir(tmp_path / 'h' / 'head')
+    assert head_model_of_urdf(load_planning_description(frames, 'hbox').urdf) == 'hbox'
+    assert head_model_of_urdf(load_planning_description(frames, 'hcad', str(head)).urdf) == 'hcad'

@@ -149,3 +149,42 @@ def test_run_gate_uses_the_given_tool0_T_tcp() -> None:
     off[2, 3] = 7.0
     c = run_gate(FakeScene(), FakeKin(), poses, seams, _plate(), _part(), ContactParams(), tool0_T_tcp=off)
     assert [r.details['q_deg'] for r in a] != [r.details['q_deg'] for r in c]
+
+
+def test_head_assumption_text_comes_from_the_description_values():
+    """Review M2: run records state the nozzle / s_c / TCP of the description in use, not hard-coded H-BOX values."""
+    from awm_path.gate_g2 import head_assumption
+    head = {'nozzle_radius_mm': 6.0, 'contact_standoff_mm': 0.25, 'nozzle_tip_length_mm': 5.0,
+            'tool0_T_tcp_mm': {'position_mm': [43.8, 0.0, 279.6], 'quat_xyzw': [0.0, 0.0, 0.0, 1.0]}}
+    text = head_assumption('H-CAD', ContactParams(nozzle_radius_mm=6.0, standoff_mm=0.25), head)
+    assert 'H-CAD head' in text and 'Ø12 mm' in text and 's_c 0.25 mm' in text and '(43.8, 0, 279.6)' in text
+    assert 'H-BOX' not in text and 'Ø20' not in text
+
+
+def test_head_launch_args_pass_the_head_model_and_folder(tmp_path):
+    """Review I1: runners pass head_model (and head_dir for H-CAD) to sim_mock, as load_planning_description does."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'awm_description' / 'test'))
+    pytest.importorskip('awm_bringup.cell_config', reason='awm_bringup not built')
+    from head_fixture import write_synthetic_head_dir
+    from awm_path.gate_g2 import head_launch_args
+    assert head_launch_args('H-BOX', None, tmp_path) == {'head_model': 'hbox'}
+    head = write_synthetic_head_dir(tmp_path / 'cell' / 'model' / 'head')
+    assert head_launch_args('H-CAD', None, tmp_path) == {'head_model': 'hcad', 'head_dir': str(head.resolve())}
+    other = write_synthetic_head_dir(tmp_path / 'other' / 'head')
+    assert head_launch_args('hcad', str(other), tmp_path)['head_dir'] == str(other.resolve())
+    with pytest.raises(ValueError):
+        head_launch_args('H-CAD', None, tmp_path / 'empty')
+    with pytest.raises(ValueError, match='head model'):
+        head_launch_args('H-XYZ', None, tmp_path)
+
+
+def test_head_args_refuse_head_model_and_head_dir():
+    """Review minor 5: head_model / head_dir belong to --head-model / --head-dir; a duplicate in --head-arg is refused
+    with a clear message instead of a TypeError from dict(**a, **b)."""
+    from awm_path.gate_g2 import parse_head_args
+    for key in ('head_model', 'head_dir'):
+        with pytest.raises(ValueError, match='--head-model / --head-dir'):
+            parse_head_args([f'{key}=1'])
+    assert parse_head_args(['nozzle_dia_mm=12']) == {'nozzle_dia_mm': '12'}

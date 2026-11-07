@@ -24,7 +24,7 @@ import numpy as np
 from awm_core import units
 from awm_core.frames import matrix_to_quat, rotation_angle_between, rpy_to_matrix
 from awm_core.hashing import sha256_text
-from awm_path.core.contact import ContactParams
+from awm_path.core.contact import ContactParams, min_rim_samples
 
 #: Tolerances of the nozzle-on-beam-axis check and of the FK cross-check (numerical only).
 AXIS_POS_TOL_MM = 1e-6
@@ -126,8 +126,51 @@ def head_from_urdf(urdf_xml: str, *, tool_link: str = 'tool0', tcp_link: str = '
 
 def contact_params_for(head: HeadGeometry, base: ContactParams = ContactParams()) -> ContactParams:
     """F9 parameters with the nozzle (radius, s_c) of the description (CP-56 decision 2); other values from ``base``.
+    ``rim_samples`` is raised (never lowered) to :func:`awm_path.core.contact.min_rim_samples` so that the rim spacing
+    stays ≤ 2·s_c for the configured nozzle (review M1).
     """
-    return dataclasses.replace(base, nozzle_radius_mm=head.nozzle_radius_mm, standoff_mm=head.contact_standoff_mm)
+    rim = max(int(base.rim_samples),
+              min_rim_samples(head.nozzle_radius_mm, head.contact_standoff_mm, int(base.ring_samples)))
+    return dataclasses.replace(base, nozzle_radius_mm=head.nozzle_radius_mm, standoff_mm=head.contact_standoff_mm,
+                               rim_samples=rim)
+
+
+#: Head model labels of the runners / records → description head_model (sim_mock ``head_model`` arg).
+HEAD_MODEL_LABELS = {'hbox': 'hbox', 'hcad': 'hcad'}
+
+
+def normalise_head_model(label: str) -> str:
+    """``'H-BOX'`` / ``'hbox'`` → ``'hbox'``, ``'H-CAD'`` / ``'hcad'`` → ``'hcad'``; anything else is refused."""
+    key = str(label).strip().lower().replace('-', '').replace('_', '')
+    if key not in HEAD_MODEL_LABELS:
+        raise ValueError(f'unknown head model {label!r}: expected H-BOX (hbox) or H-CAD (hcad)')
+    return HEAD_MODEL_LABELS[key]
+
+
+def head_model_of_urdf(urdf_xml: str, body_link: str = 'head_body') -> str:
+    """Head model a description was rendered with: ``'hcad'`` if the ``head_body`` collision is a mesh (CAD hull),
+    ``'hbox'`` if it is a box (TST-002 §3.1 envelope). Raises ``ValueError`` otherwise."""
+    root = ET.fromstring(urdf_xml)
+    links = [l for l in root.findall('link') if l.get('name') == body_link]
+    if len(links) != 1:
+        raise ValueError(f'link {body_link!r} not (uniquely) in the robot description')
+    kinds = {g.tag for c in links[0].findall('collision') for geo in c.findall('geometry') for g in geo}
+    if kinds == {'mesh'}:
+        return 'hcad'
+    if kinds == {'box'}:
+        return 'hbox'
+    raise ValueError(f'{body_link!r} collision geometry {sorted(kinds)} is neither a box (H-BOX) nor a mesh (H-CAD)')
+
+
+def check_head_model(urdf_xml: str, label: str) -> str:
+    """Refuse a description whose head is not the one named by the run label (review I1: an ``H-CAD`` record must
+    not be computed on H-BOX geometry). Returns the normalised model."""
+    want = normalise_head_model(label)
+    have = head_model_of_urdf(urdf_xml)
+    if have != want:
+        raise ValueError(f'run labelled {label!r} ({want}) but the robot description in use has the {have} head: pass '
+                         f'head_model:={want} (and head_dir for hcad) to the launch')
+    return want
 
 
 def check_against_fk(head: HeadGeometry, tool0_T_tcp_fk_mm: np.ndarray) -> Tuple[float, float]:
@@ -141,4 +184,5 @@ def check_against_fk(head: HeadGeometry, tool0_T_tcp_fk_mm: np.ndarray) -> Tuple
     return dp, dr
 
 
-__all__ = ['HeadGeometry', 'head_from_urdf', 'contact_params_for', 'check_against_fk']
+__all__ = ['HeadGeometry', 'head_from_urdf', 'contact_params_for', 'check_against_fk', 'HEAD_MODEL_LABELS',
+           'normalise_head_model', 'head_model_of_urdf', 'check_head_model']

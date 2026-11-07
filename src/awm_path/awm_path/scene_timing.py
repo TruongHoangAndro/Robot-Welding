@@ -94,7 +94,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     from awm_path.core.scene_files import part_object_files, world_T_object
     from awm_path.core.scoring import SceneScoreParams, score_candidates
     from awm_path.core.sweep import PlannerParams, required_points, sweep, write_candidates_csv
-    from awm_path.gate_g2 import _git, launch_args_from_frames, parse_head_args
+    from awm_path.gate_g2 import _git, launch_args_from_frames, parse_head_args, head_launch_args
 
     repo = Path(args.repo)
     job = repo / 'jobs' / args.job
@@ -117,6 +117,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     seam_faces = (tuple(args.n1.split(',')), tuple(args.n2.split(',')))
     kin = UrAnalyticKinematics()
     launch_args = dict(launch_args_from_frames(frames_file), cell_manifest=str(cell_manifest.resolve()),
+                       **head_launch_args(args.head_model, args.head_dir, repo),
                        **parse_head_args(args.head_arg))
     with SimLaunch(log_dir=args.log_dir, launch_file='sim_mock.launch.py', launch_args=launch_args) as sim:
         rclpy.init()
