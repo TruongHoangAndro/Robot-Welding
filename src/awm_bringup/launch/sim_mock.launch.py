@@ -111,7 +111,7 @@ def _launch_setup(context, *args, **kwargs):
         raise ValueError(f'trajectory_controllers must be one of {sorted(TRAJECTORY_CONTROLLERS)}, got {traj!r}')
     moveit_controllers_file, spawned = TRAJECTORY_CONTROLLERS[traj]
     manifest = values['cell_manifest'] or (FindPackageShare('awm_bringup').perform(context)
-                                        + '/config/cell_scene_nominal.yaml')
+                                           + '/config/cell_scene_nominal.yaml')
     moveit_config = (
         MoveItConfigsBuilder('awm_cell_v2', package_name='awm_description')
         .robot_description(file_path='urdf/awm_cell_v2.urdf.xacro', mappings=mappings)

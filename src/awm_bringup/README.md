@@ -12,6 +12,19 @@ a real-robot launch is run by a person only.
 | `repo_template/cell/` | SAMPLE WPS (D05), NOMINAL calibration (D08, `active.json`), io_map placeholder (D11) |
 | `awm_bringup.testing.SimLaunch` | runs the headless sim in a private ROS domain (tests, `run_chain --start-sim`) |
 
+## G1.16: the repository cell model in `sim_mock` (`repo:=`)
+
+```bash
+ros2 launch awm_bringup sim_mock.launch.py repo:=<repo root> trajectory_controllers:=robot_positioner
+ros2 run awm_bringup replay_program --program <repo root>/jobs/<job>/programs/P###/program.json
+```
+`repo:=` reads `<repo>/cell/model/frames.yaml` (base and positioner poses, positioner axis), `scene_manifest.json`
+(collision scene, must be from the same export) and `head/` (H-CAD when `head.yaml` exists; without it only an
+explicit `head_model:=hbox` is accepted). `base_*`, `positioner_*`, `cell_manifest`, `head_dir` together with
+`repo:=` are refused; a missing or malformed file stops the launch before any node starts. Without `repo:=` the
+launch behaves as before. Tests: `test_repo_args.py`, `test_sim_mock_repo_launch.py` (CP-60 repository through
+`AWM_CP60_REPO=<repo>`).
+
 ## G1.7: 7-joint controller and D09 replay (DES-001 §6.3 Option A1)
 
 ```bash
