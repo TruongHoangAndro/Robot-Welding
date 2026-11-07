@@ -192,9 +192,14 @@ def _check_manifest(manifest: Path, frames_yaml: Path) -> None:
     if not isinstance(doc, dict) or not doc.get('objects'):
         raise RepoArgError(f'{manifest}: no objects (re-run the cell import, S10)')
     named = doc.get('frames_file')
-    if named is not None and named != frames_yaml.name:
-        raise RepoArgError(f'{manifest}: frames_file {named!r} is not {frames_yaml.name}')
-    if doc.get('inputs') is not None and frames.get('inputs') is not None and doc['inputs'] != frames['inputs']:
+    if named != frames_yaml.name:
+        raise RepoArgError(f'{manifest}: frames_file {named!r} is not {frames_yaml.name!r}')
+    for path, d in ((manifest, doc), (frames_yaml, frames)):
+        inputs = d.get('inputs') if isinstance(d, dict) else None
+        if not isinstance(inputs, list) or not inputs:
+            raise RepoArgError(f'{path}: inputs missing or empty; cannot check that the manifest and frames.yaml '
+                               'are from the same export (re-run the cell import, S10)')
+    if doc['inputs'] != frames['inputs']:
         raise RepoArgError(f'{manifest} and {frames_yaml} are not from the same export (inputs differ); re-run the '
                            'cell import (S10)')
 

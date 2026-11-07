@@ -127,6 +127,10 @@ def test_bad_frames(tmp_path, edit, match):
     (lambda d: d.update(inputs=[{'name': '../cad/cell.step', 'sha256': 'c' * 64}]), 'same export'),
     (lambda d: d.update(frames_file='other.yaml'), 'frames_file'),
     (lambda d: d.update(objects=[]), 'no objects'),
+    (lambda d: d.pop('frames_file'), 'frames_file'),
+    (lambda d: d.pop('inputs'), 'inputs'),
+    (lambda d: d.update(inputs=[]), 'inputs'),
+    (lambda d: d.update(inputs='x'), 'inputs'),
 ])
 def test_manifest_from_another_export(tmp_path, edit, match):
     repo = make_repo(tmp_path / 'repo')
@@ -183,3 +187,13 @@ def test_launch_refuses_missing_frames(tmp_path):
                            f'repo:={repo}'], capture_output=True, text=True, timeout=120, check=False)
     out = proc.stdout + proc.stderr
     assert proc.returncode != 0 and 'frames.yaml' in out and 'process started' not in out, out
+
+
+@pytest.mark.parametrize('edit', [lambda d: d.pop('inputs'), lambda d: d.update(inputs=[]),
+                                  lambda d: d.update(inputs={'a': 1})])
+def test_frames_inputs_missing_refused(tmp_path, edit):
+    """Without inputs on both files the "same export" check cannot be made: refused (review 1)."""
+    repo = make_repo(tmp_path / 'repo')
+    _edit(repo / 'cell' / 'model' / 'frames.yaml', edit)
+    with pytest.raises(RepoArgError, match='inputs'):
+        repo_launch_args(str(repo), dict(EMPTY, head_model=''))
