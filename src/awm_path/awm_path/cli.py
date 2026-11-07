@@ -18,8 +18,10 @@ Contract agreed with the web agent (``awm_api`` planner adapter, G1.4)::
   same file and gives the same verdict.
 
 ``python3 -m awm_path.cli check --job <dir> [--path <file>]`` prints the problems and ``state <ok|stale|missing>`` of
-a D07 by the shared staleness rule (``awm_core.staleness.document_verdict``; the same rule ``awm_program`` and
-``awm_api`` use); exit 0 = ok, 1 = stale or missing.
+a D07 by the shared staleness rule (``awm_core.staleness.document_verdict``: input hashes, inputs inside the
+repository without links, record version — the rule ``awm_program`` and ``awm_api`` use); exit 0 = ok, 1 = stale or
+missing. ``ok`` here does not mean ``awm_program.cli generate`` will accept the D07: generate also compares the
+robot description and the NOMINAL calibration with the ones recorded in D07 and refuses an active D08.
 
 The robot description is rendered from xacro with the ``frames.yaml`` pose arguments and ``head_model`` /
 ``head_dir`` (no running simulation, no rclpy). Defaults (recorded in ``planner.params``): head model ``hcad``
@@ -103,7 +105,8 @@ def _parser() -> argparse.ArgumentParser:
     pl.add_argument('--head-dir', default=None, help='H-CAD head folder (default <repo>/cell/model/head)')
     pl.add_argument('--travel-speed-mm-s', type=float, default=DEFAULT_TRAVEL_SPEED_MM_S,
                     help='travel speed relative to the part (Assumption default until D06 v2)')
-    ck = sub.add_parser('check', help='staleness verdict of a D07 by the shared rule (awm_core.staleness)')
+    ck = sub.add_parser('check', help='staleness verdict of a D07 by the shared rule (awm_core.staleness); '
+                        'generate also compares the description, the calibration and the active D08')
     ck.add_argument('--job', required=True, help='job folder <repo>/jobs/<part>_<rev>')
     ck.add_argument('--path', default=None, help='D07 file (default <job>/path.json)')
     return p
