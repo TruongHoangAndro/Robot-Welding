@@ -39,3 +39,13 @@ describe('S10 taught TCP rows (audit m4)', () => {
     expect(rows.map((r) => r[0])).toEqual(['method', 'tool0 → TCP mm']);
   });
 });
+
+describe('S1 up-axis note (review minor 7)', () => {
+  it('says the default comes from the cell, or why it does not', async () => {
+    const { upAxisNote } = await import('../src/lib/cellinfo');
+    expect(upAxisNote('+Y', '+Y', false, null)).toBe('default from the cell (+Y)');
+    expect(upAxisNote('+Y', '+Z', true, null)).toBe('changed (cell up axis +Y)');
+    expect(upAxisNote(null, '+Z', false, null)).toBe('no cell STEP imported: default +Z');
+    expect(upAxisNote(null, '+Z', false, 'HTTP 500')).toBe('cell up axis not available (HTTP 500): default +Z');
+  });
+});

@@ -26,3 +26,11 @@ export function tcpRows(t: HeadTcp): [string, string][] {
   if (t.taught_by) rows.push(['taught', `${t.taught_by} at ${t.taught_at ?? '?'}`]);
   return rows;
 }
+
+/** S1 text next to the up-axis select: where the value comes from, or why the cell default is not available. */
+export function upAxisNote(cellUp: string | null, current: string, touched: boolean, error: string | null): string {
+  if (error) return `cell up axis not available (${error}): default +Z`;
+  if (!cellUp) return 'no cell STEP imported: default +Z';
+  if (touched && current !== cellUp) return `changed (cell up axis ${cellUp})`;
+  return `default from the cell (${cellUp})`;
+}
