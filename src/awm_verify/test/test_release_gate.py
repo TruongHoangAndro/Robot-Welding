@@ -146,3 +146,30 @@ def test_release_reads_cad_check_of_the_program_job(job):
         with pytest.raises(ReleaseError, match='check 4'):
             release(job, 'P001', 'A. Approver', scope)
     assert not job.release_json.exists() and not is_locked(job, 'P001')
+
+
+# ---------------------------------------------------------------------------------- review g1-19 I-1
+
+@pytest.mark.parametrize('scope', SCOPES)
+def test_cp60_job_without_cad_check_refused(tmp_path, scope):
+    """A CP-60 job (placement source job_cad, or an override record) must have its cross-check (rule 4)."""
+    ok = _checked(_example())
+    (tmp_path / 'placement.json').write_text(json.dumps({'source': 'job_cad'}))
+    with pytest.raises(ReleaseError, match='CP-60 job.*no cad_check.json'):
+        release_gate(ok, scope, job_dir=tmp_path)
+    (tmp_path / 'placement.json').unlink()
+    (tmp_path / 'cad_check_override.json').write_text('{}')
+    with pytest.raises(ReleaseError, match='CP-60 job.*no cad_check.json'):
+        release_gate(ok, scope, job_dir=tmp_path)
+
+
+@pytest.mark.parametrize('source', ['study', 'fixture_cad'])
+def test_manual_or_copied_placement_without_cad_check_keeps_old_behaviour(tmp_path, source):
+    (tmp_path / 'placement.json').write_text(json.dumps({'source': source}))
+    release_gate(_checked(_example()), 'simulation', job_dir=tmp_path)
+
+
+def test_unreadable_placement_without_cad_check_refused(tmp_path):
+    (tmp_path / 'placement.json').write_text('{not json')
+    with pytest.raises(ReleaseError, match='placement.json'):
+        release_gate(_checked(_example()), 'simulation', job_dir=tmp_path)

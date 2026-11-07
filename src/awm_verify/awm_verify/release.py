@@ -55,10 +55,34 @@ OVERRIDE_FIELD = 'cad_check_override'
 SWEPT_CHECK_ID = 4
 
 
+#: CP-62 override record in the job folder
+OVERRIDE_FILE = 'cad_check_override.json'
+#: D19 placement source written by the CP-60 job import (``awm_geometry.job_placement``)
+CP60_SOURCE = 'job_cad'
+
+
+def _cp60_marker(job_dir: Path, scope: str) -> Optional[str]:
+    """Why ``job_dir`` is a CP-60 job (which must have a cross-check), or ``None`` for a manual / copied placement.
+    An unreadable ``placement.json`` cannot be classified and is refused."""
+    if (job_dir / OVERRIDE_FILE).exists():
+        return f'{OVERRIDE_FILE} present'
+    placement = job_dir / 'placement.json'
+    if not placement.is_file():
+        return None
+    try:
+        source = json.loads(placement.read_text(encoding='utf-8')).get('source')
+    except (OSError, ValueError, AttributeError) as exc:
+        raise ReleaseError(f'placement.json is unreadable ({exc}); cannot tell whether the job needs a '
+                           f'{CAD_CHECK_FILE}; no {scope} release') from exc
+    return f'placement source {CP60_SOURCE}' if source == CP60_SOURCE else None
+
+
 def cad_check_gate(job_dir: Union[str, Path], scope: str) -> None:
     """CP-62 item 3 / CP-60: refuse a release while the job's ``cad_check.json`` is red or stale (any scope).
 
-    * no ``cad_check.json`` (job made before CP-60, manual placement): nothing to check, old behaviour;
+    * no ``cad_check.json``: refused for a CP-60 job (``placement.json`` source ``job_cad`` or a
+      ``cad_check_override.json`` in the job, :func:`_cp60_marker`); old behaviour (nothing to check) only for jobs
+      with a manual / copied placement or none;
     * unreadable or schema-invalid → refused;
     * stale → refused. Staleness = **hash check** of the recorded ``inputs`` against the job folder
       (``jsonio.check_inputs``, the reader rule of ``awm_verify``); ``awm_core.staleness`` (G1.17) is not on this
@@ -69,6 +93,10 @@ def cad_check_gate(job_dir: Union[str, Path], scope: str) -> None:
     A yellow check does not block. Raises ReleaseError."""
     path = Path(job_dir) / CAD_CHECK_FILE
     if not path.is_file():
+        reason = _cp60_marker(Path(job_dir), scope)
+        if reason:
+            raise ReleaseError(f'CP-60 job ({reason}) but no {CAD_CHECK_FILE}: run the cross-check; no {scope} '
+                               'release (design rule 4, CP-60)')
         return
     try:
         doc = jsonio.read_json(path, 'v2/cad_check', base_dir=Path(job_dir))
