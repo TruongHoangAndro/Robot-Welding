@@ -69,17 +69,18 @@ def _flange():
     return BRepAlgoAPI_Cut(_cyl(31.5, (0.0, 0.0, -10.0), 10.0), _cyl(3.0, (0.0, -25.0, -6.0), 6.0)).Shape()
 
 
-def _head_step(path, pose, surface_body=False, cable=False):
+def _head_step(path, pose, surface_body=False, cable=False, body_extra=(), top_extra=()):
     """Write the synthetic head CAD with the flange (and the head with it) at ``pose`` in the file.
 
     ``cable``: add a long cable cylinder hanging behind the flange (tool0 -Z), reaching farther from tool0 than the
-    nozzle (the real head CAD: fiber / cable connector end, bug of 2026-11-06)."""
+    nozzle (the real head CAD: fiber / cable connector end, bug of 2026-11-06). ``body_extra`` / ``top_extra``: more
+    nodes below the head body / beside the robot and the tool (name-matching tests)."""
     from awm_geometry import testparts
 
     body = (_open_box(*BODY_BOX)[0] if surface_body else _box(*BODY_BOX))
     extra = [{'name': 'cable', 'shape': _cyl(*CABLE)}] if cable else []
     head_children = [
-        {'name': 'body', 'placement_mm': frames.invert(INNER), 'children': extra + [
+        {'name': 'body', 'placement_mm': frames.invert(INNER), 'children': extra + list(body_extra) + [
             {'name': 'skin', 'shape': body},
             {'name': 'nozzle', 'shape': _cyl(10.0, (0.0, -60.0, 200.0), 40.0)},
             {'name': 'wire', 'shape': _cyl(1.0, (0.0, -90.0, 40.0), 140.0)},
@@ -91,7 +92,7 @@ def _head_step(path, pose, surface_body=False, cable=False):
     testparts.write_tree_assembly(path, 'robot', [
         {'name': 'wrist', 'placement_mm': pose, 'shape': _flange()},
         {'name': 'tool', 'placement_mm': pose @ INNER, 'children': head_children},
-    ])
+    ] + list(top_extra))
     return path
 
 
@@ -253,9 +254,10 @@ def test_override_accepted_with_cable_behind_flange(tmp_path, occ):
 
 
 def test_override_behind_flange_accepted_and_recorded(tmp_path, occ):
-    """An explicit override is accepted wherever it is (the user said so), but recorded."""
+    """A map TCP behind the flange plane is accepted (set explicitly) and recorded, as long as its beam passes the
+    beam-direction check (component along tool0 +Z)."""
     step = _head_step(tmp_path / 'head.step', POSE_A)
-    point_tool0, axis_tool0 = np.array([0.0, 0.0, -50.0]), np.array([0.0, 0.0, -1.0])
+    point_tool0, axis_tool0 = np.array([0.0, 0.0, -50.0]), np.array([0.0, 0.0, 1.0])
     cmap = _map(step, tcp={'point_file_mm': (POSE_A @ np.append(point_tool0, 1.0))[:3].tolist(),
                            'axis_file': (POSE_A[:3, :3] @ axis_tool0).tolist()})
     code, out = _export(tmp_path, step, cmap)
@@ -264,6 +266,114 @@ def test_override_behind_flange_accepted_and_recorded(tmp_path, occ):
     np.testing.assert_allclose(_pose(doc['tool0_T_tcp_mm'])[:3, 3], point_tool0, atol=1e-6)
     assert doc['estimates']['tcp']['behind_flange'] is True
     assert any('behind the flange' in a for a in doc['assumptions'])
+
+
+@pytest.mark.parametrize('point_tool0, axis_tool0', [
+    ((0.0, -60.0, 240.0), (0.0, 0.0, -1.0)),   # tip in front of the flange, beam back into the head
+    ((200.0, 0.0, 50.0), (0.995, 0.0, -0.1)),  # beam mostly sideways but tilted back towards the flange plane
+    ((100.0, 0.0, 10.0), (-1.0, 0.0, 0.0)),    # parallel to the flange plane
+])
+def test_override_beam_towards_tool0_refused(tmp_path, occ, point_tool0, axis_tool0):
+    """Review I2: a map TCP whose beam has no component along tool0 +Z (back towards tool0 / along the flange plane)
+    is refused with a clear message, nothing written; the explicit override does not bypass the beam check."""
+    from awm_geometry import head
+
+    step = _head_step(tmp_path / 'head.step', POSE_A)
+    p, a = np.array(point_tool0), np.array(axis_tool0) / np.linalg.norm(axis_tool0)
+    cmap = _map(step, tcp={'point_file_mm': (POSE_A @ np.append(p, 1.0))[:3].tolist(),
+                           'axis_file': (POSE_A[:3, :3] @ a).tolist(), 'nozzle_len_mm': 40.0})
+    map_path = tmp_path / 'cad_map_head.yaml'
+    map_path.write_text(miniyaml.dumps(cmap))
+    with pytest.raises(head.HeadError, match='points back towards tool0') as err:
+        head.export_head(step, map_path, tmp_path / 'repo', 'test')
+    assert 'frames.tcp' in str(err.value)
+    assert not (tmp_path / 'repo' / 'cell' / 'model' / 'head').exists()
+
+
+def test_override_beam_forward_beside_head_accepted(tmp_path, occ):
+    """TCP (-120, 0, 60) with the beam (0.866, 0, 0.5): the beam leaves away from the flange although it points
+    sideways past the tool0 axis -> accepted (one criterion: beam component along tool0 +Z)."""
+    step = _head_step(tmp_path / 'head.step', POSE_A)
+    p, a = np.array([-120.0, 0.0, 60.0]), np.array([0.866, 0.0, 0.5])
+    a = a / np.linalg.norm(a)
+    cmap = _map(step, tcp={'point_file_mm': (POSE_A @ np.append(p, 1.0))[:3].tolist(),
+                           'axis_file': (POSE_A[:3, :3] @ a).tolist(), 'nozzle_len_mm': 40.0})
+    code, out = _export(tmp_path, step, cmap)
+    assert code == 0
+    np.testing.assert_allclose(miniyaml.load(out / 'head.yaml')['beam_axis_tool0'], a, atol=1e-9)
+
+
+def test_override_tilted_beam_accepted(tmp_path, occ):
+    """A tilted beam leaving the head away from the flange (made-up TCP and direction, 37 deg from tool0 Z) passes
+    the beam check; the real head is checked in the env-gated test_dau_han_robot."""
+    step = _head_step(tmp_path / 'head.step', POSE_A)
+    p, a = np.array([30.0, -60.0, 200.0]), np.array([0.6, 0.0, 0.8])
+    cmap = _map(step, tcp={'point_file_mm': (POSE_A @ np.append(p, 1.0))[:3].tolist(),
+                           'axis_file': (POSE_A[:3, :3] @ a).tolist(), 'nozzle_len_mm': 40.0})
+    code, out = _export(tmp_path, step, cmap)
+    assert code == 0
+    np.testing.assert_allclose(miniyaml.load(out / 'head.yaml')['beam_axis_tool0'], a, atol=1e-9)
+
+
+def _tcp_override(point_tool0=NOZZLE_END, axis_tool0=(0.0, 0.0, 1.0)):
+    return {'point_file_mm': (POSE_A @ np.append(point_tool0, 1.0))[:3].tolist(),
+            'axis_file': (POSE_A[:3, :3] @ np.asarray(axis_tool0)).tolist(), 'nozzle_len_mm': 40.0}
+
+
+def test_cable_exit_from_rear_estimate(tmp_path, occ):
+    """The rear automatic estimate refused as a TCP (cable end, behind the flange) gives the conduit exit for the
+    xacro: cable_exit = its tcp - nozzle_len_mm * axis (= the cable end), cable_axis = its axis (outward)."""
+    step = _head_step(tmp_path / 'head.step', POSE_A, cable=True)
+    code, out = _export(tmp_path, step, _map(step, tcp=_tcp_override()))
+    assert code == 0
+    doc = miniyaml.load(out / 'head.yaml')
+    r, base, _length = CABLE
+    np.testing.assert_allclose(doc['cable_axis_tool0'], [0.0, 0.0, -1.0], atol=1e-6)
+    np.testing.assert_allclose(doc['cable_exit_tool0_mm'], base, atol=0.01)
+    assert doc['cable_exit_source'] == 'rear_estimate'
+    geo = doc['estimates']['tcp']['geometry_estimate']
+    np.testing.assert_allclose(np.asarray(doc['cable_exit_tool0_mm']) + 40.0 * np.asarray(doc['cable_axis_tool0']),
+                               geo['tcp_tool0_mm'], atol=1e-6)
+
+
+def test_cable_exit_from_map(tmp_path, occ):
+    """frames.cable_exit (point_file_mm + axis_file, file frame) wins over the rear estimate; written in tool0."""
+    step = _head_step(tmp_path / 'head.step', POSE_A, cable=True)
+    point, axis = np.array([5.0, -40.0, -20.0]), np.array([0.0, -0.6, -0.8])
+    cmap = _map(step, tcp=_tcp_override())
+    cmap['frames']['cable_exit'] = {'point_file_mm': (POSE_A @ np.append(point, 1.0))[:3].tolist(),
+                                    'axis_file': (POSE_A[:3, :3] @ axis).tolist()}
+    code, out = _export(tmp_path, step, cmap)
+    assert code == 0
+    doc = miniyaml.load(out / 'head.yaml')
+    np.testing.assert_allclose(doc['cable_exit_tool0_mm'], point, atol=1e-6)
+    np.testing.assert_allclose(doc['cable_axis_tool0'], axis, atol=1e-9)
+    assert doc['cable_exit_source'] == 'map'
+
+
+@pytest.mark.parametrize('override', [False, True])
+def test_cable_exit_null_without_source(tmp_path, occ, override):
+    """No map entry and no rear estimate (the automatic estimate is the nozzle): null, no invented default."""
+    step = _head_step(tmp_path / 'head.step', POSE_A)
+    code, out = _export(tmp_path, step, _map(step, tcp=_tcp_override() if override else {}))
+    assert code == 0
+    doc = miniyaml.load(out / 'head.yaml')
+    for key in ('cable_exit_tool0_mm', 'cable_axis_tool0', 'cable_exit_source'):
+        assert key in doc and doc[key] is None
+
+
+@pytest.mark.parametrize('entry', [{'point_file_mm': [0.0, 0.0, 0.0]}, {'axis_file': [0.0, 0.0, 1.0]},
+                                   {'point_file_mm': [0.0, 0.0, 0.0], 'axis_file': [0.0, 0.0, 0.0]}])
+def test_cable_exit_map_entry_checked(tmp_path, occ, entry):
+    from awm_geometry import head
+
+    step = _head_step(tmp_path / 'head.step', POSE_A)
+    cmap = _map(step, tcp=_tcp_override())
+    cmap['frames']['cable_exit'] = entry
+    map_path = tmp_path / 'cad_map_head.yaml'
+    map_path.write_text(miniyaml.dumps(cmap))
+    with pytest.raises(head.HeadError, match='cable_exit'):
+        head.export_head(step, map_path, tmp_path / 'repo', 'test')
 
 
 def test_tool0_override_and_nozzle_length(tmp_path, occ):
@@ -378,6 +488,11 @@ def test_dau_han_robot(tmp_path):
     assert doc['estimates']['tool0']['residuals']['contact_plane_gap_mm'] <= 0.1
     assert abs(np.linalg.norm(doc['beam_axis_tool0']) - 1.0) < 1e-9
     assert tcp[2, 3] > 0.0  # TCP in front of the flange (bug 2026-11-06: the cable end was taken as the nozzle)
+    assert doc['beam_axis_tool0'][2] > 0.0  # the beam check (review I2) passes on the real head
     exit_mm = np.asarray(doc['beam_exit_tool0_mm'])
     np.testing.assert_allclose(exit_mm + doc['nozzle_len_mm'] * np.asarray(doc['beam_axis_tool0']), tcp[:3, 3],
                                atol=1e-6)
+    # conduit exit for the xacro from the rear estimate (fiber / cable connector end behind the flange)
+    assert doc['cable_exit_source'] == 'rear_estimate'
+    np.testing.assert_allclose(doc['cable_exit_tool0_mm'], [-67.6, 0.0, -345.4], atol=0.5)
+    assert float(np.asarray(doc['cable_axis_tool0']) @ [0.0, 0.0, -1.0]) > 0.99
