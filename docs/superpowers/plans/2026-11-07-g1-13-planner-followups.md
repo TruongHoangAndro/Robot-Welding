@@ -30,7 +30,8 @@ the head.yaml cable exit, `<awm_conduit source=…/>`, review M6); ADR-14 (units
   size is always an Assumption, TST-002 §3.1); a head record without `conduit_source` is refused.
 * **R3.** Empty `nozzle_tip` (no collision, no visual) and, if present, empty `nozzle_body` = no parametric nozzle:
   `HeadGeometry.nozzle_geometry = 'none'`, radius / s_c / tip length `None`; `tool0_T_tcp` is read as before (the
-  kinematic planner needs only it). A half-empty nozzle (one link empty, the other with geometry) is refused.
+  kinematic planner needs only it). A half-empty nozzle (one link empty, the other with geometry, both directions;
+  review 2.c) is refused; a description without a `nozzle_body` link is still read (synthetic tests only).
   **F9 refuses** (`contact_params_for` raises `NoNozzleError`, a `ValueError`): there is no disc, and taking a disc
   from the head mesh would be a geometry the description does not state (no silent fallback, CP-56 one source).
   The head assumption text states "no parametric nozzle; F9 not available".

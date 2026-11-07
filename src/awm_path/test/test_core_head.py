@@ -200,3 +200,14 @@ def test_half_empty_nozzle_is_an_error() -> None:
     body = ('<collision><geometry><cylinder radius="0.01" length="0.03"/></geometry></collision>')
     with pytest.raises(ValueError, match='nozzle_body'):
         head_from_urdf(_no_nozzle_urdf(body))
+
+
+def test_tip_cylinder_with_an_empty_nozzle_body_is_an_error() -> None:
+    """Review 2.c: the other half-empty case (nozzle_tip cylinder, nozzle_body present without geometry) is refused;
+    a description without a nozzle_body link (synthetic tests) is still read."""
+    empty_body = ('<link name="nozzle_body"/><joint name="tool0_to_nozzle_body" type="fixed"><parent link="tool0"/>'
+                  '<child link="nozzle_body"/><origin xyz="0 0 0" rpy="0 0 0"/></joint>')
+    with pytest.raises(ValueError, match='half-empty'):
+        head_from_urdf(_urdf().replace('</robot>', empty_body + '</robot>'))
+    assert head_from_urdf(_urdf()).nozzle_geometry == 'cylinder'
+

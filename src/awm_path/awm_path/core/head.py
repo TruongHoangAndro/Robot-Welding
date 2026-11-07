@@ -145,8 +145,10 @@ def head_from_urdf(urdf_xml: str, *, tool_link: str = 'tool0', tcp_link: str = '
                    nozzle_link: str = 'nozzle_tip', nozzle_body_link: str = 'nozzle_body') -> HeadGeometry:
     """Read :class:`HeadGeometry` from a URDF string. Raises ``ValueError`` if a link is missing, the chain is not
     fixed, the conduit source is missing / unknown, ``nozzle_link`` has neither exactly one cylinder collision nor
-    is empty, that cylinder is not on the beam axis / not on the nozzle side of ``tcp_link``, or ``nozzle_link`` is
-    empty while ``nozzle_body_link`` has geometry (half-empty nozzle).
+    is empty, that cylinder is not on the beam axis / not on the nozzle side of ``tcp_link``, or the nozzle is
+    half-empty: one of ``nozzle_link`` / ``nozzle_body_link`` empty and the other with geometry (review 2.c). A
+    description without a ``nozzle_body_link`` link is accepted (synthetic test URDFs; H-BOX and H-CAD always
+    render both links).
 
     An empty ``nozzle_link`` (and empty ``nozzle_body_link`` if present) = no parametric nozzle (H-CAD with
     head.yaml ``nozzle_len_mm`` 0): ``nozzle_geometry = 'none'``, nozzle values ``None``."""
@@ -160,12 +162,15 @@ def head_from_urdf(urdf_xml: str, *, tool_link: str = 'tool0', tcp_link: str = '
     tool0_T_tcp = _chain_mm(joints, tool_link, tcp_link)
     tool0_T_nozzle = _chain_mm(joints, tool_link, nozzle_link)
     sha = sha256_text(urdf_xml)
+    body = links.get(nozzle_body_link)
     if _is_empty(links[nozzle_link]):
-        body = links.get(nozzle_body_link)
         if body is not None and not _is_empty(body):
             raise ValueError(f'{nozzle_link!r} is empty but {nozzle_body_link!r} has geometry: half-empty nozzle '
                              '(expected both empty for head.yaml nozzle_len_mm 0, or a nozzle_tip cylinder)')
         return HeadGeometry(tool0_T_tcp, None, None, None, sha, tool_link, tcp_link, nozzle_link, 'none', conduit)
+    if body is not None and _is_empty(body):
+        raise ValueError(f'{nozzle_link!r} has geometry but {nozzle_body_link!r} is empty: half-empty nozzle '
+                         '(expected both empty for head.yaml nozzle_len_mm 0, or both with geometry)')
     cyl = [c for c in links[nozzle_link].findall('collision') if c.find('geometry/cylinder') is not None]
     if len(cyl) != 1 or len(links[nozzle_link].findall('collision')) != 1:
         raise ValueError(f'{nozzle_link!r} must have exactly one collision geometry, a cylinder (or none at all '
