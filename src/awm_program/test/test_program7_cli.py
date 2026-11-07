@@ -340,3 +340,62 @@ def test_refuses_d07_with_another_description(tmp_path):
     p = _tampered(job, tmp_path, other)
     rc, out, err = _gen(job, '--path', str(p))
     assert rc == 1 and 'description' in out
+
+
+# ----------------------------------------------------------------------------------- CP-62 override (g1-18 I2)
+
+def _with_override(job):
+    """Record a CP-62 override in the job (format of the v2 examples) and its reference in D07, as the plan run of
+    ``awm_api`` does; return the reference."""
+    from awm_core.hashing import sha256_file
+    check = json.loads((jsonio.SCHEMA_DIR / 'v2' / 'examples' / 'cad_check.example.json').read_text())
+    (job.dir / 'cad_check.json').write_text(json.dumps(check))
+    rec = json.loads((jsonio.SCHEMA_DIR / 'v2' / 'examples' / 'cad_check_override.example.json').read_text())
+    rec['cad_check_sha256'] = sha256_file(job.dir / 'cad_check.json')
+    rec['inputs'] = [{'name': 'cad_check.json', 'sha256': rec['cad_check_sha256']}]
+    jsonio.validate(rec, 'v2/cad_check_override')
+    (job.dir / 'cad_check_override.json').write_text(json.dumps(rec))
+    ref = {'file': 'cad_check_override.json', 'sha256': sha256_file(job.dir / 'cad_check_override.json'),
+           'cad_check_sha256': rec['cad_check_sha256'], 'check_id': 4, 'by': rec['by'],
+           'created_at': rec['created_at'], 'reason': rec['reason']}
+    path = json.loads(job.path_json.read_text())
+    assert path['collision_checked'] is False
+    path['cad_check_override'] = ref
+    jsonio.validate(path, 'v2/path')
+    job.path_json.write_text(json.dumps(path))
+    return ref
+
+
+def test_no_override_in_d07_none_in_d09(ring):
+    assert 'cad_check_override' not in json.loads(ring[0].path_json.read_text())
+    assert 'cad_check_override' not in _program(ring[0])
+
+
+def test_override_in_d07_is_carried_into_d09(tmp_path):
+    from awm_core.hashing import sha256_file
+    job = _copy_job(tmp_path)
+    ref = _with_override(job)
+    rc, out, err = _gen(job)
+    assert rc == 0, out + err
+    doc = _program(job)
+    jsonio.validate(doc, 'v2/program')
+    assert doc['cad_check_override'] == ref                    # incl. by / created_at / reason, exact copy
+    assert {'by', 'created_at', 'reason'} <= set(doc['cad_check_override'])
+    assert doc['collision_checked'] is False
+    assert doc['generator']['path']['sha256'] == sha256_file(job.path_json)
+    # the awm_api runner's carry step is a no-op on this program: same reference, same recorded path.json hash
+    assert doc['cad_check_override'] == json.loads(job.path_json.read_text())['cad_check_override']
+
+
+def test_refuses_d07_override_voided_by_a_changed_cross_check(tmp_path):
+    job = _copy_job(tmp_path)
+    _with_override(job)
+    (job.dir / 'cad_check.json').write_text('{"changed": true}')
+    rc, out, err = _gen(job)
+    assert rc == 1 and 'CP-62' in out and 'void' in out
+    assert not job.programs_dir.exists()
+    _with_override(job)
+    (job.dir / 'cad_check_override.json').unlink()
+    rc, out, err = _gen(job)
+    assert rc == 1 and 'CP-62' in out and 'void' in out
+    assert not job.programs_dir.exists()
