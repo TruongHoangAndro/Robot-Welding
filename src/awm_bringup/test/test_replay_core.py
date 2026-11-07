@@ -181,3 +181,12 @@ def test_non_finite_joint_state_refused(bad):
         replay.check_start_state(prog.segments[0], prog.joint_names, current, tol_deg=0.05)
     with pytest.raises(replay.ReplayRefused, match='not finite'):
         replay.deviation_deg(prog.segments[0].start_deg, prog.joint_names, current)
+
+
+# --- review M1: argparse errors are errors, not refusals ------------------------------------------------------------
+
+def test_cli_usage_error_exits_1():
+    pytest.importorskip('rclpy')
+    from awm_bringup import replay_cli
+    assert replay_cli.main(['--no-such-option']) == 1
+    assert replay_cli.main([]) == 1          # --program missing

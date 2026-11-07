@@ -15,7 +15,8 @@ tracking error from the controller feedback and the end deviation of ``/joint_st
 logged. The end deviation must stay within ``final_tolerance_deg``.
 
 Output: log lines per segment and one machine-readable last line ``replay {json}`` on stdout.
-Exit codes: 0 replayed, 2 refused (program or start state; nothing sent for that segment), 1 error.
+Exit codes: 0 replayed, 2 refused (program or start state; nothing sent for that segment), 1 error (including a
+command-line usage error).
 
 The replay sends joint motion only: weld events of the program are listed in the log, never executed (no PLC, no
 laser; DES-001 ADR-04).
@@ -144,7 +145,10 @@ def _parse(argv: Optional[List[str]]) -> argparse.Namespace:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    args = _parse(rclpy.utilities.remove_ros_args(sys.argv)[1:] if argv is None else argv)
+    try:
+        args = _parse(rclpy.utilities.remove_ros_args(sys.argv)[1:] if argv is None else argv)
+    except SystemExit as exc:      # argparse: usage error (2) -> error exit 1, --help (0) stays 0
+        return EXIT_OK if exc.code == 0 else EXIT_ERROR
     summary: Dict = {'program': args.program, 'status': 'error', 'segments': []}
     rclpy.init()
     node = rclpy.create_node('awm_program_replay')
