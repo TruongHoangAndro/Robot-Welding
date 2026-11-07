@@ -138,6 +138,16 @@ def parse_head_args(items: Optional[Sequence[str]]) -> Dict[str, str]:
     return out
 
 
+def head_assumption(head_model: str, contact_params, head_record: Mapping[str, Any]) -> str:
+    """Assumption line of a run record built from the head of the description in use (``scene.head.as_record()``)
+    and the F9 parameters (review M2: no hard-coded head values)."""
+    pos = ', '.join(f'{float(v):g}' for v in head_record['tool0_T_tcp_mm']['position_mm'])
+    return (f'{head_model} head; nozzle Ø{2.0 * contact_params.nozzle_radius_mm:g} mm (tip link '
+            f'{float(head_record["nozzle_tip_length_mm"]):g} mm), s_c {contact_params.standoff_mm:g} mm, '
+            f'tool0_T_tcp ({pos}) mm, all from the robot description in use (S.5c Task 0, CP-56 one source); TCP at '
+            'the nozzle tip (I2 / OI-15)')
+
+
 def add_head_cli(ap: argparse.ArgumentParser) -> None:
     """Common runner options: head description args and the F9 rule (b) variant (records keep both)."""
     ap.add_argument('--head-arg', action='append', default=[], metavar='KEY=VALUE',

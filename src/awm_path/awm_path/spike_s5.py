@@ -33,7 +33,7 @@ import numpy as np
 
 from awm_core import jsonio, units
 from awm_path.core.seam_input import arc_ranges, circle_joint_geometry, frames_at, read_glb_edge_polyline
-from awm_path.gate_g2 import add_head_cli
+from awm_path.gate_g2 import add_head_cli, head_assumption
 
 CREATED_BY = 'awm_path.spike_s5'
 SPIKE_SEAM_FILE = 'spike_seam.json'
@@ -407,9 +407,10 @@ def _cmd_run(args) -> int:
                     'Mode B (positioner angles entered by the Engineer): only after the decision, B-12'],
         'assumptions': [
             'part and robot base poses from CAD component placements, no REF_* markers (OI-23, scene decisions D1–D3)',
-            'H-BOX head (TST-002 §3.1), nozzle Ø20 x 40 mm, s_c 0.3 mm, TCP at the nozzle tip, conduit at the head '
-            'side (scene decision D7)',
-            'F9 point tolerance 0.15 mm (TST-002 gives no value); F6 elbow 5° / shoulder 50 mm',
+            head_assumption(args.head_model, contact_params, scene.head.as_record()) + '; conduit at the head side '
+            '(scene decision D7)',
+            f'F9 point tolerance {contact_params.point_tolerance_mm:g} mm (TST-002 gives no value); F6 elbow 5° / '
+            'shoulder 50 mm',
             'Ψ-WIRE window centre 0° (= seam X, wire-leading direction unknown, I5 / E-05) ± 15° in 5° steps',
             'arc_overlap_mm 2.0 (T0.5 example value; welding engineer to confirm)',
             f'pitch floor {args.pitch_min_mm} mm for the CP-53 refinement',

@@ -149,3 +149,13 @@ def test_run_gate_uses_the_given_tool0_T_tcp() -> None:
     off[2, 3] = 7.0
     c = run_gate(FakeScene(), FakeKin(), poses, seams, _plate(), _part(), ContactParams(), tool0_T_tcp=off)
     assert [r.details['q_deg'] for r in a] != [r.details['q_deg'] for r in c]
+
+
+def test_head_assumption_text_comes_from_the_description_values():
+    """Review M2: run records state the nozzle / s_c / TCP of the description in use, not hard-coded H-BOX values."""
+    from awm_path.gate_g2 import head_assumption
+    head = {'nozzle_radius_mm': 6.0, 'contact_standoff_mm': 0.25, 'nozzle_tip_length_mm': 5.0,
+            'tool0_T_tcp_mm': {'position_mm': [43.8, 0.0, 279.6], 'quat_xyzw': [0.0, 0.0, 0.0, 1.0]}}
+    text = head_assumption('H-CAD', ContactParams(nozzle_radius_mm=6.0, standoff_mm=0.25), head)
+    assert 'H-CAD head' in text and 'Ø12 mm' in text and 's_c 0.25 mm' in text and '(43.8, 0, 279.6)' in text
+    assert 'H-BOX' not in text and 'Ø20' not in text
