@@ -383,10 +383,14 @@ def _cmd_run(args) -> int:
     from awm_path.core.scoring import SceneScoreParams
     from awm_path.core.sweep import PlannerParams, required_points
     from awm_path.core.head import contact_params_for
-    from awm_path.gate_g2 import _git, _rel, launch_args_from_frames, parse_head_args, head_launch_args
+    from awm_path.gate_g2 import (_git, _rel, head_launch_args, launch_args_from_frames, parse_head_args,
+                                  preflight_head, refuse)
     from awm_path.spike_s5 import _rotation_rate_deg_per_mm
 
     t_run = time.perf_counter()
+    err = preflight_head(Path(args.repo), args.head_model, args.head_dir, args.head_arg, args.f9_rule)
+    if err:
+        return refuse(err)
     inp_file = Path(args.input)
     inp = read_input(inp_file)
     repo, out_dir = Path(args.repo), Path(args.out_dir)

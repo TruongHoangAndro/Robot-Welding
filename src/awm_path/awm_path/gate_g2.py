@@ -157,6 +157,31 @@ def head_launch_args(head_model: str, head_dir: Optional[str], repo: Path) -> Di
     return {'head_model': 'hcad', 'head_dir': folder}
 
 
+def preflight_head(repo: Path, head_model: str, head_dir: Optional[str], head_arg: Sequence[str],
+                   f9_rule: str) -> Optional[str]:
+    """Offline head check of the simulation runners before they start ``sim_mock`` (review 2.b): render the
+    description with the same head args (``load_planning_description``, no ROS graph) and build the F9 parameters
+    (``contact_params_for``). Returns ``None`` when the run can start, otherwise the refusal message (e.g. a head
+    without a parametric nozzle, head.yaml ``nozzle_len_mm`` 0, or a description / frames disagreement)."""
+    from awm_path.core.contact import ContactParams
+    from awm_path.core.head import contact_params_for
+    from awm_path.description import load_planning_description
+    try:
+        head = head_launch_args(head_model, head_dir, Path(repo))
+        desc = load_planning_description(Path(repo) / 'cell' / 'model' / 'frames.yaml', head['head_model'],
+                                         head.get('head_dir'), parse_head_args(head_arg))
+        contact_params_for(desc.head, ContactParams(rule_b=f9_rule))
+    except (ValueError, FileNotFoundError) as exc:
+        return f'head refused before launching sim_mock: {exc}'
+    return None
+
+
+def refuse(message: str) -> int:
+    """One ``error:`` line on stderr, exit code 1 (nothing written)."""
+    print(f'error: {message}', file=sys.stderr)
+    return 1
+
+
 def head_assumption(head_model: str, contact_params, head_record: Mapping[str, Any]) -> str:
     """Assumption line of a run record built from the head of the description in use (``scene.head.as_record()``)
     and the F9 parameters (review M2: no hard-coded head values).
@@ -277,6 +302,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     from awm_path.core.kinematics import UrAnalyticKinematics
 
     repo, poses_file = Path(args.repo), Path(args.poses)
+    err = preflight_head(repo, args.head_model, args.head_dir, args.head_arg, args.f9_rule)
+    if err:
+        return refuse(err)
     job = repo / 'jobs' / args.job
     frames = repo / 'cell' / 'model' / 'frames.yaml'
     cell_manifest = repo / 'cell' / 'model' / 'scene_manifest.json'

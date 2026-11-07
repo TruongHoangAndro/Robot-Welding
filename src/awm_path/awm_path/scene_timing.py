@@ -94,9 +94,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     from awm_path.core.scene_files import part_object_files, world_T_object
     from awm_path.core.scoring import SceneScoreParams, score_candidates
     from awm_path.core.sweep import PlannerParams, required_points, sweep, write_candidates_csv
-    from awm_path.gate_g2 import _git, launch_args_from_frames, parse_head_args, head_launch_args
+    from awm_path.gate_g2 import (_git, head_launch_args, launch_args_from_frames, parse_head_args, preflight_head,
+                                  refuse)
 
     repo = Path(args.repo)
+    err = preflight_head(repo, args.head_model, args.head_dir, args.head_arg, args.f9_rule)
+    if err:
+        return refuse(err)
     job = repo / 'jobs' / args.job
     frames_file = repo / 'cell' / 'model' / 'frames.yaml'
     cell_manifest = repo / 'cell' / 'model' / 'scene_manifest.json'
