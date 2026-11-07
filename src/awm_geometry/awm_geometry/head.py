@@ -35,6 +35,10 @@ the map, then recorded as ``method: map`` with the geometric estimate kept for c
   (recorded, ``behind_flange``); head.yaml then holds ``beam_exit_tool0_mm = tcp - nozzle_len_mm * beam_axis`` so
   the rule ``tcp = beam_exit + nozzle_len_mm * beam_axis`` (xacro) holds and the parametric collision nozzle ends at
   the TCP. The automatic estimate is kept beside it for comparison.
+* conduit exit (additive keys ``cable_exit_tool0_mm``, ``cable_axis_tool0`` = outward along the cable, and
+  ``cable_exit_source`` = ``map`` / ``rear_estimate``; read by the cell-sim hcad xacro for the fiber / wire conduit
+  capsule): map ``frames.cable_exit`` (point_file_mm + axis_file, file frame) or else the rear automatic estimate that
+  is refused as a TCP (its beam exit and direction); null when neither exists (no default is invented).
 """
 
 from __future__ import annotations
@@ -156,6 +160,12 @@ def load_head_map(path: Path, step: Path) -> Dict[str, Any]:
     tcp_override = {'point_file_mm', 'axis_file'} & set(tcp)
     if tcp_override and len(tcp_override) != 2:
         raise HeadError(f'{path}: frames.tcp override needs point_file_mm and axis_file')
+    cable = fr.get('cable_exit')
+    if cable is not None:
+        if not isinstance(cable, dict) or set(cable) != {'point_file_mm', 'axis_file'}:
+            raise HeadError(f'{path}: frames.cable_exit needs exactly point_file_mm and axis_file')
+        _vec3(cable['point_file_mm'], f'{path}: frames.cable_exit.point_file_mm')
+        _unit(cable['axis_file'], f'{path}: frames.cable_exit.axis_file')
     if tcp.get('beam_link') not in LINKS:
         raise HeadError(f'{path}: frames.tcp.beam_link must be one of {LINKS}')
     nozzle = tcp.get('nozzle_len_mm')
@@ -560,7 +570,8 @@ def extent_behind_body(body: np.ndarray, mount: np.ndarray, exit_tool0: np.ndarr
     return out
 
 
-def _assumptions(cmap: Dict[str, Any], tool0_method: str, tcp_method: str, tcp_behind: bool) -> List[str]:
+def _assumptions(cmap: Dict[str, Any], tool0_method: str, tcp_method: str, tcp_behind: bool,
+                 cable_method: Optional[str] = None) -> List[str]:
     t0, tcp = cmap['frames']['tool0'], cmap['frames']['tcp']
     out = []
     if tool0_method == 'map':
@@ -588,6 +599,11 @@ def _assumptions(cmap: Dict[str, Any], tool0_method: str, tcp_method: str, tcp_b
                    'tool0; beam exit = farthest point of the body on that line (no REF_TCP marker, OI-23)')
         out.append(f"Assumption: tcp_laser = beam exit + parametric nozzle {tcp['nozzle_len_mm']} mm along the beam "
                    '(CP-56: nozzle is cell data; I2 / OI-15)')
+    if cable_method == 'rear_estimate':
+        out.append('Assumption: conduit exit = farthest revolved end of the head behind the flange (rear automatic '
+                   'beam estimate, refused as a TCP), axis outward along it; set frames.cable_exit to replace it')
+    elif cable_method == 'map':
+        out.append('Assumption: conduit exit from the map (frames.cable_exit point_file_mm / axis_file)')
     out.append('Assumption: tcp_laser X = tool0 X made orthogonal to the beam (tool yaw is swept, ψ)')
     out.append('The head body is a surface model: its mesh is an open triangle set (collision on triangles, no '
                'inside test)')
@@ -675,6 +691,25 @@ def taught_tcp(step: Path, teach: Dict[str, Any], body_shape) -> Dict[str, Any]:
     stickout = float(teach.get('stickout_mm') or 0.0)
     return {'point_file_mm': [float(v) for v in centre + stickout * axis], 'axis_file': [float(v) for v in axis],
             'radius_mm': circle['radius_mm']}
+
+
+def _cable_exit(entry: Optional[Dict[str, Any]], tool0_T_file: np.ndarray, geometry_tcp,
+                nozzle: float) -> Optional[Tuple[np.ndarray, np.ndarray, Dict[str, Any]]]:
+    """Fiber / wire conduit exit of the head for the xacro conduit capsule: ``(point_t0, axis_t0, estimate)`` or None.
+
+    1. map ``frames.cable_exit`` (point_file_mm + axis_file, file frame; axis outward along the cable);
+    2. else the rear automatic beam estimate that is refused as a TCP (behind the flange plane): the farthest revolved
+       end of the head is the cable / connector end, so exit = its beam exit (= its tcp - nozzle_len_mm * axis) and
+       axis = its direction (outward, away from the head);
+    3. else None (no invented default)."""
+    if entry is not None:
+        point = (tool0_T_file @ np.append(np.asarray(entry['point_file_mm'], dtype=float), 1.0))[:3]
+        axis = tool0_T_file[:3, :3] @ np.asarray(entry['axis_file'], dtype=float)
+        return point, axis, {'method': 'map'}
+    if isinstance(geometry_tcp, tuple) and (geometry_tcp[0] + nozzle * geometry_tcp[1])[2] < 0.0:
+        exit_t0, axis_t0, beam = geometry_tcp  # its tcp is behind the flange (geometry_estimate behind_flange)
+        return exit_t0, axis_t0, {'method': 'rear_estimate', 'residuals': beam['residuals']}
+    return None
 
 
 def _export_head(step: Path, map_path: Path, root: Path, created_by: str,
@@ -796,6 +831,10 @@ def _export_head(step: Path, map_path: Path, root: Path, created_by: str,
             est['runner_up'] = beam['runner_up']
     estimates['tcp'] = est
 
+    cable_exit = _cable_exit(cmap['frames'].get('cable_exit'), inv, geometry_tcp, nozzle)
+    if cable_exit is not None:
+        estimates['cable_exit'] = cable_exit[2]
+
     meshes = {link: link_meshes(shapes[link], file_T_tool0, link) for link in LINKS}
     extent = extent_behind_body(meshes[tcp_map['beam_link']]['verts'], meshes['head_mount']['verts'],
                                 exit_t0, beam_axis)
@@ -839,10 +878,14 @@ def _export_head(step: Path, map_path: Path, root: Path, created_by: str,
             'beam_exit_tool0_mm': [float(v) for v in exit_t0],
             'nozzle_len_mm': nozzle,
             'tcp_rule': 'tcp = beam_exit + nozzle_len_mm * beam_axis (for another nozzle length use the same rule)',
+            'cable_exit_tool0_mm': None if cable_exit is None else [float(v) for v in cable_exit[0]],
+            'cable_axis_tool0': None if cable_exit is None else [float(v) for v in cable_exit[1]],
+            'cable_exit_source': None if cable_exit is None else cable_exit[2]['method'],
             'links': link_docs,
             'estimates': estimates,
             'assumptions': _assumptions(cmap, estimates['tool0']['method'], estimates['tcp']['method'],
-                                        estimates['tcp']['behind_flange']),
+                                        estimates['tcp']['behind_flange'],
+                                        None if cable_exit is None else cable_exit[2]['method']),
             'extent_behind_body_mm': extent,
         })
         miniyaml.dump(doc, stage / 'head.yaml',

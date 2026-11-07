@@ -300,6 +300,67 @@ def test_override_real_head_direction_accepted(tmp_path, occ):
     np.testing.assert_allclose(miniyaml.load(out / 'head.yaml')['beam_axis_tool0'], a, atol=1e-9)
 
 
+def _tcp_override(point_tool0=NOZZLE_END, axis_tool0=(0.0, 0.0, 1.0)):
+    return {'point_file_mm': (POSE_A @ np.append(point_tool0, 1.0))[:3].tolist(),
+            'axis_file': (POSE_A[:3, :3] @ np.asarray(axis_tool0)).tolist(), 'nozzle_len_mm': 40.0}
+
+
+def test_cable_exit_from_rear_estimate(tmp_path, occ):
+    """The rear automatic estimate refused as a TCP (cable end, behind the flange) gives the conduit exit for the
+    xacro: cable_exit = its tcp - nozzle_len_mm * axis (= the cable end), cable_axis = its axis (outward)."""
+    step = _head_step(tmp_path / 'head.step', POSE_A, cable=True)
+    code, out = _export(tmp_path, step, _map(step, tcp=_tcp_override()))
+    assert code == 0
+    doc = miniyaml.load(out / 'head.yaml')
+    r, base, _length = CABLE
+    np.testing.assert_allclose(doc['cable_axis_tool0'], [0.0, 0.0, -1.0], atol=1e-6)
+    np.testing.assert_allclose(doc['cable_exit_tool0_mm'], base, atol=0.01)
+    assert doc['cable_exit_source'] == 'rear_estimate'
+    geo = doc['estimates']['tcp']['geometry_estimate']
+    np.testing.assert_allclose(np.asarray(doc['cable_exit_tool0_mm']) + 40.0 * np.asarray(doc['cable_axis_tool0']),
+                               geo['tcp_tool0_mm'], atol=1e-6)
+
+
+def test_cable_exit_from_map(tmp_path, occ):
+    """frames.cable_exit (point_file_mm + axis_file, file frame) wins over the rear estimate; written in tool0."""
+    step = _head_step(tmp_path / 'head.step', POSE_A, cable=True)
+    point, axis = np.array([5.0, -40.0, -20.0]), np.array([0.0, -0.6, -0.8])
+    cmap = _map(step, tcp=_tcp_override())
+    cmap['frames']['cable_exit'] = {'point_file_mm': (POSE_A @ np.append(point, 1.0))[:3].tolist(),
+                                    'axis_file': (POSE_A[:3, :3] @ axis).tolist()}
+    code, out = _export(tmp_path, step, cmap)
+    assert code == 0
+    doc = miniyaml.load(out / 'head.yaml')
+    np.testing.assert_allclose(doc['cable_exit_tool0_mm'], point, atol=1e-6)
+    np.testing.assert_allclose(doc['cable_axis_tool0'], axis, atol=1e-9)
+    assert doc['cable_exit_source'] == 'map'
+
+
+@pytest.mark.parametrize('override', [False, True])
+def test_cable_exit_null_without_source(tmp_path, occ, override):
+    """No map entry and no rear estimate (the automatic estimate is the nozzle): null, no invented default."""
+    step = _head_step(tmp_path / 'head.step', POSE_A)
+    code, out = _export(tmp_path, step, _map(step, tcp=_tcp_override() if override else {}))
+    assert code == 0
+    doc = miniyaml.load(out / 'head.yaml')
+    for key in ('cable_exit_tool0_mm', 'cable_axis_tool0', 'cable_exit_source'):
+        assert key in doc and doc[key] is None
+
+
+@pytest.mark.parametrize('entry', [{'point_file_mm': [0.0, 0.0, 0.0]}, {'axis_file': [0.0, 0.0, 1.0]},
+                                   {'point_file_mm': [0.0, 0.0, 0.0], 'axis_file': [0.0, 0.0, 0.0]}])
+def test_cable_exit_map_entry_checked(tmp_path, occ, entry):
+    from awm_geometry import head
+
+    step = _head_step(tmp_path / 'head.step', POSE_A)
+    cmap = _map(step, tcp=_tcp_override())
+    cmap['frames']['cable_exit'] = entry
+    map_path = tmp_path / 'cad_map_head.yaml'
+    map_path.write_text(miniyaml.dumps(cmap))
+    with pytest.raises(head.HeadError, match='cable_exit'):
+        head.export_head(step, map_path, tmp_path / 'repo', 'test')
+
+
 def test_tool0_override_and_nozzle_length(tmp_path, occ):
     step = _head_step(tmp_path / 'head.step', POSE_A)
     cmap = _map(step, tool0={'origin_file_mm': POSE_A[:3, 3].tolist(), 'z_file': POSE_A[:3, 2].tolist(),
@@ -415,3 +476,8 @@ def test_dau_han_robot(tmp_path):
     exit_mm = np.asarray(doc['beam_exit_tool0_mm'])
     np.testing.assert_allclose(exit_mm + doc['nozzle_len_mm'] * np.asarray(doc['beam_axis_tool0']), tcp[:3, 3],
                                atol=1e-6)
+    # conduit exit for the xacro from the rear estimate (fiber / cable connector end behind the flange)
+    print('cable exit', doc['cable_exit_tool0_mm'], 'axis', doc['cable_axis_tool0'], doc['cable_exit_source'])
+    assert doc['cable_exit_source'] == 'rear_estimate'
+    np.testing.assert_allclose(doc['cable_exit_tool0_mm'], [-67.6, 0.0, -345.4], atol=0.5)
+    assert float(np.asarray(doc['cable_axis_tool0']) @ [0.0, 0.0, -1.0]) > 0.99
