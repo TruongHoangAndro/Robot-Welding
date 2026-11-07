@@ -82,11 +82,16 @@ CONDUIT_POSITION_ARGS = ('conduit_x_mm', 'conduit_y_mm', 'conduit_z_mm', 'condui
 
 def conduit_source(head_dir: str) -> str:
     """Conduit source of an H-CAD head folder, same rule as lightweld_hcad.xacro (G1.8 / review I4):
-    ``explicit`` (cable_exit_tool0_mm + cable_axis_tool0), ``rear_estimate`` (estimates.tcp.geometry_estimate behind
+    ``explicit`` (cable_exit_tool0_mm + cable_axis_tool0 with cable_exit_source map or null; ``rear_estimate`` when
+    cable_exit_source is rear_estimate), ``rear_estimate`` (estimates.tcp.geometry_estimate behind
     the flange) or ``parametric`` (neither: the conduit_* args)."""
     doc = yaml.safe_load((Path(head_dir.strip()) / 'head.yaml').read_text()) or {}
     if doc.get('cable_exit_tool0_mm') is not None and doc.get('cable_axis_tool0') is not None:
-        return 'explicit'
+        label = doc.get('cable_exit_source')
+        if label not in (None, 'map', 'rear_estimate'):
+            raise ValueError(f'{head_dir}/head.yaml: cable_exit_source {label!r} unknown (expected map, rear_estimate '
+                             'or null)')
+        return 'rear_estimate' if label == 'rear_estimate' else 'explicit'
     est = ((doc.get('estimates') or {}).get('tcp') or {}).get('geometry_estimate') or {}
     if est.get('behind_flange') is True and est.get('tcp_tool0_mm') is not None \
             and est.get('beam_axis_tool0') is not None:

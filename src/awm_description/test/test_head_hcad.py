@@ -234,11 +234,67 @@ def _conduit_record(xml: str) -> dict:
     return dict(found[0].attrib)
 
 
+LABELS = {'map': 'explicit', 'rear_estimate': 'rear_estimate'}
+
+
+def _expected_source(head):
+    """Conduit source label from head.yaml (independent of xacro): cable_exit_source of the explicit keys (map ->
+    explicit, rear_estimate -> rear_estimate, absent / null -> explicit); else a rear geometry_estimate behind the
+    flange -> rear_estimate; else parametric."""
+    if head.get('cable_exit_tool0_mm') is not None and head.get('cable_axis_tool0') is not None:
+        return LABELS.get(head.get('cable_exit_source'), 'explicit')
+    g = ((head.get('estimates') or {}).get('tcp') or {}).get('geometry_estimate') or {}
+    return 'rear_estimate' if g.get('behind_flange') is True else 'parametric'
+
+
 def test_conduit_source_recorded(head_dir, head):
     rec = _conduit_record(_run_xacro(head_model='hcad', head_dir=str(head_dir)).stdout)
-    expected = 'explicit' if head.get('cable_exit_tool0_mm') is not None else 'rear_estimate'
-    assert rec['source'] == expected
+    assert rec['source'] == _expected_source(head)
     assert _conduit_record(_run_xacro(head_model='hbox').stdout)['source'] == 'parametric'
+
+
+# g1-15: (edit of the synthetic head.yaml, expected label). Keys set = position from the keys in every case.
+SOURCE_CASES = [
+    ({}, 'explicit'),                                                   # cable_exit_source: map
+    ({'cable_exit_source': 'rear_estimate'}, 'rear_estimate'),          # export-head wrote the rear estimate
+    ({'cable_exit_source': None}, 'explicit'),                          # keys without a label (older g1-8 data)
+    ({'pop': ['cable_exit_source']}, 'explicit'),
+    ({'cable_exit_tool0_mm': None, 'cable_axis_tool0': None, 'cable_exit_source': None}, 'parametric'),
+]
+
+
+def _edit_head(folder, edit):
+    doc = yaml.safe_load((folder / 'head.yaml').read_text())
+    for k in edit.get('pop', []):
+        doc.pop(k)
+    doc.update({k: v for k, v in edit.items() if k != 'pop'})
+    (folder / 'head.yaml').write_text(yaml.safe_dump(doc))
+    return doc
+
+
+@pytest.mark.parametrize('edit, label', SOURCE_CASES)
+def test_conduit_source_label_from_cable_exit_source(tmp_path, edit, label):
+    folder = write_synthetic_head_dir(tmp_path / 'h')
+    doc = _edit_head(folder, edit)
+    proc = _run_xacro(head_model='hcad', head_dir=str(folder))
+    assert proc.returncode == 0, proc.stderr
+    assert _conduit_record(proc.stdout)['source'] == label == _expected_source(doc)
+    if label != 'parametric':
+        t = fk(URDF.from_xml_string(proc.stdout), 'conduit', root='tool0')
+        assert np.allclose(units.m_to_mm(list(t[:3, 3])), doc['cable_exit_tool0_mm'], atol=TOL_MM)
+
+
+def test_conduit_source_null_keys_fall_back_to_rear_estimate(tmp_path):
+    """Null cable keys (map variant): the rear geometry_estimate behind the flange still gives rear_estimate."""
+    folder = write_map_override_head_dir(tmp_path / 'h')
+    assert _conduit_record(_run_xacro(head_model='hcad', head_dir=str(folder)).stdout)['source'] == 'rear_estimate'
+
+
+def test_unknown_cable_exit_source_fails(tmp_path):
+    folder = write_synthetic_head_dir(tmp_path / 'h')
+    _edit_head(folder, {'cable_exit_source': 'guess'})
+    proc = _run_xacro(head_model='hcad', head_dir=str(folder))
+    assert proc.returncode != 0 and 'cable_exit_source' in proc.stderr
 
 
 def _no_cable_head(tmp_path):
