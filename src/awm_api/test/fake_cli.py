@@ -167,7 +167,8 @@ def cmd_generate(a) -> None:
     out.parent.mkdir(parents=True)
     out.write_text(json.dumps({'schema_version': '2.1', 'program_rev': rev, 'collision_checked': False,
                                'cycle_time_s': 12.5, 'segments': [], 'events': [],
-                               'inputs': [{'name': 'path.json', 'sha256': sha(job / 'path.json')}]}))
+                               'inputs': [{'name': 'path.json',
+                                           'sha256': os.environ.get('FAKE_PROGRAM_PATH_SHA') or sha(job / 'path.json')}]}))
     print(f'result ok program_rev={rev} out={out} cycle_time_s=12.5 collision_checked=false')
 
 

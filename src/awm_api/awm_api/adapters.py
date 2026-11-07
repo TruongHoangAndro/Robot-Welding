@@ -234,8 +234,23 @@ def promote_program(run_dir: Path, job: Path) -> Dict[str, str]:
     rel = f'programs/{revs[-1]}/program.json'
     if not (job / rel).is_file():
         raise RuntimeError(f'the program CLI reported {revs[-1]} but {rel} does not exist')
-    carry_override(job, job / rel)
+    try:
+        carry_override(job, job / rel)
+    except Exception as exc:
+        where = quarantine_program(job, revs[-1], run_dir.name, str(exc))
+        raise RuntimeError(f'{exc}; program {revs[-1]} quarantined to {where} (never left without the CP-62 '
+                           'override record)') from exc
     return {rel: sha256_file(job / rel)}
+
+
+def quarantine_program(job: Path, rev: str, run_id: str, reason: str) -> str:
+    """Move a program revision that failed its post-step out of ``programs/`` (review minor 4): it lands in
+    ``programs/.quarantine/<rev>-<run_id>/`` with ``QUARANTINE.txt``; job listings ignore hidden folders."""
+    target = job / 'programs' / '.quarantine' / f'{rev}-{run_id}'
+    target.parent.mkdir(parents=True, exist_ok=True)
+    (job / 'programs' / rev).rename(target)
+    (target / 'QUARANTINE.txt').write_text(f'{rev} from run {run_id} quarantined by awm_api: {reason}\n')
+    return target.relative_to(job).as_posix()
 
 
 # -- CP-60 / CP-61: cell model, positioner-axis pick, TCP teach, job placement + cross-check -----------------------

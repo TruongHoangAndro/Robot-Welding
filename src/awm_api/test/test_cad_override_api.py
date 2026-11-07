@@ -267,3 +267,76 @@ def test_stale_check_during_plan_run_is_not_promoted(client, repo, monkeypatch):
     run = wait_run(client, h, run_id)
     assert run['state'] == 'failed' and 'run the cross-check again' in run['problem']['detail'], run
     assert not (job / 'path.json').exists()
+
+
+# -- review minor 4 / 8: refusal branches of record_override / carry_override, quarantine ----------------------------
+
+def _ref(job):
+    rec = json.loads((job / 'cad_check_override.json').read_text())
+    return {'file': 'cad_check_override.json', 'sha256': sha(job / 'cad_check_override.json'),
+            'cad_check_sha256': sha(job / 'cad_check.json'), 'check_id': 4, 'by': rec['by'],
+            'created_at': rec['created_at'], 'reason': rec['reason']}
+
+
+def _doc(tmp_path, **doc):
+    f = tmp_path / 'doc.json'
+    f.write_text(json.dumps(doc))
+    return f
+
+
+def test_record_override_refusals(client, repo, monkeypatch, tmp_path):
+    import pytest
+    from awm_api import adapters
+    job, _h = overridden_job(client, repo, monkeypatch)
+    ref = _ref(job)
+    with pytest.raises(RuntimeError, match='changed during the run'):
+        adapters.record_override(_doc(tmp_path, collision_checked=False), job, dict(ref, sha256='0' * 64), 'v2/path')
+    with pytest.raises(RuntimeError, match='changed during the run'):
+        adapters.record_override(_doc(tmp_path, collision_checked=False), job, dict(ref, cad_check_sha256='0' * 64),
+                                 'v2/path')
+    with pytest.raises(RuntimeError, match='kinematic-only'):
+        adapters.record_override(_doc(tmp_path, collision_checked=True), job, ref, 'v2/path')
+    with pytest.raises(RuntimeError, match='another'):
+        adapters.record_override(_doc(tmp_path, collision_checked=False, cad_check_override=dict(ref, reason='x')),
+                                 job, ref, 'v2/path')
+    with pytest.raises(RuntimeError, match='does not match'):
+        adapters.record_override(_doc(tmp_path, collision_checked=False), job, dict(ref, by=''), 'v2/path')
+    f = _doc(tmp_path, collision_checked=False)
+    adapters.record_override(f, job, ref, 'v2/path')
+    assert json.loads(f.read_text())['cad_check_override'] == ref
+
+
+def test_carry_override_refusals(client, repo, monkeypatch, tmp_path):
+    import pytest
+    from awm_api import adapters
+    job, _h = overridden_job(client, repo, monkeypatch)
+    ref = _ref(job)
+    (job / 'path.json').write_text(json.dumps({'collision_checked': False, 'cad_check_override': ref}))
+    good = [{'name': 'path.json', 'sha256': sha(job / 'path.json')}]
+    with pytest.raises(RuntimeError, match='does not record the current path.json'):
+        adapters.carry_override(job, _doc(tmp_path, collision_checked=False, inputs=[{'name': 'path.json',
+                                                                                       'sha256': '0' * 64}]))
+    with pytest.raises(RuntimeError, match='another'):
+        adapters.carry_override(job, _doc(tmp_path, collision_checked=False, inputs=good,
+                                          cad_check_override=dict(ref, by='x')))
+    with pytest.raises(RuntimeError, match='kinematic-only'):
+        adapters.carry_override(job, _doc(tmp_path, collision_checked=True, inputs=good))
+    f = _doc(tmp_path, collision_checked=False, inputs=good)
+    adapters.carry_override(job, f)
+    assert json.loads(f.read_text())['cad_check_override'] == ref
+
+
+def test_program_without_the_field_is_quarantined(client, repo, monkeypatch):
+    """Minor 4: a program revision that cannot carry the override never stays as programs/P###."""
+    job, h = overridden_job(client, repo, monkeypatch)
+    assert client.put('/api/v1/jobs/J1_A/seams', headers=h, json={'seams': [pick()]}).status_code == 200
+    assert wait_run(client, h, plan(client, h).json()['run_id'])['state'] == 'succeeded'
+    monkeypatch.setenv('FAKE_PROGRAM_PATH_SHA', '0' * 64)
+    r = client.post('/api/v1/jobs/J1_A/program', headers=h, json={})
+    run = wait_run(client, h, r.json()['run_id'])
+    assert run['state'] == 'failed' and 'quarantined' in run['problem']['detail'], run
+    assert not (job / 'programs' / 'P001').exists()
+    q = list((job / 'programs' / '.quarantine').iterdir())
+    assert len(q) == 1 and q[0].name.startswith('P001-') and (q[0] / 'program.json').is_file()
+    assert 'path.json' in (q[0] / 'QUARANTINE.txt').read_text()
+    assert client.get('/api/v1/jobs/J1_A', headers=h).json()['programs'] == []
