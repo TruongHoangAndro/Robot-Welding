@@ -1,0 +1,17 @@
+# D16: replay of a D09 program (v2 MINOR 2.1, controller robot_positioner) on the 7-joint trajectory controller of
+# sim_mock (G1.7, DES-001 §6.3 Option A1). Project units: degrees and seconds (ADR-14).
+# Read by awm_bringup.replay (CLI `ros2 run awm_bringup replay_program`). Mock hardware only.
+program_replay:
+  # Action of the single 7-joint controller (sim_mock trajectory_controllers:=robot_positioner).
+  controller_action: /robot_positioner_trajectory_controller/follow_joint_trajectory
+  # Refuse a segment when any joint differs from its first point by more than this (Assumption: 0.05 deg,
+  # about the 0.001 rad of the v1 M7 replay).
+  start_state_tolerance_deg: 0.05
+  # The replay fails when /joint_states at the end of a segment differs from its last point by more than this.
+  final_tolerance_deg: 0.05
+  # Time to wait for /joint_states and for the action server.
+  wait_timeout_s: 30.0
+  # Extra time on top of the segment duration before the goal is treated as lost.
+  result_margin_s: 10.0
+  # After the goal succeeds, wait this long for /joint_states to settle before the end check.
+  settle_s: 0.3

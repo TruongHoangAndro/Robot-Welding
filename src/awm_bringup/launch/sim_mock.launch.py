@@ -5,6 +5,7 @@
         [positioner_xyz_mm:="x y z"] [positioner_quat_xyzw:="x y z w"] [positioner_axis_xyz:="x y z"]
         [padding_mm:=3.0] [<any H-BOX xacro arg>:=<mm or deg>]
         [head_model:=hbox|hcad] [head_dir:=<absolute folder with head.yaml, e.g. <repo_root>/cell/model/head>]
+        [trajectory_controllers:=split|robot_positioner]
 
 Positioner limits: only awm_description/config/positioner_limits.yaml (URDF and MoveIt). The rotating set follows
 positioner_joint; checkers use awm_bringup.scene_sync (set_positioner_and_wait, check_positioner).
@@ -17,6 +18,12 @@ TST-002 F4). Mock hardware only: this launch never connects to a robot or a driv
 All pose / size arguments are mm, degrees and unit quaternions (ADR-14). Empty H-BOX args keep the xacro defaults
 (TST-002 §3.1). Defaults of the poses are identity (Assumption until A3 frames.yaml, OI-23). The v1 MIG launch
 ``sim.launch.py`` is unchanged.
+
+Trajectory controllers (G1.7): ``split`` (default) = joint_trajectory_controller (6 arm joints) +
+positioner_trajectory_controller; ``robot_positioner`` = DES-001 §6.3 Option A1: one 7-joint
+robot_positioner_trajectory_controller (arm joints then positioner_joint, one controller manager, mock hardware) used
+by MoveIt and by the D09 replay CLI ``ros2 run awm_bringup replay_program``. Both claim the same command interfaces;
+only one set is spawned.
 
 Head model (Goal 1 G1.1): ``head_model:=hbox`` (default, parametric envelope) or ``hcad`` (Fusion head CAD meshes and
 tcp_laser from ``<head_dir>/head.yaml``, A18 export). For hcad the folder is checked first (head.yaml, mesh files and
@@ -47,6 +54,12 @@ XACRO_ARGS = (
     'contact_standoff_mm', 'conduit_dia_mm', 'conduit_len_mm', 'conduit_x_mm', 'conduit_y_mm', 'conduit_z_mm',
     'conduit_r_deg', 'conduit_p_deg', 'conduit_y_deg',
 )
+# trajectory_controllers value -> (MoveIt controllers file, spawned trajectory controllers)
+TRAJECTORY_CONTROLLERS = {
+    'split': ('config/moveit_controllers_v2.yaml',
+              ('joint_trajectory_controller', 'positioner_trajectory_controller')),
+    'robot_positioner': ('config/moveit_controllers_v2_7axis.yaml', ('robot_positioner_trajectory_controller',)),
+}
 
 
 def _launch_setup(context, *args, **kwargs):
@@ -62,6 +75,10 @@ def _launch_setup(context, *args, **kwargs):
         check_head_dir(arg('head_dir'))  # clear error before xacro / MoveIt (missing or changed files)
         mappings['head_dir'] = arg('head_dir').strip()
     padding_mm = float(arg('padding_mm'))
+    traj = arg('trajectory_controllers').strip()
+    if traj not in TRAJECTORY_CONTROLLERS:
+        raise ValueError(f'trajectory_controllers must be one of {sorted(TRAJECTORY_CONTROLLERS)}, got {traj!r}')
+    moveit_controllers_file, spawned = TRAJECTORY_CONTROLLERS[traj]
     manifest = arg('cell_manifest') or (FindPackageShare('awm_bringup').perform(context)
                                         + '/config/cell_scene_nominal.yaml')
     moveit_config = (
@@ -70,7 +87,7 @@ def _launch_setup(context, *args, **kwargs):
         .robot_description_semantic(file_path='srdf/awm_cell_v2.srdf.xacro')
         .robot_description_kinematics(file_path='config/kinematics_v2.yaml')
         .joint_limits(file_path='config/joint_limits_v2.yaml')
-        .trajectory_execution(file_path='config/moveit_controllers_v2.yaml')
+        .trajectory_execution(file_path=moveit_controllers_file)
         .planning_pipelines(pipelines=['ompl'], default_planning_pipeline='ompl')
         .planning_scene_monitor(publish_robot_description=True,
                                 publish_robot_description_semantic=True,
@@ -94,8 +111,7 @@ def _launch_setup(context, *args, **kwargs):
              parameters=[controllers],
              remappings=[('/controller_manager/robot_description', '/robot_description')]),
         Node(package='controller_manager', executable='spawner', output='log',
-             arguments=['joint_state_broadcaster', 'joint_trajectory_controller',
-                        'positioner_trajectory_controller', '--controller-manager', '/controller_manager']),
+             arguments=['joint_state_broadcaster', *spawned, '--controller-manager', '/controller_manager']),
         Node(package='moveit_ros_move_group', executable='move_group', output='log',
              parameters=[moveit_config.to_dict(), padding, {'publish_robot_description_semantic': True}]),
         Node(package='awm_bringup', executable='cell_scene_loader', output='log',
@@ -124,6 +140,9 @@ def generate_launch_description():
         DeclareLaunchArgument('head_dir', default_value='',
                               description='hcad only: absolute folder with head.yaml + STL meshes '
                                           '(A18 export, e.g. <repo_root>/cell/model/head)'),
+        DeclareLaunchArgument('trajectory_controllers', default_value='split',
+                              description='split (6-joint arm + positioner controllers, default) or robot_positioner '
+                                          '(one 7-joint controller, DES-001 §6.3 Option A1, G1.7)'),
         DeclareLaunchArgument('padding_mm', default_value='3.0',
                               description='padding on every robot link except nozzle_tip (TST-002 F4, D16)'),
     ]
