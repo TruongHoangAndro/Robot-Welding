@@ -201,3 +201,38 @@ def test_release_json_without_cad_check_unchanged(job):
     write_report(job)
     doc = release(job, 'P001', 'A. Approver', 'simulation')
     assert 'cad_check.json' not in {i['name'] for i in doc['inputs']}
+
+
+# ---------------------------------------------------------------------------------- review g1-19 M-4
+
+@pytest.mark.parametrize('scope', SCOPES)
+def test_other_red_check_refused(tmp_path, scope):
+    _write_cad_check(tmp_path, check4='green', status='red')
+    doc = json.loads((tmp_path / 'cad_check.json').read_text())
+    next(c for c in doc['checks'] if c['id'] == 1)['status'] = 'red'
+    jsonio.write_json(tmp_path / 'cad_check.json', doc, 'v2/cad_check')
+    with pytest.raises(ReleaseError, match=r'is red \(checks \[1\]\)'):
+        release_gate(_checked(_example()), scope, job_dir=tmp_path)
+
+
+@pytest.mark.parametrize('scope', SCOPES)
+def test_status_red_without_red_check_refused(tmp_path, scope):
+    _write_cad_check(tmp_path, check4='green', status='red')
+    with pytest.raises(ReleaseError, match=r'is red \(checks \[\]\)'):
+        release_gate(_checked(_example()), scope, job_dir=tmp_path)
+
+
+def test_override_program_refused_by_release_end_to_end(job):
+    """A D09 carrying a CP-62 override, in the job with a report: release() refuses it for both CLI scopes before
+    anything is written; the program stays writable (not locked)."""
+    from awm_verify.release import is_locked
+    from conftest import write_report
+    doc = _example()
+    doc['cad_check_override'] = _override_ref()
+    jsonio.validate(doc, 'v2/program')
+    job.program_json('P001').write_text(json.dumps(doc))
+    write_report(job)
+    for scope in ('simulation', 'production'):
+        with pytest.raises(ReleaseError, match='CP-62.*never releasable'):
+            release(job, 'P001', 'A. Approver', scope)
+    assert not job.release_json.exists() and not is_locked(job, 'P001')
