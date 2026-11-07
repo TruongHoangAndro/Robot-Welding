@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "v2/cad_check_override.schema.json",
+  "title": "cad_check_override",
+  "description": "CP-62 (Truong 2026-11-07): recorded Admin override of CP-60 cross-check 4 for kinematic-only planning (jobs/<job>/cad_check_override.json). cad_check.json keeps status red; the override applies only to the cad_check.json whose SHA-256 it records (a new or changed check voids it). Allows seam saving and Plan with collision off; Plan with collision on and every release scope still refuse while check 4 is red. Checks 1, 5, 6 and a stale check are never overridden.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "created_by", "created_at", "inputs", "by", "role", "reason", "check_id",
+               "cad_check_sha256", "scope", "findings"],
+  "properties": {
+    "schema_version": {"$ref": "common.schema.json#/$defs/schema_version"},
+    "created_by": {"$ref": "common.schema.json#/$defs/created_by"},
+    "created_at": {"$ref": "common.schema.json#/$defs/created_at"},
+    "inputs": {"$ref": "common.schema.json#/$defs/inputs"},
+    "by": {"type": "string", "minLength": 1, "description": "user name of the Admin who recorded the override"},
+    "role": {"const": "admin"},
+    "reason": {"type": "string", "minLength": 1, "description": "free text, e.g. 'OI-23: jig bearing seats / belts not separated in the cell CAD'"},
+    "check_id": {"const": 4},
+    "cad_check_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+    "scope": {"const": "kinematic_planning", "description": "collision off only (CP-58); never collision-on planning or release"},
+    "findings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1},
+      "description": "check-4 findings copied from cad_check.json at the time of the override (component names of the static objects hit)"
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "schema_version": "2.0",
+  "created_by": "lead (hand-made contract example CP-62; format only)",
+  "created_at": "2026-11-07T18:00:00+07:00",
+  "inputs": [
+    {"name": "cad_check.json", "sha256": "2222222222222222222222222222222222222222222222222222222222222222"}
+  ],
+  "by": "adm",
+  "role": "admin",
+  "reason": "OI-23: static parts not yet separated in the cell CAD; kinematic planning only (Goal 1)",
+  "check_id": 4,
+  "cad_check_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+  "scope": "kinematic_planning",
+  "findings": ["StaticBlock:1", "StaticBlock:2"]
+}

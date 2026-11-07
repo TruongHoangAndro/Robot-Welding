@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "v2/program.schema.json",
   "title": "program",
-  "description": "D09 program v2 (A61\u2013A64, B-15): one segment per controller with the trajectory exactly as commanded (awm_motion converts deg \u2192 rad for the controllers), hold values of the other axes, weld events only at rest of robot and positioner, context record. Self-contained (B-09). MINOR 2.1 (G1.5, CP-58 / CP-59): controller robot_positioner = one synchronised 7-joint trajectory (positions / velocities / accelerations in the order joint_names.robot then joint_names.positioner, hold_deg empty), positioner_mode on robot_positioner weld segments, collision_checked (required from 2.1; false = kinematic only, every release gate refuses it), optional generator record, event wps_id / preset null = no process assignment (no D06 yet; every release gate refuses it).",
+  "description": "D09 program v2 (A61\u2013A64, B-15): one segment per controller with the trajectory exactly as commanded (awm_motion converts deg \u2192 rad for the controllers), hold values of the other axes, weld events only at rest of robot and positioner, context record. Self-contained (B-09). MINOR 2.1 (G1.5, CP-58 / CP-59): controller robot_positioner = one synchronised 7-joint trajectory (positions / velocities / accelerations in the order joint_names.robot then joint_names.positioner, hold_deg empty), positioner_mode on robot_positioner weld segments, collision_checked (required from 2.1; false = kinematic only, every release gate refuses it), optional generator record, event wps_id / preset null = no process assignment (no D06 yet; every release gate refuses it). CP-62 (2026-11-07): optional cad_check_override = the cross-check-4 override a kinematic-only run relied on.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -365,6 +365,32 @@
     "collision_checked": {
       "type": "boolean",
       "description": "false = kinematic only, collision not evaluated (Goal 1, CP-58); every release gate refuses it. Required from MINOR 2.1"
+    },
+    "cad_check_override": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "sha256",
+        "cad_check_sha256",
+        "check_id"
+      ],
+      "description": "CP-62: the cross-check override this run relied on (kinematic planning with check 4 red); absent = no override",
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "cad_check_sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "check_id": {
+          "const": 4
+        }
+      }
     },
     "generator": {
       "type": "object",
