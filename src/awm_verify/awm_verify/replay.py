@@ -14,10 +14,11 @@ from typing import Dict, List, Optional, Sequence
 import numpy as np
 from builtin_interfaces.msg import Duration
 from control_msgs.action import FollowJointTrajectory
-from rclpy.action import ActionClient
+from rclpy.action import ActionClient, get_action_names_and_types
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
+from awm_path.params import ControllerActionMissing, check_controller_action
 from awm_program.timing import joint_velocities
 
 
@@ -46,6 +47,7 @@ class Replayer:
     def __init__(self, node, action_name: str, joint_names: Sequence[str]) -> None:
         self.node = node
         self.joint_names = list(joint_names)
+        self._action_name = action_name
         self._client = ActionClient(node, FollowJointTrajectory, action_name)
         self._lock = threading.Lock()
         self._state: Optional[np.ndarray] = None
@@ -69,8 +71,17 @@ class Replayer:
         raise ReplayError('no /joint_states received')
 
     def wait_ready(self, timeout_s: float = 60.0) -> None:
+        """Wait for the controller action server and the first joint state. The running action names are checked
+        only **after** the wait timed out (a graph that is still starting up would be refused too early): when the
+        configured action is absent, the message names the reason, e.g. sim_mock launched with
+        ``trajectory_controllers:=robot_positioner`` (G1.14, ``awm_path.params.check_controller_action``)."""
         if not self._client.wait_for_server(timeout_sec=timeout_s):
-            raise ReplayError(f'trajectory controller action {self._client._action_name} not '
+            names = [n for n, _ in get_action_names_and_types(self.node)]
+            try:
+                check_controller_action(self._action_name, names)
+            except ControllerActionMissing as exc:
+                raise ReplayError(str(exc)) from exc
+            raise ReplayError(f'trajectory controller action {self._action_name} not '
                               'available (is sim.launch.py running?)')
         self.current(timeout_s)
 
