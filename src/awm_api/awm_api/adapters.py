@@ -157,8 +157,9 @@ def record_override(doc_path: Path, job: Path, override: Dict[str, Any], schema:
     """CP-62: write the cross-check-4 override reference into a D07 / D09 document written by a CLI that does not know
     the field yet (least invasive; becomes a no-op check when the CLI writes it itself). Refuses when the override or
     the cross-check changed while the run was going (the run slot normally prevents that)."""
-    if sha256_file(job / override['file']) != override['sha256'] or \
-            sha256_file(job / 'cad_check.json') != override['cad_check_sha256']:
+    files = (job / override['file'], job / 'cad_check.json')
+    if not all(f.is_file() for f in files) or sha256_file(files[0]) != override['sha256'] or \
+            sha256_file(files[1]) != override['cad_check_sha256']:
         raise RuntimeError('the CP-62 override or the cross-check changed during the run; nothing promoted')
     _validate_field(override, schema)
     doc = json.loads(doc_path.read_text())

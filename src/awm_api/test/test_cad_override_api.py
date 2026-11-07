@@ -196,3 +196,17 @@ def test_green_check_has_no_override_record_in_path(client, repo, monkeypatch):
     r = plan(client, h)
     assert wait_run(client, h, r.json()['run_id'])['state'] == 'succeeded'
     assert 'cad_check_override' not in json.loads((job / 'path.json').read_text())
+
+
+def test_override_change_during_plan_run_is_not_promoted(client, repo, monkeypatch):
+    job, h = overridden_job(client, repo, monkeypatch)
+    assert client.put('/api/v1/jobs/J1_A/seams', headers=h, json={'seams': [pick()]}).status_code == 200
+    monkeypatch.setenv('FAKE_SLEEP_S', '1.5')
+    r = plan(client, h)
+    assert r.status_code == 202, r.text
+    # DELETE is refused while the run holds the slot; a change on disk is caught at promotion
+    assert client.delete(URL, headers=auth(client, 'adm')).status_code == 409
+    (job / 'cad_check_override.json').unlink()
+    run = wait_run(client, h, r.json()['run_id'])
+    assert run['state'] == 'failed' and 'override' in json.dumps(run['problem'])
+    assert not (job / 'path.json').exists()
