@@ -776,3 +776,27 @@ TCP with `method: teach_ui`, picked edge, offset, user, date, hash; every path p
 **Relation to calibration:** the taught TCP is the nominal value from CAD; the measured TCP of A51 (4–6 orientations
 on the real robot) replaces it in D08 at the hardware stage.
 **DES-001 impact:** §5.3 `tcp_laser` source; A51 (nominal vs measured); S10; head.yaml / D08 records.
+
+## CP-62 Recorded Admin override of cross-check 4 for kinematic-only planning (decided by Truong, 2026-11-07)
+
+**Problem:** CP-60 cross-check 4 (`rotary_fixture` + `part` swept over the θ range must not hit `static`) is red for the
+golden part 564082 (Jig:1 bearing seats and timing-belt hulls around the pulleys, 4.5–5.1 mm) and stays red by decision
+until the mechanical team separates them in the cell CAD (OI-23). The `awm_api` gate refuses seam saving and Plan on a
+red check (409 `cad-check-red`), so the Goal 1 acceptance (CP-58: browser import → pick J1, J2 → plan → playback, kinematic
+only) cannot be done through the CP-60 flow. The only other path is the manual / copied placement, which ADR-16 and CP-60
+keep as a test helper only.
+**Decision (Truong 2026-11-07, option B of the Goal 1 audit):** an **Admin** may record an override of **check 4 only**,
+for **kinematic-only planning** (`--collision off`, CP-58):
+1. Scope: check 4 only. Checks 1 (job positioner ≠ cell positioner) and 5 / 6 stay hard; a stale check still refuses.
+2. Recorded, never silent: `job/cad_check.json` keeps `status: red`; the override is a separate record (who, when,
+   reason text, the check-4 findings and the `cad_check.json` SHA-256 it applies to). A new or changed `cad_check.json`
+   voids it. S2 shows the check red with an "overridden for kinematic planning by <admin>" banner.
+3. Effect: seam saving and Plan with collision off are allowed; Plan with collision on (Goal 2) and every release scope
+   refuse while check 4 is red, override or not. D07 / D09 record the override (id + hash) next to
+   `collision_checked: false`.
+4. Roles: only Admin creates or removes the override (ADR-09 roles, §7.3); Engineers see it.
+**Why:** check 4 is a collision check (Goal 2 work); Goal 1 is kinematics only and its outputs can never be released
+(`collision_checked: false`). The override keeps the CP-60 flow (no hand-typed placement, ADR-16) and keeps the red state
+visible until OI-23 is fixed.
+**DES-001 impact:** §5.2 job package gains the override record (schema `v2/cad_check_override`, lead); §7.3 Admin rights;
+§7.4 `/jobs/{id}/check/override` (POST / DELETE, Admin). No change to release rules (ADR-17).
