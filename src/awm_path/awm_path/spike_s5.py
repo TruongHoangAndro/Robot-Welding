@@ -202,7 +202,8 @@ def _plan_arc(ctx: Dict[str, Any], seam: Mapping[str, Any], k: int, s0: float, s
     from awm_core.frames import matrix_to_quat
     from awm_core.hashing import sha256_file
     from awm_path.core.ladder import solve
-    from awm_path.core.s5 import classify_points, longest_window, path_metrics, point_classes, refine_pitch
+    from awm_path.core.s5 import (classify_points, coverage_reject_reason, longest_window, path_metrics,
+                                  point_classes, refine_pitch)
     from awm_path.core.scoring import score_candidates
     from awm_path.core.sweep import sweep, tcp_pose, write_candidates_csv
 
@@ -246,7 +247,7 @@ def _plan_arc(ctx: Dict[str, Any], seam: Mapping[str, Any], k: int, s0: float, s
     if res.ok:
         reason = None
     elif covered < len(layers):
-        reason = f'no path: C2 fails at {len(layers) - covered} of {len(layers)} points'
+        reason = coverage_reject_reason(classes)
     else:
         reason = (f'no continuous path (F3 / F11): DP stops at layer {res.max_reached_layer + 1}, reasons '
                   f'{dict(res.reason_counts[res.failing_layers[0]]) if res.failing_layers else {}}')

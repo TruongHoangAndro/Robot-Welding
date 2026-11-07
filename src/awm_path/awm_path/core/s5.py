@@ -19,7 +19,10 @@ from awm_path.core.ladder import NodeScore, solve
 from awm_path.core.sweep import Candidate, PlannerParams, required_points
 
 #: Point classes of a point without a valid node (reported per failing point).
-POINT_CLASSES = ('contact', 'IK', 'F4', 'clearance')
+#: Failure classes of a point (CP-56 decision 2: F9 and F4 on the nozzle links only → cause ``nozzle``).
+POINT_CLASSES = ('nozzle', 'IK', 'F4', 'clearance')
+#: Nozzle collision links of the head description (CP-10 split, CP-56 decision 2).
+NOZZLE_LINKS = ('nozzle_tip', 'nozzle_body')
 
 
 def max_label_steps(layers: Sequence[Sequence[Candidate]], scores: Optional[Sequence[Sequence[NodeScore]]] = None,
@@ -145,25 +148,49 @@ def classify_points(layers: Sequence[Sequence[Candidate]], columns: Mapping[str,
     return out
 
 
-def point_classes(points: Sequence[Mapping[str, Any]]) -> List[Optional[str]]:
-    """Class of each point without a valid node (None = covered): ``contact`` if F9 fails at the point; else ``IK``
-    if no candidate is kinematically valid; else ``F4`` if no candidate passes F4; else ``clearance``."""
+def _nozzle_only(pairs: Mapping[str, int], nozzle_links: Sequence[str]) -> bool:
+    links = set(nozzle_links)
+    return bool(pairs) and all(any(x in links for x in pair.split('<->')) for pair in pairs)
+
+
+def point_classes(points: Sequence[Mapping[str, Any]], nozzle_links: Sequence[str] = NOZZLE_LINKS
+                  ) -> List[Optional[str]]:
+    """Class (= rejection cause) of each point without a valid node (None = covered):
+
+    * ``nozzle`` (CP-56 decision 2) if F9 fails at the point, or if no candidate passes F4 and every F4 contact of the
+      point involves a nozzle link (``nozzle_tip`` / ``nozzle_body``): the configured nozzle is the cause, the
+      Engineer changes the setup or the cell owner fits another nozzle (details in ``contact_reason`` / ``pairs``);
+    * else ``IK`` if no candidate is kinematically valid;
+    * else ``F4`` if no candidate passes F4 (another link collides);
+    * else ``clearance``."""
     out: List[Optional[str]] = []
     for p in points:
         if p['valid_nodes'] > 0:
             out.append(None)
         elif not p['contact_ok']:
-            out.append('contact')
+            out.append('nozzle')
         else:
             c = p['counts']
             kin_valid = sum(v for k, v in c.items() if k in ('f4_invalid', 'clearance', 'contact', 'valid'))
             if kin_valid == 0:
                 out.append('IK')
             elif c.get('clearance', 0) == 0 and c.get('contact', 0) == 0:
-                out.append('F4')
+                out.append('nozzle' if _nozzle_only(p.get('pairs', {}), nozzle_links) else 'F4')
             else:
                 out.append('clearance')
     return out
+
+
+def coverage_reject_reason(classes: Sequence[Optional[str]]) -> Optional[str]:
+    """Reject reason of an arc whose points are not all covered, with the count per cause (CP-56 decision 2: the
+    cause ``nozzle`` is named); None if every point is covered. Causes ordered by count, then by name."""
+    failing = [c for c in classes if c]
+    if not failing:
+        return None
+    counts = sorted(Counter(failing).items(), key=lambda kv: (-kv[1], POINT_CLASSES.index(kv[0])
+                                                              if kv[0] in POINT_CLASSES else len(POINT_CLASSES)))
+    return (f'no path: C2 fails at {len(failing)} of {len(classes)} points (causes: '
+            + ', '.join(f'{k} {v}' for k, v in counts) + ')')
 
 
 def path_metrics(path: Sequence[Candidate]) -> Dict[str, Any]:
@@ -199,5 +226,5 @@ def longest_window(layers: Sequence[Sequence[Candidate]], scores: Optional[Seque
     return best
 
 
-__all__ = ['POINT_CLASSES', 'PITCH_RULES', 'max_label_steps', 'PitchResult', 'refine_pitch', 'classify_points', 'point_classes',
+__all__ = ['POINT_CLASSES', 'NOZZLE_LINKS', 'PITCH_RULES', 'max_label_steps', 'PitchResult', 'refine_pitch', 'classify_points', 'point_classes', 'coverage_reject_reason',
            'path_metrics', 'longest_window']
