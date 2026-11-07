@@ -99,11 +99,40 @@ def test_hcad_tcp_equals_head_yaml(hcad, head):
     assert np.allclose(t[:3, 2], axis / np.linalg.norm(axis), atol=1e-9)
 
 
-@pytest.mark.parametrize('nozzle_len_mm', [25.0, 52.5])
-def test_hcad_tcp_follows_nozzle_len(head_dir, head, nozzle_len_mm):
-    r = _urdf(head_model='hcad', head_dir=str(head_dir), nozzle_len_mm=nozzle_len_mm)
+@pytest.mark.parametrize('delta_mm', [-15.0, 12.5, 1e-3])
+def test_hcad_nozzle_len_differing_from_head_yaml_refused(head_dir, head, delta_mm):
+    """Review C1: the nozzle length is part of the TCP record of head.yaml (map / CP-61 teach); an explicit
+    nozzle_len_mm arg that differs from it (> 1e-6 mm) stops xacro instead of moving tcp_laser silently."""
+    proc = _run_xacro(head_model='hcad', head_dir=str(head_dir), nozzle_len_mm=float(head['nozzle_len_mm']) + delta_mm)
+    assert proc.returncode != 0 and 'nozzle_len_mm' in proc.stderr and 'head.yaml' in proc.stderr
+
+
+def test_hcad_nozzle_len_equal_to_head_yaml_accepted(head_dir, head):
+    r = _urdf(head_model='hcad', head_dir=str(head_dir), nozzle_len_mm=head['nozzle_len_mm'])
     xyz_mm = np.asarray(units.m_to_mm(list(fk(r, 'tcp_laser', root='tool0')[:3, 3])))
-    assert np.max(np.abs(xyz_mm - _expected_tcp_mm(head, nozzle_len_mm))) <= TOL_MM
+    assert np.max(np.abs(xyz_mm - np.asarray(head['tool0_T_tcp_mm']['xyz']))) <= TOL_MM
+
+
+@pytest.mark.parametrize('method', ['map', 'teach_ui'])
+def test_hcad_taught_tcp_from_head_yaml(tmp_path, method):
+    """Review C1: for a map / teach_ui TCP, tcp_laser = tool0_T_tcp_mm.xyz of head.yaml even when beam_exit does
+    not satisfy the rule exactly, and the nozzle cylinders are built backwards from that TCP (nozzle_len_mm of
+    head.yaml, here 30 mm, no xacro arg needed)."""
+    folder = write_map_override_head_dir(tmp_path / 'h', nozzle_len_mm=30.0)
+    doc = yaml.safe_load((folder / 'head.yaml').read_text())
+    doc['estimates']['tcp']['method'] = method
+    doc['beam_exit_tool0_mm'] = [v + 2.0 for v in doc['beam_exit_tool0_mm']]   # stale / rounded exit
+    (folder / 'head.yaml').write_text(yaml.safe_dump(doc))
+    r = _urdf(head_model='hcad', head_dir=str(folder))
+    tcp = np.asarray(doc['tool0_T_tcp_mm']['xyz'], float)
+    xyz_mm = np.asarray(units.m_to_mm(list(fk(r, 'tcp_laser', root='tool0')[:3, 3])))
+    assert np.max(np.abs(xyz_mm - tcp)) <= TOL_MM
+    axis = np.asarray(doc['beam_axis_tool0'], float)
+    axis = axis / np.linalg.norm(axis)
+    b0, _b1, _r = _segment(r, 'nozzle_body')
+    _t0, t1, _r = _segment(r, 'nozzle_tip')
+    assert np.max(np.abs(b0 - (tcp - 30.0 * axis))) <= TOL_MM
+    assert np.linalg.norm(tcp - t1) == pytest.approx(0.3, abs=TOL_MM)
 
 
 def test_hbox_tcp_from_args():
@@ -150,10 +179,90 @@ def test_hcad_nozzle_on_beam_axis(hcad, head):
     assert np.linalg.norm(tcp - t1) == pytest.approx(0.3, abs=TOL_MM)
 
 
-def test_hcad_conduit_is_parametric(hcad):
-    conduit = hcad.link_map['conduit'].collisions
-    assert [type(c.geometry).__name__ for c in conduit] == ['Cylinder', 'Sphere', 'Sphere']
-    assert np.allclose(units.m_to_mm(list(fk(hcad, 'conduit', root='tool0')[:3, 3])), [97, 0, 110])
+def _cable_exit(head):
+    """Expected cable exit (point mm, unit outward axis) in tool0 from head.yaml, computed independently of xacro:
+    explicit cable_exit_tool0_mm / cable_axis_tool0, else the refused rear estimate of export-head (connector end =
+    estimate TCP - nozzle_len_mm * estimate axis)."""
+    if head.get('cable_exit_tool0_mm') is not None:
+        p, a = np.asarray(head['cable_exit_tool0_mm'], float), np.asarray(head['cable_axis_tool0'], float)
+    else:
+        g = head['estimates']['tcp']['geometry_estimate']
+        a = np.asarray(g['beam_axis_tool0'], float)
+        a = a / np.linalg.norm(a)
+        p = np.asarray(g['tcp_tool0_mm'], float) - float(head['nozzle_len_mm']) * a
+    return p, a / np.linalg.norm(a)
+
+
+def _seg_dist(p0, p1, q0, q1):
+    """Smallest distance between segments p0-p1 and q0-q1 (dense sampling, test only; 0.05 mm steps)."""
+    n = 2000
+    s = np.linspace(0.0, 1.0, n)[:, None]
+    a = p0 + s * (p1 - p0)
+    b = q0 + s * (q1 - q0)
+    return float(np.min(np.linalg.norm(a[:, None, :] - b[None, :, :], axis=2)))
+
+
+def test_hcad_conduit_at_cable_exit(hcad, head):
+    """G1.8: the conduit capsule starts at the head cable exit (head.yaml data) and runs outward along the cable
+    axis; its dimensions stay the parametric Assumption (Ø30 x 300 mm, TST-002 §3.1)."""
+    exit_mm, axis = _cable_exit(head)
+    col = hcad.link_map['conduit'].collisions
+    assert [type(c.geometry).__name__ for c in col] == ['Cylinder', 'Sphere', 'Sphere']
+    t = fk(hcad, 'conduit', root='tool0')
+    assert np.max(np.abs(np.asarray(units.m_to_mm(list(t[:3, 3]))) - exit_mm)) <= TOL_MM
+    assert np.allclose(t[:3, 2], axis, atol=1e-9)
+    radius = units.m_to_mm(col[1].geometry.radius)
+    assert radius == pytest.approx(15.0) and units.m_to_mm(col[0].geometry.length) == pytest.approx(270.0)
+
+
+def test_hcad_conduit_clear_of_nozzle(hcad, head):
+    """The capsule (axis segment between its sphere centres, radius r) does not overlap the nozzle cylinders."""
+    t = fk(hcad, 'conduit', root='tool0')
+    col = hcad.link_map['conduit'].collisions
+    centres = [np.asarray(units.m_to_mm(list((t @ origin_matrix(c.origin))[:3, 3]))) for c in col[1:]]
+    r_c = units.m_to_mm(col[1].geometry.radius)
+    for link in ('nozzle_body', 'nozzle_tip'):
+        n0, n1, r_n = _segment(hcad, link)
+        assert _seg_dist(centres[0], centres[1], n0, n1) > r_c + r_n, link
+
+
+def _conduit_record(xml: str) -> dict:
+    """The <awm_conduit> record of the rendered URDF (conduit source for PlanningDescription, review M6)."""
+    import xml.etree.ElementTree as ET
+    found = ET.fromstring(xml).findall('awm_conduit')
+    assert len(found) == 1, 'exactly one <awm_conduit> record expected'
+    return dict(found[0].attrib)
+
+
+def test_conduit_source_recorded(head_dir, head):
+    rec = _conduit_record(_run_xacro(head_model='hcad', head_dir=str(head_dir)).stdout)
+    expected = 'explicit' if head.get('cable_exit_tool0_mm') is not None else 'rear_estimate'
+    assert rec['source'] == expected
+    assert _conduit_record(_run_xacro(head_model='hbox').stdout)['source'] == 'parametric'
+
+
+def _no_cable_head(tmp_path):
+    folder = write_synthetic_head_dir(tmp_path / 'h')
+    doc = yaml.safe_load((folder / 'head.yaml').read_text())
+    doc.pop('cable_exit_tool0_mm')
+    doc.pop('cable_axis_tool0')
+    (folder / 'head.yaml').write_text(yaml.safe_dump(doc))
+    return folder
+
+
+def test_hcad_without_cable_exit_uses_parametric_conduit(tmp_path):
+    """Review I4: an automatic (beam_axis) export has no cable exit; it still renders, with the parametric conduit
+    args (H-BOX defaults, Assumption) and the source recorded as parametric."""
+    folder = _no_cable_head(tmp_path)
+    proc = _run_xacro(head_model='hcad', head_dir=str(folder))
+    assert proc.returncode == 0, proc.stderr
+    assert _conduit_record(proc.stdout)['source'] == 'parametric'
+    t = fk(URDF.from_xml_string(proc.stdout), 'conduit', root='tool0')
+    assert np.allclose(units.m_to_mm(list(t[:3, 3])), [97, 0, 110])
+    assert np.allclose(t[:3, 2], [1.0, 0.0, 0.0], atol=1e-9)
+    r = _urdf(head_model='hcad', head_dir=str(folder), conduit_x_mm=50, conduit_p_deg=0)
+    t = fk(r, 'conduit', root='tool0')
+    assert np.allclose(units.m_to_mm(list(t[:3, 3])), [50, 0, 110]) and np.allclose(t[:3, 2], [0, 0, 1], atol=1e-9)
 
 
 def test_hcad_without_head_dir_fails():
@@ -208,3 +317,60 @@ def test_hcad_wrong_unit_fails(tmp_path):
     (folder / 'head.yaml').write_text(yaml.safe_dump(doc))
     proc = _run_xacro(head_model='hcad', head_dir=str(folder))
     assert proc.returncode != 0 and 'unit' in proc.stderr
+
+
+@pytest.mark.parametrize('tip_mm, standoff_mm', [(0.3, 0.3), (0.3, 0.5), (0.0, 0.3)])
+@pytest.mark.parametrize('model', ['hbox', 'hcad'])
+def test_nozzle_tip_not_longer_than_standoff_fails(tmp_path, model, tip_mm, standoff_mm):
+    """Review M5: tip collision length = nozzle_tip_len_mm - contact_standoff_mm must be > 0 for both heads."""
+    args = {'head_model': model, 'nozzle_tip_len_mm': tip_mm, 'contact_standoff_mm': standoff_mm}
+    if model == 'hcad':
+        args['head_dir'] = str(write_synthetic_head_dir(tmp_path / 'h'))
+    proc = _run_xacro(**args)
+    assert proc.returncode != 0 and 'nozzle_tip_len_mm' in proc.stderr and 'contact_standoff_mm' in proc.stderr
+
+
+@pytest.mark.parametrize('nozzle_mm', [5.0, 4.0, 0.0, -1.0])
+def test_hbox_nozzle_not_longer_than_tip_fails(nozzle_mm):
+    """Review I5: body length = nozzle_len_mm - nozzle_tip_len_mm must be > 0 (no negative-length cylinder)."""
+    proc = _run_xacro(head_model='hbox', nozzle_len_mm=nozzle_mm, nozzle_tip_len_mm=5)
+    assert proc.returncode != 0 and 'nozzle_len_mm' in proc.stderr and 'nozzle_tip_len_mm' in proc.stderr
+
+
+@pytest.mark.parametrize('nozzle_mm', [5.0, 4.0, -1.0])
+def test_hcad_nozzle_not_longer_than_tip_fails(tmp_path, nozzle_mm):
+    folder = write_synthetic_head_dir(tmp_path / 'h', nozzle_len_mm=nozzle_mm)
+    proc = _run_xacro(head_model='hcad', head_dir=str(folder), nozzle_tip_len_mm=5)
+    assert proc.returncode != 0 and 'nozzle_len_mm' in proc.stderr and 'nozzle_tip_len_mm' in proc.stderr
+
+
+def test_hcad_zero_nozzle_leaves_out_the_parametric_nozzle(tmp_path):
+    """Review I5: nozzle_len_mm 0 is valid in head.yaml (nozzle part of the CAD, head.py); the parametric nozzle is
+    left out (nozzle_body / nozzle_tip keep their names, no geometry) and tcp_laser = head.yaml TCP = beam exit."""
+    folder = write_synthetic_head_dir(tmp_path / 'h', nozzle_len_mm=0.0)
+    head = yaml.safe_load((folder / 'head.yaml').read_text())
+    r = _urdf(head_model='hcad', head_dir=str(folder))
+    for link in ('nozzle_body', 'nozzle_tip'):
+        assert not r.link_map[link].collisions and not r.link_map[link].visuals
+        assert r.joint_map[f'tool0_to_{link}'].parent == 'tool0'
+    xyz_mm = np.asarray(units.m_to_mm(list(fk(r, 'tcp_laser', root='tool0')[:3, 3])))
+    assert np.max(np.abs(xyz_mm - np.asarray(head['tool0_T_tcp_mm']['xyz']))) <= TOL_MM
+    assert np.max(np.abs(xyz_mm - np.asarray(head['beam_exit_tool0_mm']))) <= TOL_MM
+
+
+@pytest.mark.parametrize('method', ['beam_axis', None])
+@pytest.mark.parametrize('shift_mm, ok', [(0.0005, True), (0.002, False), (1.0, False)])
+def test_hcad_automatic_tcp_must_follow_the_rule(tmp_path, method, shift_mm, ok):
+    """Review M4: for the automatic estimate (or no method) tool0_T_tcp_mm.xyz must equal beam_exit + noz * axis
+    within 1e-3 mm, otherwise xacro stops (a stale or edited head.yaml)."""
+    folder = write_synthetic_head_dir(tmp_path / 'h')
+    doc = yaml.safe_load((folder / 'head.yaml').read_text())
+    if method is None:
+        doc['estimates'].pop('tcp')
+    doc['tool0_T_tcp_mm']['xyz'][0] += shift_mm
+    (folder / 'head.yaml').write_text(yaml.safe_dump(doc))
+    proc = _run_xacro(head_model='hcad', head_dir=str(folder))
+    if ok:
+        assert proc.returncode == 0, proc.stderr
+    else:
+        assert proc.returncode != 0 and 'tool0_T_tcp_mm' in proc.stderr and 'beam_exit' in proc.stderr

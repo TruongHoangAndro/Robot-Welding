@@ -1,11 +1,14 @@
 <?xml version="1.0"?>
 <!-- Conduit (fiber + wire feed) capsule shared by the H-BOX and H-CAD head macros: cylinder + 2 spheres, starting at
      (x, y, z) in the parent frame (tool0) and running along the local +Z of the rotation (r, p, y). mm / deg in,
-     converted only through units.xacro. Every value is an Assumption (TST-002 §3.1; no conduit in the head CAD). -->
+     converted only through units.xacro. Every value is an Assumption (TST-002 §3.1; no conduit in the head CAD).
+     Also writes the record <awm_conduit source="..."/> (explicit | rear_estimate | parametric) so that a reader of the
+     URDF (awm_path PlanningDescription) knows where the conduit position came from (review M6). -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
   <xacro:include filename="$(find awm_description)/urdf/units.xacro"/>
 
-  <xacro:macro name="awm_head_conduit" params="parent dia_mm len_mm x_mm y_mm z_mm r_deg p_deg y_deg">
+  <xacro:macro name="awm_head_conduit" params="parent dia_mm len_mm x_mm y_mm z_mm r_deg p_deg y_deg source:=parametric">
+    <awm_conduit source="${source}"/>
     <xacro:property name="mm" value="${m_per_mm}"/>
     <xacro:property name="c_r" value="${float(dia_mm) / 2.0}"/>
     <xacro:property name="c_cyl" value="${float(len_mm) - float(dia_mm)}"/>

@@ -31,7 +31,9 @@ In ``robot_positioner`` mode the split controllers are not running: the actions 
 
 Head model (Goal 1 G1.1): ``head_model:=hbox`` (default, parametric envelope) or ``hcad`` (Fusion head CAD meshes and
 tcp_laser from ``<head_dir>/head.yaml``, A18 export). For hcad the folder is checked first (head.yaml, mesh files and
-their SHA-256: awm_bringup.cell_config.check_head_dir); nozzle_* and conduit_* args apply to both models.
+their SHA-256: awm_bringup.cell_config.check_head_dir); nozzle_*, conduit_dia_mm and conduit_len_mm apply to both
+models; for hcad the conduit capsule sits at the head.yaml cable exit and conduit_x/y/z, conduit_r/p/y are refused
+(G1.8, review M5), unless head.yaml has no cable exit (parametric conduit from these args, Assumption, review I4).
 """
 
 from launch import LaunchDescription
@@ -41,7 +43,8 @@ from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from moveit_configs_utils import MoveItConfigsBuilder
 
-from awm_bringup.cell_config import check_head_dir, load_positioner_limits, positioner_moveit_limits
+from awm_bringup.cell_config import (check_conduit_args, check_head_dir, load_positioner_limits,
+                                     positioner_moveit_limits)
 from awm_core import units
 
 POSE_ARGS = {
@@ -77,6 +80,8 @@ def _launch_setup(context, *args, **kwargs):
     mappings['head_model'] = head_model
     if head_model == 'hcad':
         check_head_dir(arg('head_dir'))  # clear error before xacro / MoveIt (missing or changed files)
+        # conduit position args are ignored when head.yaml gives the cable exit (review M5): refuse them.
+        check_conduit_args('hcad', arg('head_dir'), [n for n in XACRO_ARGS if arg(n).strip()])
         mappings['head_dir'] = arg('head_dir').strip()
     padding_mm = float(arg('padding_mm'))
     traj = arg('trajectory_controllers').strip()
@@ -151,6 +156,6 @@ def generate_launch_description():
                               description='padding on every robot link except nozzle_tip (TST-002 F4, D16)'),
     ]
     decls += [DeclareLaunchArgument(n, default_value=d, description=t) for n, (d, t) in POSE_ARGS.items()]
-    decls += [DeclareLaunchArgument(n, default_value='', description='head xacro arg (H-BOX; nozzle / conduit also H-CAD); empty = default')
+    decls += [DeclareLaunchArgument(n, default_value='', description='head xacro arg (H-BOX; nozzle_*, conduit_dia / len also H-CAD); empty = default')
               for n in XACRO_ARGS]
     return LaunchDescription(decls + [OpaqueFunction(function=_launch_setup)])

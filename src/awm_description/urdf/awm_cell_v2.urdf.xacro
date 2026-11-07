@@ -28,7 +28,8 @@
   <xacro:arg name="head_dir" default=""/>
 
   <!-- H-BOX head (TST-002 Rev 0.3 draft §3.1). Every value: Assumption, except head_w/d/h (data-sheet envelope).
-       The nozzle_* / contact_standoff / conduit_* args are used by both head models. -->
+       The nozzle_* / contact_standoff / conduit_dia / conduit_len args are used by both head models; conduit_x/y/z and
+       conduit_r/p/y only by H-BOX (H-CAD: capsule at the head.yaml cable exit, G1.8). -->
   <xacro:arg name="mount_w_mm" default="100"/>          <!-- Assumption: no mount drawing -->
   <xacro:arg name="mount_d_mm" default="100"/>          <!-- Assumption -->
   <xacro:arg name="mount_h_mm" default="60"/>           <!-- Assumption -->
@@ -38,7 +39,9 @@
   <xacro:arg name="head_axis_x_mm" default="0"/>        <!-- Assumption: beam axis at the box centre -->
   <xacro:arg name="head_axis_y_mm" default="0"/>        <!-- Assumption -->
   <xacro:arg name="nozzle_dia_mm" default="20"/>        <!-- Assumption until IPG data (I2) -->
-  <xacro:arg name="nozzle_len_mm" default="40"/>        <!-- Assumption until IPG data (I2) -->
+  <!-- nozzle_len_mm empty (default): H-BOX 40 mm (Assumption until IPG data, I2), H-CAD = head.yaml nozzle_len_mm
+       (part of the map / CP-61 TCP record; an explicit value that differs from head.yaml stops xacro, review C1). -->
+  <xacro:arg name="nozzle_len_mm" default=""/>
   <xacro:arg name="nozzle_tip_len_mm" default="5"/>     <!-- Assumption (TST-002 §3.1: last 5 mm) -->
   <xacro:arg name="contact_standoff_mm" default="0.3"/> <!-- Assumption s_c (F9, D16 contact_standoff_mm) -->
   <xacro:arg name="conduit_dia_mm" default="30"/>       <!-- Assumption -->
@@ -96,12 +99,14 @@
   <xacro:unless value="${head_model in ('hbox', 'hcad')}">
     ${xacro.fatal('head_model must be hbox or hcad, got ' + head_model)}
   </xacro:unless>
+  <xacro:property name="nozzle_len_arg" value="$(arg nozzle_len_mm)"/>
+  <xacro:property name="hbox_nozzle_len_mm" value="${nozzle_len_arg if str(nozzle_len_arg).strip() else 40}"/>
   <xacro:if value="${head_model == 'hbox'}">
     <xacro:awm_lightweld_hbox parent="tool0"
       mount_w_mm="$(arg mount_w_mm)" mount_d_mm="$(arg mount_d_mm)" mount_h_mm="$(arg mount_h_mm)"
       head_w_mm="$(arg head_w_mm)" head_d_mm="$(arg head_d_mm)" head_h_mm="$(arg head_h_mm)"
       head_axis_x_mm="$(arg head_axis_x_mm)" head_axis_y_mm="$(arg head_axis_y_mm)"
-      nozzle_dia_mm="$(arg nozzle_dia_mm)" nozzle_len_mm="$(arg nozzle_len_mm)"
+      nozzle_dia_mm="$(arg nozzle_dia_mm)" nozzle_len_mm="${hbox_nozzle_len_mm}"
       nozzle_tip_len_mm="$(arg nozzle_tip_len_mm)" contact_standoff_mm="$(arg contact_standoff_mm)"
       conduit_dia_mm="$(arg conduit_dia_mm)" conduit_len_mm="$(arg conduit_len_mm)"
       conduit_x_mm="$(arg conduit_x_mm)" conduit_y_mm="$(arg conduit_y_mm)" conduit_z_mm="$(arg conduit_z_mm)"
@@ -109,7 +114,7 @@
   </xacro:if>
   <xacro:if value="${head_model == 'hcad'}">
     <xacro:awm_lightweld_hcad parent="tool0" head_dir="$(arg head_dir)"
-      nozzle_dia_mm="$(arg nozzle_dia_mm)" nozzle_len_mm="$(arg nozzle_len_mm)"
+      nozzle_dia_mm="$(arg nozzle_dia_mm)" nozzle_len_mm="${nozzle_len_arg}"
       nozzle_tip_len_mm="$(arg nozzle_tip_len_mm)" contact_standoff_mm="$(arg contact_standoff_mm)"
       conduit_dia_mm="$(arg conduit_dia_mm)" conduit_len_mm="$(arg conduit_len_mm)"
       conduit_x_mm="$(arg conduit_x_mm)" conduit_y_mm="$(arg conduit_y_mm)" conduit_z_mm="$(arg conduit_z_mm)"

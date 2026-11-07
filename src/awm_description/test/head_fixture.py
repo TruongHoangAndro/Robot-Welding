@@ -2,7 +2,10 @@
 
 Test data only (no part or cell data): two boxes as STL meshes and hulls, and a beam axis that is deliberately tilted
 and offset so the tests do not depend on the real CAD values. Two variants: the automatic beam estimate
-(``write_synthetic_head_dir``) and a map TCP override (``write_map_override_head_dir``: TCP given, beam exit derived). ``real_head_dir()`` returns the folder named by the
+(``write_synthetic_head_dir``) and a map TCP override (``write_map_override_head_dir``: TCP given, beam exit derived).
+Cable exit (G1.8): the synthetic variant carries the explicit keys ``cable_exit_tool0_mm`` / ``cable_axis_tool0``
+(proposed to cad-geometry), the map variant only the refused automatic rear estimate
+(``estimates.tcp.geometry_estimate`` with ``behind_flange: true``), as export-head writes it today. ``real_head_dir()`` returns the folder named by the
 environment variable ``AWM_HEAD_DIR`` (the real export, e.g. ``<repo_root>/cell/model/head``) or None.
 """
 
@@ -58,7 +61,9 @@ def write_synthetic_head_dir(folder: Path, tilt_deg: float = 20.0, nozzle_len_mm
     # tcp rotation = Rx(180 deg + tilt): its Z column is the beam direction.
     a = (math.pi + t) / 2.0
     quat = [math.sin(a), 0.0, 0.0, math.cos(a)]
-    return _write_head_dir(folder, tcp, quat, beam, exit_mm, nozzle_len_mm, {'method': 'beam_axis'})
+    # Cable leaves the rear (tool0 -X) side of the head body box, near its top: away from the nozzle.
+    cable = {'cable_exit_tool0_mm': [-120.0, 0.0, 150.0], 'cable_axis_tool0': [-1.0, 0.0, 0.0]}
+    return _write_head_dir(folder, tcp, quat, beam, exit_mm, nozzle_len_mm, {'method': 'beam_axis'}, cable)
 
 
 def write_map_override_head_dir(folder: Path, tilt_deg: float = 55.0, nozzle_len_mm: float = 40.0) -> Path:
@@ -71,10 +76,17 @@ def write_map_override_head_dir(folder: Path, tilt_deg: float = 55.0, nozzle_len
     tcp = [35.0, -4.0, 260.0]
     exit_mm = [p - nozzle_len_mm * b for p, b in zip(tcp, beam)]
     quat = [0.0, math.sin(t / 2.0), 0.0, math.cos(t / 2.0)]  # Ry(tilt): Z column = beam
-    return _write_head_dir(folder, tcp, quat, beam, exit_mm, nozzle_len_mm, {'method': 'map', 'behind_flange': False})
+    # Refused automatic estimate = fiber / cable connector end at the bottom of the body box (tool0 -Z), recorded by
+    # export-head as geometry_estimate (tcp = connector end + nozzle_len_mm along its axis).
+    rear_axis = [0.0, 0.0, -1.0]
+    rear_end = [-50.0, 0.0, -300.0]
+    est = {'method': 'map', 'behind_flange': False, 'geometry_estimate': {
+        'tcp_tool0_mm': [e + nozzle_len_mm * a for e, a in zip(rear_end, rear_axis)],
+        'beam_axis_tool0': rear_axis, 'behind_flange': True}}
+    return _write_head_dir(folder, tcp, quat, beam, exit_mm, nozzle_len_mm, est)
 
 
-def _write_head_dir(folder: Path, tcp, quat, beam, exit_mm, nozzle_len_mm, tcp_estimate) -> Path:
+def _write_head_dir(folder: Path, tcp, quat, beam, exit_mm, nozzle_len_mm, tcp_estimate, extra=None) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     links = {}
     for name, lo, hi in (('head_body', (-120.0, -20.0, -300.0), (40.0, 20.0, 200.0)),
@@ -89,5 +101,6 @@ def _write_head_dir(folder: Path, tcp, quat, beam, exit_mm, nozzle_len_mm, tcp_e
            'tool0_T_tcp_mm': {'xyz': tcp, 'quat_xyzw': quat},
            'beam_axis_tool0': beam, 'beam_exit_tool0_mm': exit_mm, 'nozzle_len_mm': nozzle_len_mm,
            'links': links, 'estimates': {'tcp': tcp_estimate}, 'assumptions': ['synthetic test head']}
+    doc.update(extra or {})
     (folder / 'head.yaml').write_text(yaml.safe_dump(doc, sort_keys=False))
     return folder
