@@ -55,3 +55,8 @@ T6: `colcon test --packages-select awm_path` → awm_path 247 tests, 0 errors, 0
 (`AWM_SPIKE_REPO not set`); `colcon test-result` summary 398 / 0 / 0 / 3 includes older result files of awm_core,
 awm_bringup, awm_seam (1 skip `AWM_SPIKE_REPO not set`) and awm_description in this worktree's build folder.
 With `AWM_SPIKE_REPO`: golden g13 + g15 4 passed.
+
+Review minors (2026-11-07): feasibility is not always monotonic in the travel speed (reviewer: 2 of 300 random
+paths) → `max_feasible_speed` scans 256 speeds before the bisection and never reports a feasible request above the
+maximum; remaining case (island narrower than the scan step) named in the `weld_timing` docstring. The D07 speed
+record is timed on the rounded values written to D07.

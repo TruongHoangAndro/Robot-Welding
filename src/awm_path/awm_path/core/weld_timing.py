@@ -16,9 +16,14 @@ program accepts:
 (bisection on (0, √(a_ramp · L)) — above that the ramps leave no constant-speed part — rounded down to the
 resolution). The travel speed is an Engineer input: it is never changed here, and no limit is scaled or raised.
 
-Assumption (as in the generator): feasibility is monotonic in the travel speed (joint velocities grow with v,
-accelerations with v² plus the ramp term dq/ds · a_ramp); the bisection relies on it, the returned maximum itself is
-always checked feasible.
+Feasibility is **not** always monotonic in the travel speed: the knot times of the spline change with v and the
+ramps move along the seam, so a path can be refused at one speed and accepted at a higher one (review minor 1:
+about 1 % of random paths). :func:`max_feasible_speed` therefore scans ``SCAN_POINTS`` speeds on (0, √(a_ramp · L))
+first and bisects only between the highest feasible scan speed and the next one; a feasible request is never reported
+above the maximum. Remaining case (Assumption, named): a feasible island narrower than the scan step
+√(a_ramp · L) / ``SCAN_POINTS`` above the highest feasible scan speed can be missed — the reported maximum is then
+too low (conservative), never infeasible. The program generator (bisection on [0, request]) can also differ in such
+a case; it never accepts an infeasible speed either.
 
 Pure numpy (B-06); degrees, mm, seconds.
 """
@@ -26,14 +31,16 @@ Pure numpy (B-06); degrees, mm, seconds.
 from __future__ import annotations
 
 import math
-from typing import Dict, Sequence, Tuple
+from typing import Dict, Optional, Sequence, Tuple
 
 import numpy as np
 
-__all__ = ['TimingError', 'constant_speed_times', 'weld_times', 'clamped_cubic', 'max_abs', 'weld_spline_maxima',
+__all__ = ['SCAN_POINTS', 'TimingError', 'constant_speed_times', 'weld_times', 'clamped_cubic', 'max_abs', 'weld_spline_maxima',
            'within_limits', 'max_feasible_speed', 'speed_report']
 
 _REL = 1e-9   # relative tolerance of a limit check (same as the program generator)
+#: Coarse scan points of :func:`max_feasible_speed` on (0, √(a_ramp · L)) (review minor 1).
+SCAN_POINTS = 256
 
 
 class TimingError(ValueError):
@@ -180,25 +187,40 @@ def within_limits(s_mm: np.ndarray, q7_deg: np.ndarray, speed_mm_s: float, vlim:
 
 
 def max_feasible_speed(s_mm: np.ndarray, q7_deg: np.ndarray, vlim: Sequence[float], alim: Sequence[float],
-                       ramp_accel_mm_s2: float, resolution_mm_s: float) -> float:
+                       ramp_accel_mm_s2: float, resolution_mm_s: float, request_mm_s: Optional[float] = None) -> float:
     """Largest travel speed (rounded down to ``resolution_mm_s``) whose weld spline is inside the velocity and
-    acceleration limits; 0.0 if no speed ≥ the resolution is. Bisection as in the program generator."""
+    acceleration limits; 0.0 if none ≥ the resolution is found. Coarse scan of ``SCAN_POINTS`` speeds, then bisection
+    between the highest feasible scan speed and the next scan speed (module docstring: non-monotonic paths). If
+    ``request_mm_s`` is feasible, the result is at least the request rounded down to the resolution (when that is
+    feasible too), so a record never says "within limits" with a maximum below the request."""
     if resolution_mm_s <= 0.0:
         raise ValueError('speed search resolution must be > 0')
     s = np.asarray(s_mm, float)
     length = float(s[-1] - s[0])
     if length <= 0.0 or ramp_accel_mm_s2 <= 0.0:
         return 0.0
-    lo, hi = 0.0, math.sqrt(ramp_accel_mm_s2 * length)   # ramps leave no constant-speed part at ≥ hi
+
+    def ok(v: float) -> bool:
+        return v > 0.0 and within_limits(s, q7_deg, v, vlim, alim, ramp_accel_mm_s2)
+
+    top = math.sqrt(ramp_accel_mm_s2 * length)            # ramps leave no constant-speed part at ≥ top
+    step = top / SCAN_POINTS
+    feasible = [k for k in range(1, SCAN_POINTS) if ok(k * step)]
+    k0 = max(feasible) if feasible else 0
+    lo, hi = k0 * step, (k0 + 1) * step
     while hi - lo > resolution_mm_s / 4.0:
         mid = 0.5 * (lo + hi)
-        if within_limits(s, q7_deg, mid, vlim, alim, ramp_accel_mm_s2):
+        if ok(mid):
             lo = mid
         else:
             hi = mid
     best = math.floor(lo / resolution_mm_s + 1e-9) * resolution_mm_s
-    while best > 0.0 and not within_limits(s, q7_deg, best, vlim, alim, ramp_accel_mm_s2):
+    while best > 0.0 and not ok(best):
         best = round(best - resolution_mm_s, 12)        # never report an infeasible maximum
+    if request_mm_s is not None and ok(float(request_mm_s)):
+        floor_req = math.floor(float(request_mm_s) / resolution_mm_s + 1e-9) * resolution_mm_s
+        if floor_req > best and ok(floor_req):
+            best = floor_req
     return float(max(best, 0.0))
 
 
@@ -228,5 +250,6 @@ def speed_report(s_mm: np.ndarray, q7_deg: np.ndarray, speed_mm_s: float, vlim: 
         vmax = (np.abs(np.diff(q7, axis=0)) / np.diff(t)[:, None]).max(axis=0)   # reported only (constant speed)
         ok, limited = False, 'speed ramps longer than the arc'
     return {'max_joint_speed_deg_s': [float(x) for x in vmax], 'speed_within_limits': bool(ok),
-            'max_travel_speed_mm_s': max_feasible_speed(s_mm, q7, vlim, alim, ramp_accel_mm_s2, resolution_mm_s),
+            'max_travel_speed_mm_s': max_feasible_speed(s_mm, q7, vlim, alim, ramp_accel_mm_s2, resolution_mm_s,
+                                                        speed_mm_s if ok else None),
             'limited_by': limited}
