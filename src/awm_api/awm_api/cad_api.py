@@ -18,6 +18,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Literal, Optional
 
+import yaml
 from fastapi import APIRouter, Depends, File, Form, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -94,6 +95,13 @@ class TcpPut(BaseModel):
     stickout_mm: float = Field(default=0.0, ge=0.0, le=50.0, allow_inf_nan=False)
 
 
+class OverridePost(BaseModel):
+    """CP-62 override request (Admin): the reason is recorded verbatim (e.g. the OI-23 CAD issue)."""
+
+    model_config = ConfigDict(extra='forbid')
+    reason: str = Field(min_length=1, max_length=2000, pattern=r'\S')
+
+
 def _instance(path: str) -> str:
     """Instance name of a component path (last segment; names are never split on '/')."""
     return path.split(' / ')[-1]
@@ -113,6 +121,25 @@ def _write_json(path: Path, doc: Dict[str, Any], schema: Optional[str] = None) -
     tmp.replace(path)
 
 
+def head_tcp_record(path: Path) -> Optional[Dict[str, Any]]:
+    """Taught / mapped TCP of the head record (CP-61) for S10 display: ``tool0_T_tcp_mm``, beam axis and the teach
+    record (mm, quaternion xyzw); None when head.yaml is missing or unreadable."""
+    try:
+        doc = yaml.safe_load(path.read_text())
+    except (OSError, yaml.YAMLError):
+        return None
+    if not isinstance(doc, dict) or not isinstance(doc.get('tool0_T_tcp_mm'), dict):
+        return None
+    est = ((doc.get('estimates') or {}).get('tcp') or {}) if isinstance(doc.get('estimates'), dict) else {}
+    out: Dict[str, Any] = {'method': est.get('method'), 'xyz_mm': doc['tool0_T_tcp_mm'].get('xyz'),
+                           'quat_xyzw': doc['tool0_T_tcp_mm'].get('quat_xyzw'),
+                           'beam_axis_tool0': doc.get('beam_axis_tool0')}
+    for k in ('component', 'edge_id', 'reversed', 'stickout_mm', 'mouth_radius_mm', 'taught_by', 'taught_at'):
+        if k in est:
+            out[k] = est[k]
+    return out
+
+
 def roles_problem(problems: List[str]) -> ProblemError:
     return ProblemError(422, 'roles-invalid', 'Roles do not fit the file', detail='; '.join(problems),
                         errors=[{'pointer': '/assignments', 'message': p} for p in problems])
@@ -123,14 +150,58 @@ def is_assembly(job: Path) -> bool:
     return job.joinpath(*cad_roles.JOB_TREE).is_file()
 
 
-def cad_gate(job: Path, repo_root: Path) -> None:
-    """CP-60 gate for seam picking and Plan: a job with roles needs a current cross-check that is not red."""
-    if not (job / cad_roles.ROLES_FILE).is_file():
-        if is_assembly(job):
-            raise ProblemError(409, 'roles-missing', 'Roles missing',
-                               detail='this job was imported as an assembly: save its roles, pick the positioner '
-                                      'axis and run the CAD cross-check first (CP-60)')
-        return
+OVERRIDE_FILE = 'cad_check_override.json'
+OVERRIDE_SCHEMA = 'v2/cad_check_override'
+OVERRIDE_CHECK = 4  # CP-62: only cross-check 4 may be overridden
+OVERRIDE_BY = 'awm_api (CP-62 override of cross-check 4)'
+CP62_HINT = ('an Admin may record a CP-62 override of check 4 for kinematic-only planning (collision off) until the '
+             'cell CAD is fixed (OI-23)')
+
+
+def red_checks(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return [c for c in doc.get('checks', []) if c.get('status') == 'red']
+
+
+def check4_findings(doc: Dict[str, Any]) -> List[str]:
+    """Names of the static objects hit by the swept rotating set (check 4 ``values.hits[].static``), else its note."""
+    c4 = next((c for c in doc.get('checks', []) if c.get('id') == OVERRIDE_CHECK), {})
+    names = sorted({str(h.get('static')) for h in (c4.get('values') or {}).get('hits', []) or []
+                    if isinstance(h, dict) and h.get('static')})
+    return names or [c4.get('note') or f'check {OVERRIDE_CHECK} red']
+
+
+def _red_detail(reds: List[Dict[str, Any]]) -> str:
+    return '; '.join(f"check {c['id']}: {c.get('note', c['status'])}" for c in reds)
+
+
+def override_state(job: Path) -> Dict[str, Any]:
+    """CP-62 override record of a job and whether it applies to the current ``cad_check.json``:
+    ``{override, valid, problem, kind}``; kind = missing | invalid | void | ok."""
+    path = job / OVERRIDE_FILE
+    doc = jobs.read_json(path)
+    if doc is None:
+        return {'override': None, 'valid': False, 'problem': None, 'kind': 'missing'}
+    try:
+        jsonio.validate(doc, OVERRIDE_SCHEMA)
+    except jsonio.SchemaValidationError as exc:
+        return {'override': doc, 'valid': False, 'kind': 'invalid',
+                'problem': f'{OVERRIDE_FILE} does not match {OVERRIDE_SCHEMA}: {exc}'}
+    check = job / cad_roles.CHECK_FILE
+    if not check.is_file() or sha256_file(check) != doc['cad_check_sha256']:
+        return {'override': doc, 'valid': False, 'kind': 'void',
+                'problem': f'the cross-check changed after the override was recorded by {doc["by"]} at '
+                           f'{doc["created_at"]}: the override is void; an Admin must review the new check and '
+                           'record it again'}
+    return {'override': doc, 'valid': True, 'problem': None, 'kind': 'ok'}
+
+
+def override_reference(job: Path, state: Dict[str, Any]) -> Dict[str, Any]:
+    """The D07 / D09 ``cad_check_override`` field (CP-62) for a valid override."""
+    return {'file': OVERRIDE_FILE, 'sha256': sha256_file(job / OVERRIDE_FILE),
+            'cad_check_sha256': state['override']['cad_check_sha256'], 'check_id': OVERRIDE_CHECK}
+
+
+def _current_check(job: Path, repo_root: Path) -> Dict[str, Any]:
     doc = jobs.read_json(job / cad_roles.CHECK_FILE)
     if doc is None:
         raise ProblemError(409, 'cad-check-missing', 'Cross-check missing',
@@ -138,10 +209,44 @@ def cad_gate(job: Path, repo_root: Path) -> None:
     if jobs.document_state(job, cad_roles.CHECK_FILE, repo_root, doc) == 'stale':
         raise ProblemError(409, 'cad-check-stale', 'Cross-check out of date',
                            detail='roles, axis pick, job STEP or cell model changed: run the cross-check again')
-    if doc.get('status') == 'red':
-        raise ProblemError(409, 'cad-check-red', 'Cross-check red',
-                           detail='; '.join(f"check {c['id']}: {c.get('note', c['status'])}"
-                                            for c in doc.get('checks', []) if c.get('status') == 'red'))
+    return doc
+
+
+def cad_gate(job: Path, repo_root: Path, collision: str = 'off') -> Optional[Dict[str, Any]]:
+    """CP-60 gate for seam picking and Plan: a job with roles needs a current cross-check that is not red.
+
+    CP-62: a red check passes only when check 4 is the only red check, the check is current, a valid Admin override
+    records the SHA-256 of this very ``cad_check.json`` and the request is kinematic only (collision ``off``). Returns
+    the override reference for D07 / D09 in that case, else None."""
+    if not (job / cad_roles.ROLES_FILE).is_file():
+        if is_assembly(job):
+            raise ProblemError(409, 'roles-missing', 'Roles missing',
+                               detail='this job was imported as an assembly: save its roles, pick the positioner '
+                                      'axis and run the CAD cross-check first (CP-60)')
+        return None
+    doc = _current_check(job, repo_root)
+    if doc.get('status') != 'red':
+        return None
+    reds = red_checks(doc)
+    only4 = bool(reds) and all(c.get('id') == OVERRIDE_CHECK for c in reds)
+    state = override_state(job) if only4 else {'kind': 'missing'}
+    if state['kind'] == 'missing':
+        detail = _red_detail(reds) or 'status red'
+        if only4:
+            detail = (f'check 4: static object(s) in the volume swept by the rotating set: '
+                      f'{", ".join(check4_findings(doc))}. The cause is in the CAD (OI-23): separate them in the cell '
+                      f'CAD or correct their roles (S10 cell roles / job roles); {CP62_HINT}')
+        raise ProblemError(409, 'cad-check-red', 'Cross-check red', detail=detail)
+    if state['kind'] == 'invalid':
+        raise ProblemError(409, 'cad-check-override-invalid', 'Override record invalid', detail=state['problem'])
+    if state['kind'] == 'void':
+        raise ProblemError(409, 'cad-check-override-void', 'Override void (cross-check changed)',
+                           detail=state['problem'])
+    if collision != 'off':
+        raise ProblemError(409, 'cad-check-override-kinematic-only', 'Override is for kinematic planning only',
+                           detail='check 4 is red and overridden (CP-62) for kinematic-only planning: plan with '
+                                  'collision off; collision-on planning and every release refuse while check 4 is red')
+    return override_reference(job, state)
 
 
 def register(api: APIRouter, settings: Settings, runs: RunManager, require: Callable[..., Any],
@@ -234,7 +339,8 @@ def register(api: APIRouter, settings: Settings, runs: RunManager, require: Call
         out: Dict[str, Any] = {'step': None, 'up_axis': None, 'roles': {'state': 'missing'}, 'axis': None,
                                'model': {'saved': (settings.cell_model_dir / 'frames.yaml').is_file()},
                                'head': {'step': (cad / HEAD_STEP).is_file(), 'map': (cad / HEAD_MAP).is_file(),
-                                        'head_yaml': (settings.head_dir / 'head.yaml').is_file()},
+                                        'head_yaml': (settings.head_dir / 'head.yaml').is_file(),
+                                        'tcp': head_tcp_record(settings.head_dir / 'head.yaml')},
                                'stale_jobs': []}
         if doc is not None and step.is_file():
             out.update(step={'file': doc.get('file'), 'sha256': sha256_file(step)}, up_axis=doc.get('up_axis'),
@@ -391,3 +497,47 @@ def register(api: APIRouter, settings: Settings, runs: RunManager, require: Call
         if doc is None:
             raise ProblemError(404, 'no-check', 'No cross-check', detail='run the CAD cross-check first')
         return {'state': jobs.document_state(job, cad_roles.CHECK_FILE, root, doc), 'check': doc}
+
+    # -- CP-62: recorded Admin override of cross-check 4 (kinematic-only planning) -----------------------------
+    @api.get('/jobs/{job_id}/check/override')
+    def override_get(job_id: str, _u: User = Depends(require(*CELL_READ))) -> Dict[str, Any]:
+        job = jobs.job_dir(settings.jobs_dir, job_id)
+        state = override_state(job)
+        if state['kind'] == 'missing':
+            raise ProblemError(404, 'no-override', 'No override', detail='no CP-62 override recorded for this job')
+        return {k: state[k] for k in ('override', 'valid', 'problem')}
+
+    @api.post('/jobs/{job_id}/check/override', status_code=201)
+    def override_post(job_id: str, body: OverridePost, user: User = Depends(require(*CELL_WRITE))) -> Dict[str, Any]:
+        job = jobs.job_dir(settings.jobs_dir, job_id)
+        try:
+            with runs.slot('override', job_id):
+                doc = _current_check(job, root)
+                reds = red_checks(doc)
+                others = [c for c in reds if c.get('id') != OVERRIDE_CHECK]
+                if doc.get('status') != 'red' or not reds or others:
+                    raise ProblemError(409, 'override-not-applicable', 'Override not applicable',
+                                       detail='CP-62 overrides check 4 only, and only when it is the only red check'
+                                              + (f'; still red: {_red_detail(others)}' if others else
+                                                 '; check 4 is not red'))
+                check = job / cad_roles.CHECK_FILE
+                rec = jsonio.make_header(OVERRIDE_BY, [check], job)
+                rec.update({'schema_version': '2.0', 'by': user.username, 'role': 'admin', 'reason': body.reason.strip(),
+                            'check_id': OVERRIDE_CHECK, 'cad_check_sha256': sha256_file(check),
+                            'scope': 'kinematic_planning', 'findings': check4_findings(doc)})
+                _write_json(job / OVERRIDE_FILE, rec, OVERRIDE_SCHEMA)
+        except RunBusyError as exc:
+            raise busy(exc) from exc
+        return rec
+
+    @api.delete('/jobs/{job_id}/check/override', status_code=204)
+    def override_delete(job_id: str, _u: User = Depends(require(*CELL_WRITE))) -> Response:
+        job = jobs.job_dir(settings.jobs_dir, job_id)
+        try:
+            with runs.slot('override', job_id):
+                if not (job / OVERRIDE_FILE).is_file():
+                    raise ProblemError(404, 'no-override', 'No override', detail='no CP-62 override recorded')
+                (job / OVERRIDE_FILE).unlink()
+        except RunBusyError as exc:
+            raise busy(exc) from exc
+        return Response(status_code=204)

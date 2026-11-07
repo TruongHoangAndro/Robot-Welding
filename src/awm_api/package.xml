@@ -9,6 +9,7 @@
 
   <exec_depend>awm_core</exec_depend>
   <exec_depend>awm_geometry</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
 
   <test_depend>python3-pytest</test_depend>
 

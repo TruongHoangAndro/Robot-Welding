@@ -152,3 +152,50 @@ def test_tcp_put_passes_stickout_and_user(client, repo, tmp_path, monkeypatch):
     e = auth(client, 'eng')
     assert client.put('/api/v1/cell/head/tcp', headers=e, json={'component': 'LightWELD:1', 'edge_id': 'E12',
                                                                 'reverse': False, 'stickout_mm': 0}).status_code == 403
+
+
+HEAD_YAML = '''schema: "awm_head/0.1"
+unit: "mm"
+frame: "tool0"
+tool0_T_tcp_mm:
+  xyz: [43.8, 0.0, 279.6]
+  quat_xyzw: [0.0, 0.5, 0.0, 0.8660254037844386]
+beam_axis_tool0: [0.8660254037844386, 0.0, 0.5]
+estimates:
+  tcp:
+    method: "teach_ui"
+    component: "Nozzle:1"
+    edge_id: "E12"
+    reversed: false
+    stickout_mm: 0.0
+    mouth_radius_mm: 2.5
+    taught_by: "adm"
+    taught_at: "2026-11-07T12:25:04Z"
+'''
+
+
+def test_status_reports_head_cad_and_taught_tcp(client, repo):
+    """Audit m4: S10 shows 'head CAD present' and the taught tool0 TCP values (CP-61)."""
+    h = auth(client, 'eng')
+    head = client.get(CELL, headers=h).json()['head']
+    assert head['step'] is False and head['tcp'] is None
+    cad = repo / 'cell' / 'cad'
+    cad.mkdir(parents=True)
+    (cad / 'head.step').write_text('ISO-10303-21; head')
+    hd = repo / 'cell' / 'model' / 'head'
+    hd.mkdir(parents=True)
+    (hd / 'head.yaml').write_text(HEAD_YAML)
+    head = client.get(CELL, headers=h).json()['head']
+    assert head['step'] is True and head['head_yaml'] is True
+    assert head['tcp'] == {'method': 'teach_ui', 'xyz_mm': [43.8, 0.0, 279.6],
+                           'quat_xyzw': [0.0, 0.5, 0.0, 0.8660254037844386],
+                           'beam_axis_tool0': [0.8660254037844386, 0.0, 0.5], 'component': 'Nozzle:1',
+                           'edge_id': 'E12', 'reversed': False, 'stickout_mm': 0.0, 'mouth_radius_mm': 2.5,
+                           'taught_by': 'adm', 'taught_at': '2026-11-07T12:25:04Z'}
+
+
+def test_status_head_tcp_unreadable_yaml_is_none(client, repo):
+    hd = repo / 'cell' / 'model' / 'head'
+    hd.mkdir(parents=True)
+    (hd / 'head.yaml').write_text(': not yaml [')
+    assert client.get(CELL, headers=auth(client, 'eng')).json()['head']['tcp'] is None

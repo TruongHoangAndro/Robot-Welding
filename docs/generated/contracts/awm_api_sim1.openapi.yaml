@@ -11,7 +11,8 @@ info:
     Progress is polled through /runs/{run_id} or pushed over the run WebSocket (x-awm-websockets, G1.4); the cell
     status WebSocket comes with S6 (WP4). Updated 2026-11-06 by the web agent (G1.6) to what the server serves: plan
     travel speed, program runs, S4 simulation payload, placement PUT, robot description + meshes, SeamPick D04 2.1
-    fields, JobDetail fields. Paths marked x-awm-implemented false are contract only (not served yet).
+    fields, JobDetail fields. Updated 2026-11-07 by the web agent (G1.18, CP-62): /jobs/{job_id}/check/override, plan
+    collision field, cell model head.tcp. Paths marked x-awm-implemented false are contract only (not served yet).
 x-awm-websockets:
   /runs/{run_id}/ws:
     description: >
@@ -234,10 +235,19 @@ paths:
                     absent = planner default (Assumption, recorded in D07 planner.params). Passed to the planner as
                     --travel-speed-mm-s. Never slowed down silently: D07 reports max_travel_speed_mm_s per arc and the
                     program step refuses a speed above it.
+                collision:
+                  type: string
+                  enum: ['off', 'on']
+                  default: 'off'
+                  description: >
+                    Goal 1 plans kinematic only (CP-58, D07 collision_checked false); 'on' is refused with 409
+                    collision-unavailable (Goal 2), or with cad-check-override-kinematic-only when a CP-62 override of
+                    check 4 is what lets the job plan. With a valid override the run writes D07 cad_check_override
+                    {file, sha256, cad_check_sha256, check_id 4}; the program run carries it into D09.
       responses:
         '202': {$ref: '#/components/responses/RunStarted'}
         '403': {$ref: '#/components/responses/Problem'}
-        '409': {$ref: '#/components/responses/Problem', description: 'no-seams, no-placement, seam-axis-missing, seam-axis-stale, run-busy'}
+        '409': {$ref: '#/components/responses/Problem', description: 'no-seams, no-placement, seam-axis-missing, seam-axis-stale, run-busy, roles-missing, cad-check-missing, cad-check-stale, cad-check-red, cad-check-override-void, cad-check-override-invalid, cad-check-override-kinematic-only, collision-unavailable'}
         '422': {$ref: '#/components/responses/Problem'}
   /jobs/{job_id}/program:
     parameters: [{$ref: '#/components/parameters/JobId'}]
@@ -359,7 +369,10 @@ paths:
   /cell/model:
     get:
       tags: [cell]
-      summary: S10 cell model status (CP-60) - cell STEP, up axis, roles / axis pick state, saved model, head files, stale jobs
+      summary: >
+        S10 cell model status (CP-60) - cell STEP, up axis, roles / axis pick state, saved model, head files
+        (head.step, cad_map_head.yaml, head.yaml) and head.tcp (CP-61: tool0_T_tcp xyz_mm / quat_xyzw, beam_axis_tool0,
+        method, taught_by / taught_at, edge, stick-out; null without head.yaml), stale jobs
       responses:
         '200': {description: status, content: {application/json: {}}}
     post:
@@ -504,6 +517,39 @@ paths:
       responses:
         '202': {description: 'run started: {run_id} (+ key for a view); Location /api/v1/runs/{run_id}', content: {application/json: {}}}
         '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /jobs/{job_id}/check/override:
+    parameters: [{$ref: '#/components/parameters/JobId'}]
+    get:
+      tags: [jobs]
+      summary: >
+        CP-62 override of cross-check 4 (all roles): {override (v2/cad_check_override), valid, problem}. valid false =
+        void (the cross-check changed after it was recorded) or not matching the schema; 404 no-override.
+      responses:
+        '200': {description: '{override, valid, problem}', content: {application/json: {}}}
+        '404': {$ref: '#/components/responses/Problem'}
+    post:
+      tags: [jobs]
+      summary: >
+        Admin - record the override of check 4 for kinematic-only planning (CP-62): writes jobs/<job>/cad_check_override.json
+        (by, reason, check-4 findings, SHA-256 of the current cad_check.json). Refused 409 override-not-applicable when
+        check 4 is not red or another check is red; cad-check-stale / cad-check-missing; run-busy while a run is active.
+        cad_check.json stays red; with a valid override seam saving and Plan with collision off pass the gate.
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, additionalProperties: false, required: [reason], properties: {reason: {type: string, minLength: 1, maxLength: 2000, pattern: '\S'}}}}}
+      responses:
+        '201': {description: v2/cad_check_override document, content: {application/json: {}}}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+    delete:
+      tags: [jobs]
+      summary: Admin - remove the CP-62 override (seams and Plan are blocked again while check 4 is red)
+      responses:
+        '204': {description: removed}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
         '409': {$ref: '#/components/responses/Problem'}
   /jobs/{job_id}/release:
     x-awm-implemented: false

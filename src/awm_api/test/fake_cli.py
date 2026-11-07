@@ -101,15 +101,26 @@ def cmd_export_head(a) -> None:
 
 
 def cmd_job_placement(a) -> None:
+    """FAKE_CHECK_STATUS: green | yellow | red (check 1 red, no placement) | red4 (only check 4 red, CP-62) |
+    red14 (checks 1 and 4 red). FAKE_CHECK_HITS: comma-separated static names for check 4."""
     job = Path(a.repo) / 'jobs' / a.job
     status = os.environ.get('FAKE_CHECK_STATUS', 'green')
     inputs = [{'name': n, 'sha256': sha(job / n)} for n in ('model.step', 'roles.json', 'axis_pick.json')
               if (job / n).is_file()]
+    c1_red, c4_red = status in ('red', 'red14'), status in ('red4', 'red14')
+    hits = [{'static': s, 'rotating': 'Part1:1', 'count': 3, 'depth_mm': 4.5, 'at_x_mm': 1.0}
+            for s in os.environ.get('FAKE_CHECK_HITS', 'Jig:1,Timing Belts:1').split(',')] if c4_red else []
+    overall = 'red' if (c1_red or c4_red) else status
     _write(job / 'cad_check.json', {'schema_version': '2.0', 'created_by': 'fake', 'created_at': '2026-11-06T00:00:00Z',
-                                    'inputs': inputs, 'status': status, 'phi_deg': 0.0,
+                                    'inputs': inputs, 'status': overall, 'phi_deg': 0.0,
                                     'checks': [{'id': 1, 'name': 'positioner match',
-                                                'status': 'red' if status == 'red' else 'green'}]})
-    if status != 'red':
+                                                'status': 'red' if c1_red else 'green'},
+                                               {'id': 4, 'name': 'swept rotating set vs static',
+                                                'status': 'red' if c4_red else 'green', 'values': {'hits': hits},
+                                                'note': ('static object(s) inside the volume swept by the rotating '
+                                                         'set: ' + ', '.join(sorted({h['static'] for h in hits})))
+                                                if hits else 'full turn checked'}]})
+    if not c1_red:
         _write(job / 'placement.json', {'schema_version': '2.0', 'source': 'job_cad', 'verified': False,
                                         'inputs': inputs})
 
