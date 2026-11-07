@@ -6,6 +6,7 @@ import hashlib
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
+import numpy as np
 import yaml
 
 from awm_core import units
@@ -108,3 +109,133 @@ def check_conduit_args(head_model: str, head_dir: str, set_args: List[str]) -> N
     if src != 'parametric':
         raise ValueError(f'{", ".join(given)} not used with head_model:=hcad: the conduit starts at the head.yaml cable '
                          f'exit (source {src}); only conduit_dia_mm / conduit_len_mm apply')
+
+
+# --- G1.16 (close-out A2): sim_mock repo:=<root> -----------------------------------------------------------------
+
+#: sim_mock pose arguments taken from ``cell/model/frames.yaml`` when ``repo:=`` is given.
+REPO_POSE_ARGS = ('base_xyz_mm', 'base_quat_xyzw', 'positioner_xyz_mm', 'positioner_quat_xyzw', 'positioner_axis_xyz')
+#: Arguments that ``repo:=`` sets itself; giving one of them together with ``repo:=`` is refused (no two sources).
+REPO_CONFLICT_ARGS = REPO_POSE_ARGS + ('cell_manifest', 'head_dir')
+HEAD_MODELS = ('hbox', 'hcad')
+
+
+class RepoArgError(ValueError):
+    """``repo:=`` cannot be used: conflicting arguments, or a cell model file is missing, malformed or stale."""
+
+
+def _fmt(values) -> str:
+    """Full float precision (repr) so the URDF pose equals frames.yaml to the last digit."""
+    return ' '.join(repr(float(v)) for v in values)
+
+
+def _vector(entry: dict, key: str, n: int, where: str) -> np.ndarray:
+    value = entry.get(key) if isinstance(entry, dict) else None
+    try:
+        vec = np.asarray([float(v) for v in value], dtype=float)
+    except (TypeError, ValueError):
+        vec = None
+    if vec is None or vec.shape != (n,) or not np.all(np.isfinite(vec)):
+        raise RepoArgError(f'{where}.{key}: expected {n} numbers, got {value!r}')
+    return vec
+
+
+def _unit_quat(entry: dict, where: str) -> np.ndarray:
+    quat = _vector(entry, 'quat_xyzw', 4, where)
+    if abs(np.linalg.norm(quat) - 1.0) > 1e-6:
+        raise RepoArgError(f'{where}.quat_xyzw is not a unit quaternion: {quat.tolist()}')
+    return quat
+
+
+def frames_launch_args(frames_yaml: PathLike) -> Dict[str, str]:
+    """sim_mock pose arguments from the export-scene ``frames.yaml`` (mm, quaternion xyzw).
+
+    ``world_T_base`` -> base_link pose; ``world_T_positioner_axis`` -> positioner_axis pose (= positioner_flange at
+    θ = 0); its world ``direction`` is expressed in the positioner_axis frame for ``positioner_axis_xyz``. Same rule
+    as ``awm_path.gate_g2.launch_args_from_frames`` (planner side); here with checks and a clear refusal.
+    """
+    from awm_core.frames import quat_to_matrix
+
+    path = Path(frames_yaml)
+    try:
+        doc = yaml.safe_load(path.read_text(encoding='utf-8'))
+    except (OSError, yaml.YAMLError) as exc:
+        raise RepoArgError(f'{path}: cannot read ({exc})') from exc
+    if not isinstance(doc, dict):
+        raise RepoArgError(f'{path}: not a mapping')
+    if doc.get('unit') != 'mm':
+        raise RepoArgError(f'{path}: unit must be "mm", got {doc.get("unit")!r}')
+    for key in ('world_T_base', 'world_T_positioner_axis'):
+        if not isinstance(doc.get(key), dict):
+            raise RepoArgError(f'{path}: {key} missing')
+    base, axis = doc['world_T_base'], doc['world_T_positioner_axis']
+    where_b, where_a = f'{path.name} world_T_base', f'{path.name} world_T_positioner_axis'
+    base_pos, base_q = _vector(base, 'position_mm', 3, where_b), _unit_quat(base, where_b)
+    axis_pos, axis_q = _vector(axis, 'position_mm', 3, where_a), _unit_quat(axis, where_a)
+    direction = _vector(axis, 'direction', 3, where_a)
+    norm = float(np.linalg.norm(direction))
+    if norm < 1e-9:
+        raise RepoArgError(f'{where_a}.direction is the zero vector')
+    local = quat_to_matrix(axis_q).T @ (direction / norm)
+    return {'base_xyz_mm': _fmt(base_pos), 'base_quat_xyzw': _fmt(base_q),
+            'positioner_xyz_mm': _fmt(axis_pos), 'positioner_quat_xyzw': _fmt(axis_q),
+            'positioner_axis_xyz': _fmt(local)}
+
+
+def _check_manifest(manifest: Path, frames_yaml: Path) -> None:
+    """The scene manifest must be readable, list objects and come from the same export as frames.yaml."""
+    try:
+        doc = yaml.safe_load(manifest.read_text(encoding='utf-8'))  # JSON is YAML
+        frames = yaml.safe_load(frames_yaml.read_text(encoding='utf-8'))
+    except (OSError, yaml.YAMLError) as exc:
+        raise RepoArgError(f'{manifest}: cannot read ({exc})') from exc
+    if not isinstance(doc, dict) or not doc.get('objects'):
+        raise RepoArgError(f'{manifest}: no objects (re-run the cell import, S10)')
+    named = doc.get('frames_file')
+    if named is not None and named != frames_yaml.name:
+        raise RepoArgError(f'{manifest}: frames_file {named!r} is not {frames_yaml.name}')
+    if doc.get('inputs') is not None and frames.get('inputs') is not None and doc['inputs'] != frames['inputs']:
+        raise RepoArgError(f'{manifest} and {frames_yaml} are not from the same export (inputs differ); re-run the '
+                           'cell import (S10)')
+
+
+def repo_launch_args(repo: str, given: Dict[str, str]) -> Dict[str, str]:
+    """Resolve the sim_mock arguments from the job repository root (DES-001 §5.2, cell model written by A18 / CP-60).
+
+    ``given``: the launch values of :data:`REPO_CONFLICT_ARGS` and ``head_model`` ('' = not set). Returns the pose
+    arguments from ``<repo>/cell/model/frames.yaml``, ``cell_manifest`` = ``<repo>/cell/model/scene_manifest.json``,
+    ``head_model`` / ``head_dir``: ``hcad`` with ``<repo>/cell/model/head`` when ``head/head.yaml`` exists; without a
+    head only an explicit ``head_model:=hbox`` is accepted. Raises :class:`RepoArgError` (never a silent default).
+    """
+    conflicts = [n for n in REPO_CONFLICT_ARGS if str(given.get(n, '') or '').strip()]
+    if conflicts:
+        raise RepoArgError(f'repo:= sets {", ".join(conflicts)} from the repository cell model; do not pass '
+                           f'{", ".join(c + ":=" for c in conflicts)} together with repo:=')
+    head_model = str(given.get('head_model', '') or '').strip()
+    if head_model not in ('',) + HEAD_MODELS:
+        raise RepoArgError(f'head_model must be hbox or hcad, got {head_model!r}')
+    root = Path(repo.strip()).expanduser()
+    if not root.is_dir():
+        raise RepoArgError(f'repo:={repo!r} is not a folder')
+    root = root.resolve()
+    model = root / 'cell' / 'model'
+    frames_yaml, manifest = model / 'frames.yaml', model / 'scene_manifest.json'
+    for path in (frames_yaml, manifest):
+        if not path.is_file():
+            raise RepoArgError(f'{path} not found: import the cell CAD first (S10, CP-60)')
+    out = frames_launch_args(frames_yaml)
+    _check_manifest(manifest, frames_yaml)
+    out['cell_manifest'] = str(manifest)
+    head_dir = model / 'head'
+    if head_model == 'hbox':
+        out.update(head_model='hbox', head_dir='')
+    elif (head_dir / 'head.yaml').is_file():
+        try:
+            check_head_dir(str(head_dir))
+        except HeadDirError as exc:
+            raise RepoArgError(str(exc)) from exc
+        out.update(head_model='hcad', head_dir=str(head_dir))
+    else:
+        raise RepoArgError(f'{head_dir / "head.yaml"} not found: import the head CAD (S10) or pass head_model:=hbox '
+                           'explicitly for the parametric head')
+    return out
