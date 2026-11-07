@@ -130,19 +130,24 @@ def theta_invariant_blocking(rows, psi_all: Sequence[float], head_links, rotatin
     With work / travel angle fixed, the head pose relative to the part and to every object that turns with it
     depends only on (s, ψ), not on θ or the IK branch. A contact between a head link and the rotating set is
     therefore the same at every θ. ``rows`` = (s_mm, ψ_deg, kinematic reason, F4 contacts) of the candidates of all
-    screened θ. A bin is ``blocked`` when every ψ of ``psi_all`` was kinematically valid somewhere in the bin at some
-    θ and every such candidate had a head ↔ rotating-set contact (F4, 3 mm padding). ψ never kinematically valid in
-    the bin are listed (``psi_unseen``): for them the screening has no evidence and the bin is not marked blocked.
+    screened θ. A bin is ``blocked`` when **at every sampled point of the bin** (every s of ``rows`` in the bin) every
+    ψ of ``psi_all`` was kinematically valid at that point at some θ and every such candidate had a head ↔
+    rotating-set contact (F4, 3 mm padding). ψ never kinematically valid at a point of the bin are listed
+    (``psi_unseen``, union over the points): for them the screening has no evidence and the bin is not marked blocked
+    (review M3: ψ seen at different points of a bin are no evidence for one point).
     """
     nb = max(1, int(np.ceil(length_mm / bin_mm - 1e-9)))
-    seen = [set() for _ in range(nb)]
-    free = [set() for _ in range(nb)]
+    seen: List[Dict[float, set]] = [{} for _ in range(nb)]
+    free: List[Dict[float, set]] = [{} for _ in range(nb)]
     pairs: Counter = Counter()
     head, rot = set(head_links), set(rotating_ids)
     for s_mm, psi, reason, contacts in rows:
+        b = min(nb - 1, int(float(s_mm) // bin_mm))
+        key = round(float(s_mm), 6)
+        seen[b].setdefault(key, set())
+        free[b].setdefault(key, set())
         if reason:
             continue
-        b = min(nb - 1, int(float(s_mm) // bin_mm))
         hp = []
         for pair in (contacts or '').split(';'):
             if not pair:
@@ -150,17 +155,19 @@ def theta_invariant_blocking(rows, psi_all: Sequence[float], head_links, rotatin
             a, c = pair.split('<->')
             if (a in rot and c in head) or (c in rot and a in head):
                 hp.append(pair)
-        seen[b].add(float(psi))
+        seen[b][key].add(float(psi))
         if hp:
             pairs.update(hp)
         else:
-            free[b].add(float(psi))
+            free[b][key].add(float(psi))
     psi_all = sorted(float(x) for x in psi_all)
     bins = []
     for b in range(nb):
-        unseen = [p for p in psi_all if p not in seen[b]]
-        bins.append({'s_from_mm': b * bin_mm, 's_to_mm': min((b + 1) * bin_mm, length_mm),
-                     'blocked': not unseen and not free[b], 'psi_unseen': unseen, 'psi_free': sorted(free[b])})
+        unseen = sorted({p for pts in seen[b].values() for p in psi_all if p not in pts})
+        free_b = sorted(set().union(*free[b].values())) if free[b] else []
+        blocked = bool(seen[b]) and not unseen and not free_b
+        bins.append({'s_from_mm': b * bin_mm, 's_to_mm': min((b + 1) * bin_mm, length_mm), 'blocked': blocked,
+                     'psi_unseen': unseen if seen[b] else psi_all, 'psi_free': free_b, 'points': len(seen[b])})
     runs = []
     for b in bins:
         if b['blocked'] and runs and abs(runs[-1]['s_to_mm'] - b['s_from_mm']) < 1e-9:
