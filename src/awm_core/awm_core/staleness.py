@@ -24,8 +24,8 @@ Rules, in this order, for each recorded input:
 Names resolve against the job folder only. In addition:
 
 * a D07 (a document with a ``planner`` block, or a schema 2.x path document without one) must carry
-  ``planner.params.record_version`` equal to :data:`PLANNER_RECORD_VERSION`; missing / lower → "planned with an older planner; re-plan", higher → "planned with
-  a newer planner";
+  ``planner.params.record_version`` equal to :data:`PLANNER_RECORD_VERSION`; missing / lower → "planned with an
+  older planner; re-plan", higher → "planned with a newer planner";
 * a D09 (a document with ``program_rev``) inherits the verdict of every JSON input that is a D07; repeated problems
   are reported once.
 

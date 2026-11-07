@@ -229,7 +229,8 @@ def plan(args: argparse.Namespace) -> int:
         head_hash = sha256_file(Path(head_dir) / 'head.yaml')
     header = jsonio.make_header(CREATED_BY, inputs, job.dir)
     header['run_id'] = _run_id(header['created_at'])
-    run_params = {staleness.RECORD_VERSION_KEY: staleness.PLANNER_RECORD_VERSION, 'collision': 'off', 'travel_speed_mm_s': args.travel_speed_mm_s,
+    run_params = {staleness.RECORD_VERSION_KEY: staleness.PLANNER_RECORD_VERSION, 'collision': 'off',
+                  'travel_speed_mm_s': args.travel_speed_mm_s,
                   'travel_speed_source': 'cli default (Assumption)'
                   if args.travel_speed_mm_s == DEFAULT_TRAVEL_SPEED_MM_S else 'cli argument',
                   'head_model': args.head_model, 'seams': wanted, 'sync': params.record(),

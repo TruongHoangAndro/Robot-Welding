@@ -11,8 +11,8 @@ A61–A64; CP-58, CP-59; DES-001 Rev 0.5 §4.3 steps 5–6, §5.3, §6.2).
 
 Refusals: D07 stale by the shared rule ``awm_core.staleness`` (an input outside the repository, missing or with
 another hash, or ``planner.params.record_version`` missing / older: "planned with an older planner; re-plan" —
-G1.17, the same verdict as ``awm_path.cli check`` and ``awm_api``), a program input reached through a symbolic link or outside the repository, schema
-invalid, a rejected arc (no partial programs), an arc with
+G1.17, the same verdict as ``awm_path.cli check`` and ``awm_api``), a program input reached through a symbolic link
+or outside the repository, schema invalid, a rejected arc (no partial programs), an arc with
 ``speed_within_limits: false`` or a weld motion above a velocity / acceleration limit (arc and the largest feasible
 travel speed in the message; never slowed silently, no limit raised), the robot description differs from the one
 recorded in D07, the NOMINAL calibration differs from the D07 one, an active D08 exists (the 7-axis chain needs a
