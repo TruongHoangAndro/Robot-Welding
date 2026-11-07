@@ -57,3 +57,32 @@ def test_missing_link(tmp_path):
     (folder / 'head.yaml').write_text(yaml.safe_dump(doc))
     with pytest.raises(HeadDirError, match='head_mount'):
         check_head_dir(str(folder))
+
+
+# --- review M5: conduit position args that hcad would ignore ---------------------------------------------------
+
+def test_conduit_position_args_refused_when_head_has_cable_exit(tmp_path):
+    from awm_bringup.cell_config import CONDUIT_POSITION_ARGS, check_conduit_args, conduit_source
+    from head_fixture import write_map_override_head_dir
+    explicit = write_synthetic_head_dir(tmp_path / 'e')
+    rear = write_map_override_head_dir(tmp_path / 'r')
+    assert conduit_source(str(explicit)) == 'explicit' and conduit_source(str(rear)) == 'rear_estimate'
+    for folder in (explicit, rear):
+        check_conduit_args('hcad', str(folder), [])                        # nothing set: fine
+        check_conduit_args('hcad', str(folder), ['conduit_dia_mm'])        # dia / len apply to hcad
+        for name in CONDUIT_POSITION_ARGS:
+            with pytest.raises(ValueError, match=name):
+                check_conduit_args('hcad', str(folder), [name])
+    check_conduit_args('hbox', '', list(CONDUIT_POSITION_ARGS))           # H-BOX uses them
+
+
+def test_conduit_position_args_allowed_for_parametric_hcad(tmp_path):
+    """A head without cable exit uses the parametric conduit (review I4): the position args are used, not refused."""
+    from awm_bringup.cell_config import CONDUIT_POSITION_ARGS, check_conduit_args, conduit_source
+    folder = write_synthetic_head_dir(tmp_path / 'p')
+    doc = yaml.safe_load((folder / 'head.yaml').read_text())
+    doc.pop('cable_exit_tool0_mm')
+    doc.pop('cable_axis_tool0')
+    (folder / 'head.yaml').write_text(yaml.safe_dump(doc))
+    assert conduit_source(str(folder)) == 'parametric'
+    check_conduit_args('hcad', str(folder), list(CONDUIT_POSITION_ARGS))

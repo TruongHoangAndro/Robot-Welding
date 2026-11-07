@@ -73,3 +73,33 @@ def check_head_dir(head_dir: str) -> List[Path]:
                 raise HeadDirError(f'SHA-256 of {path} does not match {head_yaml} (file changed after export)')
             files.append(path)
     return files
+
+
+# Conduit position args of awm_cell_v2.urdf.xacro (H-BOX, and H-CAD only when head.yaml has no cable exit).
+CONDUIT_POSITION_ARGS = ('conduit_x_mm', 'conduit_y_mm', 'conduit_z_mm', 'conduit_r_deg', 'conduit_p_deg',
+                         'conduit_y_deg')
+
+
+def conduit_source(head_dir: str) -> str:
+    """Conduit source of an H-CAD head folder, same rule as lightweld_hcad.xacro (G1.8 / review I4):
+    ``explicit`` (cable_exit_tool0_mm + cable_axis_tool0), ``rear_estimate`` (estimates.tcp.geometry_estimate behind
+    the flange) or ``parametric`` (neither: the conduit_* args)."""
+    doc = yaml.safe_load((Path(head_dir.strip()) / 'head.yaml').read_text()) or {}
+    if doc.get('cable_exit_tool0_mm') is not None and doc.get('cable_axis_tool0') is not None:
+        return 'explicit'
+    est = ((doc.get('estimates') or {}).get('tcp') or {}).get('geometry_estimate') or {}
+    if est.get('behind_flange') is True and est.get('tcp_tool0_mm') is not None \
+            and est.get('beam_axis_tool0') is not None:
+        return 'rear_estimate'
+    return 'parametric'
+
+
+def check_conduit_args(head_model: str, head_dir: str, set_args: List[str]) -> None:
+    """Review M5: refuse conduit position args that the hcad xacro would ignore (head.yaml gives the cable exit)."""
+    given = [a for a in set_args if a in CONDUIT_POSITION_ARGS]
+    if head_model != 'hcad' or not given:
+        return
+    src = conduit_source(head_dir)
+    if src != 'parametric':
+        raise ValueError(f'{", ".join(given)} not used with head_model:=hcad: the conduit starts at the head.yaml cable '
+                         f'exit (source {src}); only conduit_dia_mm / conduit_len_mm apply')
