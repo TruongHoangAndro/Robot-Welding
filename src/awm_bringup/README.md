@@ -22,6 +22,7 @@ ros2 run awm_bringup replay_program --program <job>/programs/P###/program.json [
 hardware) instead of the split pair. The replay first checks that every ros2_control hardware component is
 `mock_components/GenericSystem` and that it talks to the 7-joint controller (else exit 2), then sends each D09 v2.1 `robot_positioner` segment unchanged (no time
 scaling), refuses a segment whose start differs from `/joint_states` by more than `start_state_tolerance_deg`
-(exit 2, nothing sent), checks the end state, logs the tracking error and prints `replay {json}`. Weld events are
+(exit 2; the refused segment is never sent, earlier segments stay executed: status `partial`, or `refused`
+when nothing moved), checks the end state, logs the tracking error and prints `replay {json}`. Weld events are
 listed, never executed. Config: `config/program_replay.yaml`. Golden launch test:
 `AWM_GOLDEN_REPO=<golden repo> python3 -m pytest -s src/awm_bringup/test/test_sim_mock_7axis_launch.py`.

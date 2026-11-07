@@ -15,8 +15,9 @@ tracking error from the controller feedback and the end deviation of ``/joint_st
 logged. The end deviation must stay within ``final_tolerance_deg``.
 
 Output: log lines per segment and one machine-readable last line ``replay {json}`` on stdout.
-Exit codes: 0 replayed, 2 refused (program or start state; nothing sent for that segment), 1 error (including a
-command-line usage error).
+Exit codes: 0 replayed; 2 refused — status ``refused`` when nothing moved, ``partial`` when the refusal (start
+state of segment N > 1) came after N − 1 segments were already executed (the refused segment is never sent);
+1 error (including a command-line usage error).
 
 The replay sends joint motion only: weld events of the program are listed in the log, never executed (no PLC, no
 laser; DES-001 ADR-04).
@@ -180,7 +181,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         code = EXIT_OK
     except replay.ReplayRefused as exc:
         log.error(f'refused: {exc}')
-        summary.update(status='refused', reason=str(exc))
+        summary.update(status=replay.refusal_status(len(summary['segments'])), reason=str(exc))
         code = EXIT_REFUSED
     except Exception as exc:  # noqa: BLE001 - CLI boundary: report and exit 1
         log.error(f'replay failed: {exc}')

@@ -190,3 +190,10 @@ def test_cli_usage_error_exits_1():
     from awm_bringup import replay_cli
     assert replay_cli.main(['--no-such-option']) == 1
     assert replay_cli.main([]) == 1          # --program missing
+
+
+# --- review M3: refusal after motion -------------------------------------------------------------------------------
+
+def test_refusal_status():
+    assert replay.refusal_status(0) == 'refused'
+    assert replay.refusal_status(3) == 'partial'

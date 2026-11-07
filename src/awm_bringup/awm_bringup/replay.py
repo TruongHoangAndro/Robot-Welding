@@ -10,7 +10,8 @@ Refusals (:class:`ReplayRefused`): not a 2.x program, a segment of another contr
 a value that is not finite (NaN / inf), a segment that does not start where the previous one ends or does not end at rest,
 a controller action other than the 7-joint controller, a hardware component that is not mock hardware. Before every segment the
 current joint state must be finite and equal the segment start within ``start_state_tolerance_deg`` (:class:`StartStateMismatch`,
-DES-001 §4.2 M9 start-state check).
+DES-001 §4.2 M9 start-state check). A refusal after the
+first segment leaves the earlier segments executed: status ``partial``.
 """
 
 from __future__ import annotations
@@ -202,6 +203,11 @@ def check_mock_hardware(components: Sequence[Tuple[str, str]]) -> None:
     if bad:
         raise ReplayRefused('replay runs on mock hardware only (ADR-13); not mock: '
                             + ', '.join(f'{n} ({p or "plugin unknown"})' for n, p in bad))
+
+
+def refusal_status(segments_done: int) -> str:
+    """``refused`` when nothing moved, ``partial`` when earlier segments were already executed."""
+    return 'partial' if segments_done > 0 else 'refused'
 
 
 def _deviations(expected_deg: Sequence[float], names: Sequence[str], current_deg: Mapping[str, float]
