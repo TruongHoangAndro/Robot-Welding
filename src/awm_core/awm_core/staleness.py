@@ -43,6 +43,10 @@ PathLike = Union[str, Path]
 #: (``awm_path.core.head.HeadGeometry.as_record``, the head.yaml format read by the description) changes in a way
 #: that makes an older D07 wrong even though its input hashes still match (e.g. c01ba5b changed the head record
 #: derived from an unchanged head.yaml). 1 = first recorded version (G1.17); every D07 without it is older.
+#: The bump is a developer decision. A guard test (``awm_path/test/test_staleness_cli.py``, ``RECORD_FORMATS``) pins
+#: the description record of two synthetic heads (H-BOX and a synthetic H-CAD head) by key sets and by value, so a
+#: change of the rendered record fails until a new version is added; it cannot detect changes that do not show in
+#: those two records, nor decide whether a change matters for existing D07 files.
 PLANNER_RECORD_VERSION = 1
 #: Key inside ``planner.params`` (free-form and hashed into ``params_sha256``; no schema change).
 RECORD_VERSION_KEY = 'record_version'

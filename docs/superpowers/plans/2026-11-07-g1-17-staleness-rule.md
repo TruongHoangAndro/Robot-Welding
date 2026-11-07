@@ -50,9 +50,13 @@ Write scope (named by the lead, AGENT_TEAM.md §1 exception): `src/awm_path`, `s
   as `planner.params.record_version` (free-form, hashed into `params_sha256`; no schema change). A D07 (a document
   with a `planner` block) without it or with a lower value → stale, "planned with an older planner; re-plan"; a
   higher value → stale, "planned with a newer planner …". Bump rule (docstring): any change of the planner output or
-  of the head record (`HeadGeometry.as_record`, head.yaml format) that changes what a D07 means. A guard test in
-  `awm_path` pins the key set of the head / description record to the version so such a change fails until the
-  version is bumped.
+  of the head record (`HeadGeometry.as_record`, head.yaml format) that changes what a D07 means. The bump is a
+  developer decision; a guard test in `awm_path` (`RECORD_FORMATS`) pins the description record of two synthetic
+  heads (H-BOX and the `write_synthetic_head_dir` H-CAD head) by key sets and by value (SHA-256 of the canonical
+  record, URDF hashed without XML comments and with the head folder as a placeholder, so independent of the
+  checkout; review I2). Any change of those two rendered records (xacro, head reading, limits, UR kinematics) fails
+  until a new version with a new entry is added. It does not cover changes invisible in these two records and cannot
+  tell whether a change matters for existing D07 files.
 * **D4 — D09 inherits D07 staleness.** For a program document (`program_rev` present), each JSON input that is a D07
   is checked with the same rule; its problems are reported as `<name>: <problem>`. A program generated from an old or
   stale D07 is stale.
