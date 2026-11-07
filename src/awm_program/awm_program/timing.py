@@ -10,43 +10,18 @@ from typing import Sequence, Tuple
 
 import numpy as np
 
+# One weld timing model for planner and program (G1.12, decision 2026-11-07): the trapezoidal arc-length profile and
+# the timing error are the planner's (``awm_path.core.weld_timing``), not a copy.
+from awm_path.core.weld_timing import TimingError, constant_speed_times
 
-class TimingError(ValueError):
-    """A trajectory cannot be timed within the limits."""
+__all__ = ['TimingError', 'arc_length', 'constant_speed_times', 'joint_velocities', 'max_velocity_ratio',
+           'trapezoid_times']
 
 
 def arc_length(points: np.ndarray) -> np.ndarray:
     """Cumulative arc length of a polyline [N,3]."""
     steps = np.linalg.norm(np.diff(np.asarray(points, float), axis=0), axis=1)
     return np.concatenate([[0.0], np.cumsum(steps)])
-
-
-def constant_speed_times(s: np.ndarray, speed: float, accel: float) -> np.ndarray:
-    """Time at each arc length for a trapezoidal speed profile (rest -> speed -> rest)."""
-    if speed <= 0 or accel <= 0:
-        raise TimingError('speed and acceleration must be positive')
-    s = np.asarray(s, float)
-    total = float(s[-1])
-    if total <= 0:
-        raise TimingError('zero-length weld segment')
-    d_acc = speed ** 2 / (2 * accel)
-    if 2 * d_acc > total:  # triangular profile: never reaches the travel speed
-        d_acc = total / 2
-        speed = np.sqrt(accel * total)
-    t_acc = speed / accel
-    t_total = 2 * t_acc + (total - 2 * d_acc) / speed
-    out = np.empty_like(s)
-    for i, si in enumerate(s):
-        if si <= d_acc:
-            out[i] = np.sqrt(2 * si / accel)
-        elif si >= total - d_acc:
-            out[i] = t_total - np.sqrt(2 * max(total - si, 0.0) / accel)
-        else:
-            out[i] = t_acc + (si - d_acc) / speed
-    if np.any(np.diff(out) <= 0):
-        raise TimingError('weld samples are not strictly increasing in time '
-                          '(duplicate points in the weld segment)')
-    return out
 
 
 def joint_velocities(q: np.ndarray, t: np.ndarray) -> np.ndarray:

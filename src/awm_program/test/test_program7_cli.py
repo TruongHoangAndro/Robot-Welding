@@ -301,7 +301,9 @@ def test_refuses_travel_speed_over_the_limit_with_the_number(tmp_path):
 
 
 def test_refuses_acceleration_over_the_limit_with_the_number(ring):
-    """Core: a too steep weld ramp breaks the positioner acceleration limit → refused with the feasible speed."""
+    """Core: a too steep weld ramp breaks the positioner acceleration limit → refused with the feasible speed.
+    G1.12: the program refuses a ramp other than the D07 one, so the D07 record is edited to the same ramp (its speed
+    record still says "within limits" at ramp 5: the defensive check of the program must still catch it)."""
     from awm_path.core.kinematics import UrAnalyticKinematics
     from awm_path.description import load_planning_description
     from awm_program.core.program7 import ProgramParams, ProgramRefused, build_program
@@ -310,6 +312,7 @@ def test_refuses_acceleration_over_the_limit_with_the_number(ring):
     desc = load_planning_description(job.repo.cell_dir / 'model' / 'frames.yaml', 'hbox')
     pcell = load_program_cell(desc)
     path = json.loads(job.path_json.read_text())
+    path['planner']['params']['sync']['weld_ramp_accel_mm_s2'] = 500.0
     with pytest.raises(ProgramRefused, match=r'positioner_joint acceleration .* max feasible travel speed \d+\.\d\d'):
         build_program(path, {'S01': 1}, _ftp(job), pcell, UrAnalyticKinematics(),
                       ProgramParams(weld_ramp_accel_mm_s2=500.0))
