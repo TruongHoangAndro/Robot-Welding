@@ -328,3 +328,31 @@ def test_nozzle_tip_not_longer_than_standoff_fails(tmp_path, model, tip_mm, stan
         args['head_dir'] = str(write_synthetic_head_dir(tmp_path / 'h'))
     proc = _run_xacro(**args)
     assert proc.returncode != 0 and 'nozzle_tip_len_mm' in proc.stderr and 'contact_standoff_mm' in proc.stderr
+
+
+@pytest.mark.parametrize('nozzle_mm', [5.0, 4.0, 0.0, -1.0])
+def test_hbox_nozzle_not_longer_than_tip_fails(nozzle_mm):
+    """Review I5: body length = nozzle_len_mm - nozzle_tip_len_mm must be > 0 (no negative-length cylinder)."""
+    proc = _run_xacro(head_model='hbox', nozzle_len_mm=nozzle_mm, nozzle_tip_len_mm=5)
+    assert proc.returncode != 0 and 'nozzle_len_mm' in proc.stderr and 'nozzle_tip_len_mm' in proc.stderr
+
+
+@pytest.mark.parametrize('nozzle_mm', [5.0, 4.0, -1.0])
+def test_hcad_nozzle_not_longer_than_tip_fails(tmp_path, nozzle_mm):
+    folder = write_synthetic_head_dir(tmp_path / 'h', nozzle_len_mm=nozzle_mm)
+    proc = _run_xacro(head_model='hcad', head_dir=str(folder), nozzle_tip_len_mm=5)
+    assert proc.returncode != 0 and 'nozzle_len_mm' in proc.stderr and 'nozzle_tip_len_mm' in proc.stderr
+
+
+def test_hcad_zero_nozzle_leaves_out_the_parametric_nozzle(tmp_path):
+    """Review I5: nozzle_len_mm 0 is valid in head.yaml (nozzle part of the CAD, head.py); the parametric nozzle is
+    left out (nozzle_body / nozzle_tip keep their names, no geometry) and tcp_laser = head.yaml TCP = beam exit."""
+    folder = write_synthetic_head_dir(tmp_path / 'h', nozzle_len_mm=0.0)
+    head = yaml.safe_load((folder / 'head.yaml').read_text())
+    r = _urdf(head_model='hcad', head_dir=str(folder))
+    for link in ('nozzle_body', 'nozzle_tip'):
+        assert not r.link_map[link].collisions and not r.link_map[link].visuals
+        assert r.joint_map[f'tool0_to_{link}'].parent == 'tool0'
+    xyz_mm = np.asarray(units.m_to_mm(list(fk(r, 'tcp_laser', root='tool0')[:3, 3])))
+    assert np.max(np.abs(xyz_mm - np.asarray(head['tool0_T_tcp_mm']['xyz']))) <= TOL_MM
+    assert np.max(np.abs(xyz_mm - np.asarray(head['beam_exit_tool0_mm']))) <= TOL_MM

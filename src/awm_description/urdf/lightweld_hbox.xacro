@@ -32,6 +32,10 @@
     <xacro:property name="z_tcp" value="${z_nozzle + float(nozzle_len_mm)}"/>
     <xacro:property name="z_tip" value="${z_tcp - float(nozzle_tip_len_mm)}"/>
     <xacro:property name="body_len" value="${float(nozzle_len_mm) - float(nozzle_tip_len_mm)}"/>
+    <xacro:unless value="${body_len > 0.0}">
+      ${xacro.fatal('nozzle_len_mm (' + str(nozzle_len_mm) + ') must be longer than nozzle_tip_len_mm ('
+                    + str(nozzle_tip_len_mm) + '): nozzle_body would have length ' + str(body_len) + ' mm (review I5)')}
+    </xacro:unless>
     <xacro:property name="tip_len" value="${float(nozzle_tip_len_mm) - float(contact_standoff_mm)}"/>
     <xacro:unless value="${tip_len > 0.0}">
       ${xacro.fatal('nozzle_tip_len_mm (' + str(nozzle_tip_len_mm) + ') must be longer than contact_standoff_mm ('

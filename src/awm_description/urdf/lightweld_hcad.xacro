@@ -116,6 +116,13 @@
 
     <!-- Nozzle split along the beam (s = distance from the beam exit, mm). -->
     <xacro:property name="body_len" value="${noz - float(nozzle_tip_len_mm)}"/>
+    <!-- nozzle_len_mm 0 = nozzle part of the CAD (head.py): no parametric nozzle; otherwise it must be longer than its
+         tip (review I5). -->
+    <xacro:if value="${noz != 0.0 and not body_len > 0.0}">
+      ${xacro.fatal('nozzle_len_mm (' + str(noz) + ', head.yaml) must be 0 (nozzle in the CAD) or longer than '
+                    + 'nozzle_tip_len_mm (' + str(nozzle_tip_len_mm) + '): nozzle_body would have length '
+                    + str(body_len) + ' mm (review I5)')}
+    </xacro:if>
     <xacro:property name="tip_len" value="${float(nozzle_tip_len_mm) - float(contact_standoff_mm)}"/>
     <xacro:unless value="${tip_len > 0.0}">
       ${xacro.fatal('nozzle_tip_len_mm (' + str(nozzle_tip_len_mm) + ') must be longer than contact_standoff_mm ('
@@ -167,10 +174,19 @@
 
     <xacro:awm_mesh_link name="head_mount" rgba="0.45 0.45 0.48 1"/>
     <xacro:awm_mesh_link name="head_body" rgba="0.85 0.85 0.85 1"/>
-    <xacro:awm_beam_cyl_link name="nozzle_body" s_c="${body_len / 2.0}" len_s="${body_len}"
-                             rgba="0.72 0.45 0.20 1"/>
-    <xacro:awm_beam_cyl_link name="nozzle_tip" s_c="${body_len + tip_len / 2.0}" len_s="${tip_len}"
-                             rgba="0.80 0.20 0.20 1"/>
+    <xacro:if value="${noz > 0.0}">
+      <xacro:awm_beam_cyl_link name="nozzle_body" s_c="${body_len / 2.0}" len_s="${body_len}"
+                               rgba="0.72 0.45 0.20 1"/>
+      <xacro:awm_beam_cyl_link name="nozzle_tip" s_c="${body_len + tip_len / 2.0}" len_s="${tip_len}"
+                               rgba="0.80 0.20 0.20 1"/>
+    </xacro:if>
+    <xacro:if value="${noz == 0.0}">
+      <!-- nozzle in the head CAD: links kept for the SRDF / ACM, no parametric geometry. -->
+      <link name="nozzle_body"/>
+      <xacro:awm_on_tool0 child="nozzle_body"/>
+      <link name="nozzle_tip"/>
+      <xacro:awm_on_tool0 child="nozzle_tip"/>
+    </xacro:if>
 
     <xacro:if value="${ce_src == 'parametric'}">
       <!-- Assumption: no cable exit in head.yaml (automatic beam_axis export) -> parametric conduit args (H-BOX
