@@ -182,3 +182,22 @@ def test_program_with_null_override_field_refused(scope):
     doc['cad_check_override'] = None
     with pytest.raises(ReleaseError, match='CP-62.*never releasable'):
         release_gate(doc, scope)
+
+
+def test_release_json_records_cad_check_when_present(job):
+    """review g1-19 M-2: the release names the cross-check it relied on (inputs), only when the job has one."""
+    from awm_core.hashing import sha256_file
+    from conftest import write_report
+    _write_cad_check(job.dir, check4='green')
+    write_report(job)
+    doc = release(job, 'P001', 'A. Approver', 'simulation')
+    names = {i['name']: i['sha256'] for i in doc['inputs']}
+    assert names['cad_check.json'] == sha256_file(job.dir / 'cad_check.json')
+    jsonio.read_json(job.release_json, 'release', base_dir=job.dir)
+
+
+def test_release_json_without_cad_check_unchanged(job):
+    from conftest import write_report
+    write_report(job)
+    doc = release(job, 'P001', 'A. Approver', 'simulation')
+    assert 'cad_check.json' not in {i['name'] for i in doc['inputs']}

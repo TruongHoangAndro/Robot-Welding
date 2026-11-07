@@ -191,6 +191,8 @@ def release(job: JobPaths, rev: str, approved_by: str, scope: str, note: str = '
                             'file': rec['path'].relative_to(job.dir).as_posix(),
                             'sha256': sha256_file(rec['path'])})
     inputs = [program, report_path] + [job.dir / r['file'] for r in records]
+    if (job.dir / CAD_CHECK_FILE).is_file():
+        inputs.append(job.dir / CAD_CHECK_FILE)  # the CP-60 cross-check the gate accepted (review g1-19 M-2)
     doc = jsonio.make_header(f'awm_verify {__version__}', inputs, job.dir)
     doc.update({'program_rev': rev, 'program_sha256': program_sha,
                 'report_sha256': sha256_file(report_path), 'scope': scope,
