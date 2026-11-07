@@ -216,13 +216,14 @@ def _check_manifest(manifest: Path, frames_yaml: Path) -> None:
                            'cell import (S10)')
 
 
-def repo_launch_args(repo: str, given: Dict[str, str]) -> Dict[str, str]:
+def repo_launch_args(repo: str, given: Dict[str, str], warnings: Optional[List[str]] = None) -> Dict[str, str]:
     """Resolve the sim_mock arguments from the job repository root (DES-001 §5.2, cell model written by A18 / CP-60).
 
     ``given``: the launch values of :data:`REPO_CONFLICT_ARGS` and ``head_model`` ('' = not set). Returns the pose
     arguments from ``<repo>/cell/model/frames.yaml``, ``cell_manifest`` = ``<repo>/cell/model/scene_manifest.json``,
     ``head_model`` / ``head_dir``: ``hcad`` with ``<repo>/cell/model/head`` when ``head/head.yaml`` exists; without a
-    head only an explicit ``head_model:=hbox`` is accepted. Raises :class:`RepoArgError` (never a silent default).
+    head only an explicit ``head_model:=hbox`` is accepted; a forced hbox over a present head appends a message to
+    ``warnings`` (the launch logs it at WARN). Raises :class:`RepoArgError` (never a silent default).
     """
     conflicts = [n for n in REPO_CONFLICT_ARGS if str(given.get(n, '') or '').strip()]
     if conflicts:
@@ -245,6 +246,9 @@ def repo_launch_args(repo: str, given: Dict[str, str]) -> Dict[str, str]:
     out['cell_manifest'] = str(manifest)
     head_dir = model / 'head'
     if head_model == 'hbox':
+        if (head_dir / 'head.yaml').is_file() and warnings is not None:
+            warnings.append(f'head_model:=hbox forced: {head_dir / "head.yaml"} is ignored (parametric H-BOX head, not '
+                            'the imported head CAD)')
         out.update(head_model='hbox', head_dir='')
     elif (head_dir / 'head.yaml').is_file():
         try:

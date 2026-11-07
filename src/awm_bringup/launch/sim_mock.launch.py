@@ -46,6 +46,7 @@ models; for hcad the conduit capsule sits at the head.yaml cable exit and condui
 (G1.8, review M5), unless head.yaml has no cable exit (parametric conduit from these args, Assumption, review I4).
 """
 
+import launch.logging
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, LogInfo, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
@@ -88,7 +89,10 @@ def _launch_setup(context, *args, **kwargs):
     log = []
     if repo:
         # G1.16: everything from the repository cell model; conflicting args / missing files -> RepoArgError
-        values = repo_launch_args(repo, values)
+        warnings = []
+        values = repo_launch_args(repo, values, warnings=warnings)
+        for text in warnings:
+            launch.logging.get_logger('sim_mock').warning(text)
         log.append(LogInfo(msg=f'sim_mock repo:={repo}: frames, cell_manifest {values["cell_manifest"]}, '
                                f'head_model {values["head_model"]} {values["head_dir"]}'.rstrip()))
     else:

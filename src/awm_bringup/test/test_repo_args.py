@@ -159,9 +159,17 @@ def test_no_head_refused_unless_hbox(tmp_path):
 
 
 def test_explicit_hbox_with_head_present(tmp_path):
+    """Forced hbox over a present head is accepted with a warning that names the ignored head.yaml (review 6)."""
     repo = make_repo(tmp_path / 'repo')
-    out = repo_launch_args(str(repo), dict(EMPTY, head_model='hbox'))
+    warnings = []
+    out = repo_launch_args(str(repo), dict(EMPTY, head_model='hbox'), warnings=warnings)
     assert out['head_model'] == 'hbox' and out['head_dir'] == ''
+    assert len(warnings) == 1 and str(repo.resolve() / 'cell' / 'model' / 'head' / 'head.yaml') in warnings[0]
+    assert 'ignored' in warnings[0]
+    # no head present, hbox: nothing to warn about; default hcad: nothing either
+    quiet = []
+    repo_launch_args(str(repo), dict(EMPTY, head_model=''), warnings=quiet)
+    assert quiet == []
 
 
 def test_changed_head_mesh_refused(tmp_path):
