@@ -99,9 +99,12 @@
         "file",
         "sha256",
         "cad_check_sha256",
-        "check_id"
+        "check_id",
+        "by",
+        "created_at",
+        "reason"
       ],
-      "description": "CP-62: the cross-check override this run relied on (kinematic planning with check 4 red); absent = no override",
+      "description": "CP-62: the cross-check override this run relied on (kinematic planning with check 4 red), with who / when / reason copied from the override record; absent = no override. Present only with collision_checked false.",
       "properties": {
         "file": {
           "type": "string",
@@ -115,6 +118,18 @@
         },
         "check_id": {
           "const": 4
+        },
+        "by": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Admin who recorded the override (copied so the audit trail survives a later DELETE / new override)"
+        },
+        "created_at": {
+          "$ref": "common.schema.json#/$defs/created_at"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },
@@ -499,5 +514,24 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "cad_check_override"
+        ]
+      },
+      "then": {
+        "required": [
+          "collision_checked"
+        ],
+        "properties": {
+          "collision_checked": {
+            "const": false
+          }
+        }
+      }
+    }
+  ]
 }

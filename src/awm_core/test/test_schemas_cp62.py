@@ -50,11 +50,13 @@ def test_override_findings_not_empty():
 REF = {'file': 'cad_check_override.json',
        'sha256': '1111111111111111111111111111111111111111111111111111111111111111',
        'cad_check_sha256': '2222222222222222222222222222222222222222222222222222222222222222',
-       'check_id': 4}
+       'check_id': 4,
+       'by': 'adm', 'created_at': '2026-11-07T18:00:00+07:00', 'reason': 'OI-23 kinematic planning only'}
 
 
 def test_path_records_override_reference():
     doc = example('path')
+    doc['collision_checked'] = False
     doc['cad_check_override'] = copy.deepcopy(REF)
     jsonio.validate(doc, 'v2/path')
     doc['cad_check_override']['check_id'] = 2
@@ -64,8 +66,37 @@ def test_path_records_override_reference():
 
 def test_program_records_override_reference():
     doc = example('program')
+    doc['collision_checked'] = False
     doc['cad_check_override'] = copy.deepcopy(REF)
     jsonio.validate(doc, 'v2/program')
     del doc['cad_check_override']['sha256']
     with pytest.raises(SchemaValidationError):
         jsonio.validate(doc, 'v2/program')
+
+
+@pytest.mark.parametrize('name', ['path', 'program'])
+@pytest.mark.parametrize('field', ['by', 'created_at', 'reason'])
+def test_reference_keeps_who_when_why(name, field):
+    """Review I1: the audit trail survives a later DELETE / new override."""
+    doc = example(name)
+    doc['collision_checked'] = False
+    doc['cad_check_override'] = copy.deepcopy(REF)
+    del doc['cad_check_override'][field]
+    with pytest.raises(SchemaValidationError):
+        jsonio.validate(doc, f'v2/{name}')
+
+
+@pytest.mark.parametrize('name', ['path', 'program'])
+def test_override_only_with_collision_unchecked(name):
+    """Review I2: an override reference is only valid on a kinematic-only document."""
+    doc = example(name)
+    doc['cad_check_override'] = copy.deepcopy(REF)
+    doc['collision_checked'] = False
+    jsonio.validate(doc, f'v2/{name}')
+    doc['collision_checked'] = True
+    with pytest.raises(SchemaValidationError):
+        jsonio.validate(doc, f'v2/{name}')
+    if name == 'path':
+        del doc['collision_checked']
+        with pytest.raises(SchemaValidationError):
+            jsonio.validate(doc, f'v2/{name}')
