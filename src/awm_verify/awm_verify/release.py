@@ -127,7 +127,7 @@ def release_gate(program: Dict, scope: str, job_dir: Optional[Union[str, Path]] 
     if scope not in GATE_SCOPES:
         raise ReleaseError(f'scope must be one of {GATE_SCOPES}, got {scope!r}')
     rev = program.get('program_rev', '?')
-    if program.get(OVERRIDE_FIELD) is not None:
+    if OVERRIDE_FIELD in program:  # the key is the marker: a null value is refused too
         ref = program[OVERRIDE_FIELD]
         who = ref.get('by', '?') if isinstance(ref, dict) else '?'
         raise ReleaseError(f'program {rev} carries {OVERRIDE_FIELD} (by {who}): kinematic-only planning under a '

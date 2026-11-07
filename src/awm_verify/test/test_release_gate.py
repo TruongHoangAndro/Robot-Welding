@@ -173,3 +173,12 @@ def test_unreadable_placement_without_cad_check_refused(tmp_path):
     (tmp_path / 'placement.json').write_text('{not json')
     with pytest.raises(ReleaseError, match='placement.json'):
         release_gate(_checked(_example()), 'simulation', job_dir=tmp_path)
+
+
+@pytest.mark.parametrize('scope', SCOPES)
+def test_program_with_null_override_field_refused(scope):
+    """review g1-19 M-3: the key itself is the marker; a null value is refused too."""
+    doc = _checked(_example())
+    doc['cad_check_override'] = None
+    with pytest.raises(ReleaseError, match='CP-62.*never releasable'):
+        release_gate(doc, scope)
