@@ -135,3 +135,23 @@ def test_program_from_file_validates_schema(tmp_path):
     assert prog.program_rev == 'P001'
     with pytest.raises(replay.ReplayRefused, match='schema'):
         replay.load_program(path)
+
+
+# --- review I1: mock hardware only, only the 7-joint controller action ---------------------------------------------
+
+def test_mock_hardware_check():
+    ok = [('ur5e', 'mock_components/GenericSystem'), ('awm_positioner', 'mock_components/GenericSystem')]
+    replay.check_mock_hardware(ok)
+    with pytest.raises(replay.ReplayRefused, match='ur5e.*ur_robot_driver/URPositionHardwareInterface'):
+        replay.check_mock_hardware([('ur5e', 'ur_robot_driver/URPositionHardwareInterface'), ok[1]])
+    with pytest.raises(replay.ReplayRefused, match='no hardware component'):
+        replay.check_mock_hardware([])
+    with pytest.raises(replay.ReplayRefused, match='awm_positioner'):
+        replay.check_mock_hardware([ok[0], ('awm_positioner', '')])
+
+
+def test_config_accepts_only_the_7_joint_action(tmp_path):
+    other = tmp_path / 'other.yaml'
+    other.write_text('program_replay:\n  controller_action: /scaled_joint_trajectory_controller/follow_joint_trajectory\n')
+    with pytest.raises(replay.ReplayRefused, match='robot_positioner_trajectory_controller'):
+        replay.load_config(str(other))

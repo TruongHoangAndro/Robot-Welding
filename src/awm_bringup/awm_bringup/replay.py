@@ -7,7 +7,8 @@ planned) to the single 7-joint controller of ``sim_mock`` (DES-001 §6.3 Option 
 ``awm_core.units`` (ADR-14).
 
 Refusals (:class:`ReplayRefused`): not a 2.x program, a segment of another controller, a point without 7 values,
-a segment that does not start where the previous one ends or does not end at rest. Before every segment the
+a segment that does not start where the previous one ends or does not end at rest,
+a controller action other than the 7-joint controller, a hardware component that is not mock hardware. Before every segment the
 current joint state must equal the segment start within ``start_state_tolerance_deg`` (:class:`StartStateMismatch`,
 DES-001 §4.2 M9 start-state check).
 """
@@ -24,6 +25,10 @@ import yaml
 from awm_core import units
 
 CONTROLLER = 'robot_positioner'
+# The only action the replay sends to (sim_mock trajectory_controllers:=robot_positioner, DES-001 §6.3 Option A1).
+REQUIRED_ACTION = '/robot_positioner_trajectory_controller/follow_joint_trajectory'
+# Hardware plugins accepted by the replay (ADR-13: mock hardware only; UR mock and the awm_positioner mock).
+MOCK_PLUGINS = ('mock_components/GenericSystem',)
 SCHEMA = 'v2/program'
 CONTINUITY_TOL_DEG = 1e-6
 REST_TOL_DEG_S = 1e-6
@@ -66,6 +71,9 @@ def load_config(path: Optional[str]) -> ReplayConfig:
                            float(merged['result_margin_s']), float(merged['settle_s']))
     except KeyError as exc:
         raise ValueError(f'{src}: program_replay.{exc.args[0]} missing') from exc
+    if cfg.controller_action != REQUIRED_ACTION:
+        raise ReplayRefused(f'{src}: controller_action {cfg.controller_action!r}; the replay sends only to '
+                            f'{REQUIRED_ACTION} (mock 7-joint controller of sim_mock)')
     for name in ('start_state_tolerance_deg', 'final_tolerance_deg', 'wait_timeout_s', 'result_margin_s'):
         if not getattr(cfg, name) > 0.0:
             raise ValueError(f'{src}: program_replay.{name} must be > 0')
@@ -172,6 +180,16 @@ def load_program(path: Union[str, Path], validate_schema: bool = True) -> Replay
         except Exception as exc:  # SchemaValidationError lists all errors
             raise ReplayRefused(f'{path}: not a valid D09 v2 program (schema): {exc}') from exc
     return ReplayProgram.from_doc(doc)
+
+
+def check_mock_hardware(components: Sequence[Tuple[str, str]]) -> None:
+    """``(name, plugin)`` of every ros2_control hardware component; refuse unless all are mock hardware."""
+    if not components:
+        raise ReplayRefused('no hardware component reported by the controller manager: cannot prove mock hardware')
+    bad = [(n, p) for n, p in components if p not in MOCK_PLUGINS]
+    if bad:
+        raise ReplayRefused('replay runs on mock hardware only (ADR-13); not mock: '
+                            + ', '.join(f'{n} ({p or "plugin unknown"})' for n, p in bad))
 
 
 def _deviations(expected_deg: Sequence[float], names: Sequence[str], current_deg: Mapping[str, float]

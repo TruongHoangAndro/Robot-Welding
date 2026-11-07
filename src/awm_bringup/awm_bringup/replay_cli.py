@@ -4,6 +4,10 @@
     ros2 run awm_bringup replay_program --program <job>/programs/P###/program.json [--config <yaml>]
         [--segments G002-G004]
 
+Before the first segment the controller manager must report only mock hardware components
+(``/controller_manager/list_hardware_components``, plugin ``mock_components/GenericSystem``), and the configured
+action must be the 7-joint controller; otherwise the CLI refuses (exit 2) and sends nothing.
+
 Per segment: read ``/joint_states``; if any joint differs from the segment start by more than
 ``start_state_tolerance_deg`` the segment is **not sent** and the CLI stops (exit 2). Otherwise the segment is sent
 unchanged (program timing, no scaling) as one ``FollowJointTrajectory`` goal to ``controller_action``; the largest
@@ -28,6 +32,7 @@ from typing import Dict, List, Optional
 import rclpy
 from builtin_interfaces.msg import Duration
 from control_msgs.action import FollowJointTrajectory
+from controller_manager_msgs.srv import ListHardwareComponents
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
@@ -36,6 +41,7 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from awm_bringup import replay
 
 EXIT_OK, EXIT_ERROR, EXIT_REFUSED = 0, 1, 2
+HW_SERVICE = '/controller_manager/list_hardware_components'
 
 
 def _duration(t_s: float) -> Duration:
@@ -64,6 +70,17 @@ class Replayer:
         self._js_count = 0
         node.create_subscription(JointState, '/joint_states', self._on_js, 50)
         self.client = ActionClient(node, FollowJointTrajectory, cfg.controller_action)
+
+    def hardware_components(self) -> List[tuple]:
+        """(name, plugin) of every hardware component from the controller manager."""
+        cli = self.node.create_client(ListHardwareComponents, HW_SERVICE)
+        if not cli.wait_for_service(timeout_sec=self.cfg.wait_timeout_s):
+            raise replay.ReplayRefused(f'{HW_SERVICE} not available: cannot prove mock hardware')
+        fut = cli.call_async(ListHardwareComponents.Request())
+        rclpy.spin_until_future_complete(self.node, fut, timeout_sec=self.cfg.wait_timeout_s)
+        if not fut.done() or fut.result() is None:
+            raise replay.ReplayRefused(f'{HW_SERVICE} did not answer: cannot prove mock hardware')
+        return [(c.name, c.plugin_name or c.class_type) for c in fut.result().component]
 
     def _on_js(self, msg: JointState) -> None:
         self._js = msg
@@ -140,6 +157,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         summary.update(program_rev=prog.program_rev, joint_names=prog.joint_names,
                        controller_action=cfg.controller_action)
         r = Replayer(node, cfg)
+        components = r.hardware_components()
+        replay.check_mock_hardware(components)
+        summary['hardware'] = [{'name': n, 'plugin': p} for n, p in components]
         if not r.client.wait_for_server(timeout_sec=cfg.wait_timeout_s):
             raise RuntimeError(f'{cfg.controller_action} not available (launch sim_mock with '
                                'trajectory_controllers:=robot_positioner)')
