@@ -16,7 +16,7 @@ R_OUT = 'rpy="0 0 0"'
 
 
 def _urdf(tcp_z_mm=481.0, nozzle_r_mm=10.0, tip_len_mm=5.0, s_c_mm=0.3, mid_rpy='0 0 0', tip_joint='fixed',
-          nozzle_rpy='0 0 0', nozzle_off_mm=0.0, with_nozzle=True):
+          nozzle_rpy='0 0 0', nozzle_off_mm=0.0, with_nozzle=True, conduit='parametric'):
     """tool0 -> mid (rotated by mid_rpy, undone by the child joints) -> tcp_laser; nozzle_tip on tool0."""
     m = units.mm_to_m
     roll, pitch, yaw = (float(v) for v in mid_rpy.split())
@@ -30,6 +30,8 @@ def _urdf(tcp_z_mm=481.0, nozzle_r_mm=10.0, tip_len_mm=5.0, s_c_mm=0.3, mid_rpy=
     <geometry><cylinder radius="{m(nozzle_r_mm)}" length="{m(tip_len_mm - s_c_mm)}"/></geometry></collision></link>
   <joint name="tool0_to_nozzle_tip" type="fixed"><parent link="tool0"/><child link="nozzle_tip"/>
     <origin xyz="0 0 0" rpy="0 0 0"/></joint>''' if with_nozzle else ''
+    tag = f'\n  <awm_conduit source="{conduit}"/>' if conduit else ''
+    nozzle += tag
     return f'''<?xml version="1.0"?>
 <robot name="t">
   <link name="wrist_3_link"/><link name="tool0"/><link name="mid"/><link name="tcp_laser"/>
@@ -143,3 +145,58 @@ def test_head_model_of_the_description_and_label_check() -> None:
         check_head_model(box, 'H-CAD')
     with pytest.raises(ValueError, match='head_body'):
         head_model_of_urdf(_urdf())
+
+
+# -- G1.13 request 2: conduit source record (<awm_conduit source=.../>, review M6) --------------------------------
+@pytest.mark.parametrize('source, assumption', [('explicit', False), ('rear_estimate', True), ('parametric', True)])
+def test_conduit_source_is_read_and_recorded(source, assumption) -> None:
+    head = head_from_urdf(_urdf(conduit=source))
+    assert head.conduit_source == source
+    rec = head.as_record()
+    assert rec['conduit_source'] == source and rec['conduit_source_assumption'] is assumption
+
+
+def test_missing_unknown_or_duplicated_conduit_source_is_an_error() -> None:
+    with pytest.raises(ValueError, match='awm_conduit'):
+        head_from_urdf(_urdf(conduit=None))
+    with pytest.raises(ValueError, match='awm_conduit'):
+        head_from_urdf(_urdf(conduit='guess'))
+    twice = _urdf().replace('</robot>', '<awm_conduit source="explicit"/></robot>')
+    with pytest.raises(ValueError, match='awm_conduit'):
+        head_from_urdf(twice)
+
+
+# -- G1.13 request 3: H-CAD with nozzle_len_mm 0 (empty nozzle_body / nozzle_tip links) ----------------------------
+def _no_nozzle_urdf(body_geometry: str = '') -> str:
+    empty = ('<link name="nozzle_body">' + body_geometry + '</link>'
+             '<joint name="tool0_to_nozzle_body" type="fixed"><parent link="tool0"/><child link="nozzle_body"/>'
+             '<origin xyz="0 0 0" rpy="0 0 0"/></joint>'
+             '<link name="nozzle_tip"/>'
+             '<joint name="tool0_to_nozzle_tip" type="fixed"><parent link="tool0"/><child link="nozzle_tip"/>'
+             '<origin xyz="0 0 0" rpy="0 0 0"/></joint>')
+    return _urdf(with_nozzle=False, conduit='explicit').replace('</robot>', empty + '</robot>')
+
+
+def test_empty_nozzle_links_mean_no_parametric_nozzle() -> None:
+    head = head_from_urdf(_no_nozzle_urdf())
+    assert head.nozzle_geometry == 'none'
+    assert head.nozzle_radius_mm is None and head.contact_standoff_mm is None and head.nozzle_tip_length_mm is None
+    assert np.allclose(head.tool0_T_tcp_mm[:3, 3], [0.0, 0.0, 481.0], atol=1e-9)    # kinematics still read
+    rec = head.as_record()
+    assert rec['nozzle_geometry'] == 'none' and rec['nozzle_radius_mm'] is None
+    assert head_from_urdf(_urdf()).nozzle_geometry == 'cylinder'
+
+
+def test_no_nozzle_refuses_f9_instead_of_falling_back_to_the_head_mesh() -> None:
+    from awm_path.core.head import NoNozzleError
+    head = head_from_urdf(_no_nozzle_urdf())
+    with pytest.raises(NoNozzleError, match='nozzle_len_mm 0') as exc:
+        contact_params_for(head)
+    assert 'head mesh' in str(exc.value)
+    assert isinstance(exc.value, ValueError)
+
+
+def test_half_empty_nozzle_is_an_error() -> None:
+    body = ('<collision><geometry><cylinder radius="0.01" length="0.03"/></geometry></collision>')
+    with pytest.raises(ValueError, match='nozzle_body'):
+        head_from_urdf(_no_nozzle_urdf(body))

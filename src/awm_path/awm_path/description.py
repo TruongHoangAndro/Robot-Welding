@@ -6,7 +6,9 @@
 (``cell_urdf``), each cross-checked against ``frames.yaml`` and ``positioner_limits.yaml``; the acceleration limits
 (G1.9) from the sources the program generator uses: UR ``awm_description/config/joint_limits_v2.yaml`` (rad/s², REP
 103, converted only through ``awm_core.units``) and the positioner ``positioner_limits.yaml``. Limits are read, never
-changed.
+changed. The head record states the conduit source (``<awm_conduit source>``) and whether the head has a
+parametric nozzle (``nozzle_geometry``; H-CAD head.yaml ``nozzle_len_mm`` 0 = none: kinematics only, F9 refused by
+``awm_path.core.head.contact_params_for``), G1.13.
 
 Needs the ROS overlay (xacro, ament index): not part of the pure core (B-06). No rclpy, no running nodes.
 """

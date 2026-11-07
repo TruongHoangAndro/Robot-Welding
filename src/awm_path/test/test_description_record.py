@@ -16,7 +16,7 @@ sys.path.insert(0, str(HERE.parents[1] / 'awm_description' / 'test'))
 pytest.importorskip('xacro', reason='xacro not available (run inside awm_dev)')
 
 from g13_job import make_ring_job  # noqa: E402
-from head_fixture import write_synthetic_head_dir  # noqa: E402
+from head_fixture import write_map_override_head_dir, write_synthetic_head_dir  # noqa: E402
 
 
 def test_record_is_independent_of_the_head_folder_location(tmp_path):
@@ -68,3 +68,38 @@ def test_rendered_descriptions_match_their_head_model(tmp_path):
     head = write_synthetic_head_dir(tmp_path / 'h' / 'head')
     assert head_model_of_urdf(load_planning_description(frames, 'hbox').urdf) == 'hbox'
     assert head_model_of_urdf(load_planning_description(frames, 'hcad', str(head)).urdf) == 'hcad'
+
+
+def test_conduit_source_of_the_rendered_head_is_in_the_record(tmp_path):
+    """G1.13 request 2: the <awm_conduit source> of the description is in the head record (explicit cable exit,
+    refused rear estimate, parametric H-BOX conduit); estimated sources are marked as Assumptions."""
+    from awm_seam import seam_axis
+    from awm_path.description import load_planning_description
+    frames = seam_axis.frames_path(make_ring_job(tmp_path / 'repo'))
+    explicit = write_synthetic_head_dir(tmp_path / 'e' / 'head')
+    rear = write_map_override_head_dir(tmp_path / 'r' / 'head')
+    cases = [(load_planning_description(frames, 'hcad', str(explicit)), 'explicit', False),
+             (load_planning_description(frames, 'hcad', str(rear)), 'rear_estimate', True),
+             (load_planning_description(frames, 'hbox'), 'parametric', True)]
+    for desc, source, assumption in cases:
+        rec = desc.as_record()['head']
+        assert desc.head.conduit_source == source
+        assert rec['conduit_source'] == source and rec['conduit_source_assumption'] is assumption
+
+
+def test_hcad_with_nozzle_len_zero_loads_for_kinematics_and_refuses_f9(tmp_path):
+    """G1.13 request 3: head.yaml nozzle_len_mm 0 -> empty nozzle links, tcp_laser at the head.yaml TCP; the
+    kinematic description loads, F9 refuses (no disc, no fallback to the head mesh)."""
+    import numpy as np
+    from awm_seam import seam_axis
+    from awm_path.core.head import NoNozzleError, contact_params_for
+    from awm_path.description import load_planning_description
+    frames = seam_axis.frames_path(make_ring_job(tmp_path / 'repo'))
+    head_dir = write_synthetic_head_dir(tmp_path / 'z' / 'head', nozzle_len_mm=0.0)
+    tcp = yaml.safe_load((head_dir / 'head.yaml').read_text())['tool0_T_tcp_mm']['xyz']
+    desc = load_planning_description(frames, 'hcad', str(head_dir))
+    assert desc.head.nozzle_geometry == 'none'
+    assert np.allclose(desc.head.tool0_T_tcp_mm[:3, 3], tcp, atol=1e-6)
+    assert desc.as_record()['head']['nozzle_radius_mm'] is None
+    with pytest.raises(NoNozzleError):
+        contact_params_for(desc.head)

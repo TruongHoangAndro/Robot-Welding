@@ -38,11 +38,11 @@ the head.yaml cable exit, `<awm_conduit source=…/>`, review M6); ADR-14 (units
 ## Tasks
 
 - [x] T1 Plan (this file).
-- [ ] T2 Tests first: `test_params.py` (helper messages), `test_core_head.py` (conduit tag read / missing / unknown /
+- [x] T2 Tests first: `test_params.py` (helper messages), `test_core_head.py` (conduit tag read / missing / unknown /
   duplicated; empty nozzle links → `nozzle_geometry 'none'`, record, `contact_params_for` refusal; half-empty refused),
   `test_gate_g2_runner.py` (assumption text with conduit source, no-nozzle text, missing source refused),
   `test_description_record.py` (synthetic H-CAD head with explicit cable exit → `explicit`; map variant →
   `rear_estimate`; hbox → `parametric`; synthetic head with `nozzle_len_mm` 0 → `none`, F9 refused).
-- [ ] T3 Implement in `params.py`, `core/head.py`, `gate_g2.py`.
-- [ ] T4 `colcon build --packages-select awm_core awm_description awm_bringup awm_path && colcon test
+- [x] T3 Implement in `params.py`, `core/head.py`, `gate_g2.py`.
+- [x] T4 `colcon build --packages-select awm_core awm_description awm_bringup awm_path && colcon test
   --packages-select awm_path`.

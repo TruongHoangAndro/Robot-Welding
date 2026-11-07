@@ -159,12 +159,32 @@ def head_launch_args(head_model: str, head_dir: Optional[str], repo: Path) -> Di
 
 def head_assumption(head_model: str, contact_params, head_record: Mapping[str, Any]) -> str:
     """Assumption line of a run record built from the head of the description in use (``scene.head.as_record()``)
-    and the F9 parameters (review M2: no hard-coded head values)."""
+    and the F9 parameters (review M2: no hard-coded head values).
+
+    G1.13: states the conduit source (``conduit_source`` of the record, required; ``parametric`` and
+    ``rear_estimate`` are Assumptions; the conduit size (xacro args) is always an Assumption). A record with
+    ``nozzle_geometry 'none'`` (H-CAD head.yaml nozzle_len_mm 0) states that there is no parametric nozzle and F9
+    is not available; ``contact_params`` is not used then (may be ``None``)."""
+    from awm_path.core.head import CONDUIT_SOURCE_TEXT, CONDUIT_SOURCES
+    src = head_record.get('conduit_source')
+    if src not in CONDUIT_SOURCES:
+        raise ValueError(f'head record has no valid conduit_source ({src!r}): every run record must state the '
+                         'conduit source of the description (<awm_conduit source>, G1.8)')
     pos = ', '.join(f'{float(v):g}' for v in head_record['tool0_T_tcp_mm']['position_mm'])
-    return (f'{head_model} head; nozzle Ø{2.0 * contact_params.nozzle_radius_mm:g} mm (tip link '
-            f'{float(head_record["nozzle_tip_length_mm"]):g} mm), s_c {contact_params.standoff_mm:g} mm, '
-            f'tool0_T_tcp ({pos}) mm, all from the robot description in use (S.5c Task 0, CP-56 one source); TCP at '
-            'the nozzle tip (I2 / OI-15)')
+    geometry = head_record.get('nozzle_geometry')
+    if geometry not in ('cylinder', 'none'):
+        raise ValueError(f'head record has no valid nozzle_geometry ({geometry!r}): expected cylinder or none')
+    if geometry == 'none':
+        nozzle = ('no parametric nozzle (head.yaml nozzle_len_mm 0, nozzle_tip / nozzle_body without geometry; F9 '
+                  'not available, no fallback to the head mesh)')
+    else:
+        nozzle = (f'nozzle Ø{2.0 * contact_params.nozzle_radius_mm:g} mm (tip link '
+                  f'{float(head_record["nozzle_tip_length_mm"]):g} mm), s_c {contact_params.standoff_mm:g} mm')
+    conduit = (f'conduit source {src} (Assumption: {CONDUIT_SOURCE_TEXT[src]})' if CONDUIT_SOURCES[src]
+               else f'conduit source {src} ({CONDUIT_SOURCE_TEXT[src]}; size from the conduit_dia_mm / '
+                    'conduit_len_mm args, Assumption)')
+    return (f'{head_model} head; {nozzle}, tool0_T_tcp ({pos}) mm, {conduit}, all from the robot description in use '
+            '(S.5c Task 0, CP-56 one source); TCP at the nozzle tip (I2 / OI-15)')
 
 
 def add_head_cli(ap: argparse.ArgumentParser) -> None:
@@ -301,9 +321,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                                                                if k != 'cell_manifest'},
         'wall_time_s': wall, 'assumptions': [
             'part and base poses from CAD component placements, no REF_* markers (OI-23)',
-            f'{args.head_model} head; nozzle Ø{2.0 * contact_params.nozzle_radius_mm:g} mm, s_c '
-            f'{contact_params.standoff_mm:g} mm and tool0_T_tcp from the robot description (S.5c Task 0); TCP at the '
-            'nozzle tip (TST-002 §3.1, I2 / OI-15)',
+            head_assumption(args.head_model, contact_params, scene.head.as_record()),
             'contact point tolerance 0.15 mm (F9 gives no value)'],
     }
     out = Path(args.out_dir)
