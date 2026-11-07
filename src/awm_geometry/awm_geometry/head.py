@@ -661,7 +661,7 @@ def check_beam_direction(point_t0: np.ndarray, axis_t0: np.ndarray, source: str)
 
     DES-001 §5.3: tcp_laser Z = beam direction, out of the nozzle. A beam with ``dot(axis, tcp) <= 0`` in tool0 runs
     back towards the flange: the parametric nozzle would sit beyond the tip and the planner would put the head on
-    the wrong side of the seam. The real LightWELD head (beam (0.866, 0, 0.5), TCP (43.8, 0, 279.6) mm) passes."""
+    the wrong side of the seam."""
     if float(axis_t0 @ point_t0) <= BEAM_TOL:
         raise HeadError(f'{source}: the beam axis {np.round(axis_t0, 5).tolist()} points back towards tool0 (TCP '
                         f'{np.round(point_t0, 3).tolist()} mm in tool0, dot = {float(axis_t0 @ point_t0):.3f} mm): '

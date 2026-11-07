@@ -288,11 +288,11 @@ def test_override_beam_towards_tool0_refused(tmp_path, occ, point_tool0, axis_to
     assert not (tmp_path / 'repo' / 'cell' / 'model' / 'head').exists()
 
 
-def test_override_real_head_direction_accepted(tmp_path, occ):
-    """The real LightWELD beam in tool0 (0.866, 0, 0.5) with the TCP at (43.8, 0, 279.6) mm passes the beam check."""
+def test_override_tilted_beam_accepted(tmp_path, occ):
+    """A tilted beam leaving the head away from the flange (made-up TCP and direction, 37 deg from tool0 Z) passes
+    the beam check; the real head is checked in the env-gated test_dau_han_robot."""
     step = _head_step(tmp_path / 'head.step', POSE_A)
-    p, a = np.array([43.8285, 0.0, 279.606]), np.array([0.866019, 0.0, 0.500011])
-    a = a / np.linalg.norm(a)
+    p, a = np.array([30.0, -60.0, 200.0]), np.array([0.6, 0.0, 0.8])
     cmap = _map(step, tcp={'point_file_mm': (POSE_A @ np.append(p, 1.0))[:3].tolist(),
                            'axis_file': (POSE_A[:3, :3] @ a).tolist(), 'nozzle_len_mm': 40.0})
     code, out = _export(tmp_path, step, cmap)
@@ -473,6 +473,7 @@ def test_dau_han_robot(tmp_path):
     assert doc['estimates']['tool0']['residuals']['contact_plane_gap_mm'] <= 0.1
     assert abs(np.linalg.norm(doc['beam_axis_tool0']) - 1.0) < 1e-9
     assert tcp[2, 3] > 0.0  # TCP in front of the flange (bug 2026-11-06: the cable end was taken as the nozzle)
+    assert doc['beam_axis_tool0'][2] > 0.0  # the beam check (review I2) passes on the real head
     exit_mm = np.asarray(doc['beam_exit_tool0_mm'])
     np.testing.assert_allclose(exit_mm + doc['nozzle_len_mm'] * np.asarray(doc['beam_axis_tool0']), tcp[:3, 3],
                                atol=1e-6)
