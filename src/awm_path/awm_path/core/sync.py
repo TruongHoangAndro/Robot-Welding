@@ -46,6 +46,7 @@ from awm_core import frames, units
 from awm_path.core.batch_kin import LABEL_COUNT, batch_fk, batch_label_metrics, ik_by_label
 from awm_path.core.kinematics import pose_error, wrap_deg
 from awm_path.core.states import LABELS
+from awm_path.core.weld_timing import speed_report
 
 ProgressFn = Optional[Callable[[float, str], None]]
 
@@ -63,7 +64,8 @@ MODES = ('sync', 'C', 'B')
 class SyncParams:
     """Planner parameters (D16 later). Assumptions (recorded with every run): cost weights, θ lattice step, wrist-3
     window half width, pitch floor 0.05 mm (CP-53), F8 tolerances for Mode C (TST-002: D16 Assumption), F6 elbow /
-    shoulder margins (TST-002: Assumption)."""
+    shoulder margins (TST-002: Assumption), weld ramp acceleration 5 mm/s² and speed search resolution 0.01 mm/s
+    (G1.9: the values of the program generator's ``ProgramParams``, so both time the weld the same way)."""
 
     theta_step_deg: float = 5.0
     psi_step_deg: float = 10.0
@@ -84,8 +86,12 @@ class SyncParams:
     fk_tol_mm: float = 0.01
     fk_tol_deg: float = 0.01
     wrist3_window_half_deg: float = 45.0
+    weld_ramp_accel_mm_s2: float = 5.0
+    speed_search_resolution_mm_s: float = 0.01
 
     def __post_init__(self) -> None:
+        if self.weld_ramp_accel_mm_s2 <= 0.0 or self.speed_search_resolution_mm_s <= 0.0:
+            raise ValueError('weld_ramp_accel_mm_s2 and speed_search_resolution_mm_s must be > 0')
         if not 0.0 < self.theta_step_deg <= self.dq_max_deg:
             raise ValueError('theta_step_deg must be in (0, dq_max_deg] (θ grid ≤ Δq_max)')
         for step in (self.theta_step_deg, self.psi_step_deg):
@@ -104,7 +110,9 @@ class SyncParams:
 
 @dataclass(frozen=True)
 class SyncCell:
-    """Cell values used by the planner (mm, degrees), from the robot description (``cell_urdf``) and the head."""
+    """Cell values used by the planner (mm, degrees), from the robot description (``cell_urdf``), the head and the
+    acceleration limits (G1.9: UR ``joint_limits_v2.yaml``, positioner ``positioner_limits.yaml`` — the sources of the
+    program generator). Acceleration limits are required: there is no velocity-only fallback."""
 
     base_link_T_axis: np.ndarray
     world_z_base: np.ndarray
@@ -113,6 +121,24 @@ class SyncCell:
     theta_limits_deg: Tuple[float, float]
     joint_velocity_deg_s: Tuple[float, ...]
     theta_velocity_deg_s: float
+    joint_acceleration_deg_s2: Tuple[float, ...]
+    theta_acceleration_deg_s2: float
+
+    def __post_init__(self) -> None:
+        if len(self.joint_velocity_deg_s) != 6 or len(self.joint_acceleration_deg_s2) != 6:
+            raise ValueError('6 robot joint velocity and acceleration limits are needed')
+        if min(self.velocity_limits_deg_s) <= 0.0 or min(self.acceleration_limits_deg_s2) <= 0.0:
+            raise ValueError('velocity and acceleration limits must be > 0')
+
+    @property
+    def velocity_limits_deg_s(self) -> np.ndarray:
+        """7 velocity limits: robot joints 1–6, then the positioner."""
+        return np.array(list(self.joint_velocity_deg_s) + [self.theta_velocity_deg_s], float)
+
+    @property
+    def acceleration_limits_deg_s2(self) -> np.ndarray:
+        """7 acceleration limits: robot joints 1–6, then the positioner."""
+        return np.array(list(self.joint_acceleration_deg_s2) + [self.theta_acceleration_deg_s2], float)
 
 
 @dataclass(frozen=True)
@@ -878,22 +904,33 @@ def plan_arc(kin, cell: SyncCell, seam: Dict, arc: ArcSpec, mode: str, params: S
     return res
 
 
-def timing(res: ArcResult, travel_speed_mm_s: float, cell: SyncCell) -> Tuple[List[float], Dict]:
-    """A47: times at constant travel speed relative to the part (t = Δs / v) and the joint speeds they imply
-    (reported against the velocity limits; the travel speed is a process value and is never changed here)."""
+def timing(res: ArcResult, travel_speed_mm_s: float, cell: SyncCell,
+           params: SyncParams = SyncParams()) -> Tuple[List[float], Dict]:
+    """A47: times at constant travel speed relative to the part (t = Δs / v; the program generator re-times the weld
+    with its speed ramps) and the speed record of the arc (G1.9, :func:`awm_path.core.weld_timing.speed_report`):
+    ``speed_within_limits`` = the timed weld spline (ramps ``params.weld_ramp_accel_mm_s2``) at the requested speed
+    is inside the joint / positioner velocity **and** acceleration limits; ``max_travel_speed_mm_s`` = the largest
+    such speed (resolution ``params.speed_search_resolution_mm_s``, rounded down); ``max_joint_speed_deg_s`` = spline
+    velocity maxima at the requested speed. The travel speed is a process value and is never changed here."""
     if travel_speed_mm_s <= 0.0:
         raise ValueError('travel speed must be > 0')
     s = np.array([p.s_mm for p in res.points])
     t = (s - s[0]) / travel_speed_mm_s
     q7 = np.array([list(p.q_deg) + [p.theta_deg] for p in res.points])
-    dt = np.diff(t)
-    speed = (np.abs(np.diff(q7, axis=0)) / dt[:, None]).max(axis=0) if len(dt) else np.zeros(7)
-    lim = np.array(list(cell.joint_velocity_deg_s) + [cell.theta_velocity_deg_s])
-    ratio = float((speed / lim).max())
-    return [float(v) for v in t], {'max_joint_speed_deg_s': [float(v) for v in speed],
-                                   'speed_within_limits': bool(ratio <= 1.0 + 1e-12),
-                                   'max_travel_speed_mm_s': float(travel_speed_mm_s / ratio) if ratio > 0 else 0.0}
+    return [float(v) for v in t], speed_record(s, q7, travel_speed_mm_s, cell, params)
+
+
+def speed_record(s_mm: np.ndarray, q7_deg: np.ndarray, travel_speed_mm_s: float, cell: SyncCell,
+                 params: SyncParams = SyncParams()) -> Dict:
+    """D07 speed record (``max_joint_speed_deg_s``, ``speed_within_limits``, ``max_travel_speed_mm_s``) of the 7-joint
+    states ``q7_deg`` at seam arc lengths ``s_mm`` (G1.9; see :func:`timing`). The D07 builder passes the values it
+    writes (rounded), so the record holds for the stored path."""
+    if travel_speed_mm_s <= 0.0:
+        raise ValueError('travel speed must be > 0')
+    rep = speed_report(s_mm, q7_deg, travel_speed_mm_s, cell.velocity_limits_deg_s, cell.acceleration_limits_deg_s2,
+                       params.weld_ramp_accel_mm_s2, params.speed_search_resolution_mm_s)
+    return {k: rep[k] for k in ('max_joint_speed_deg_s', 'speed_within_limits', 'max_travel_speed_mm_s')}
 
 
 __all__ = ['MODES', 'SyncParams', 'SyncCell', 'ArcSpec', 'ArcGeometry', 'ArcResult', 'PlannedPoint', 'rot_x',
-           'flange_point_at', 'tcp_target', 'seam_z_up_deg', 'arc_geometry', 'plan_arc', 'timing']
+           'flange_point_at', 'tcp_target', 'seam_z_up_deg', 'arc_geometry', 'plan_arc', 'timing', 'speed_record']

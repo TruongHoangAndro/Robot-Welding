@@ -24,7 +24,7 @@ import numpy as np
 
 from awm_core import frames, units
 from awm_core.hashing import sha256_text
-from awm_path.core.sync import ArcResult, SyncCell, timing
+from awm_path.core.sync import ArcResult, SyncCell, SyncParams, speed_record
 
 SCHEMA_VERSION = '2.1'
 SCENE_BACKEND_OFF = 'none (collision not evaluated, Goal 1 / CP-58)'
@@ -100,14 +100,20 @@ def _jsonable(v):
     return v
 
 
-def _accepted(plan: ArcPlan, cell: SyncCell, flange_t_part: np.ndarray) -> Dict:
+def _accepted(plan: ArcPlan, cell: SyncCell, flange_t_part: np.ndarray, sync_params: SyncParams) -> Dict:
     res = plan.result
     pts = []
     for p in res.points:
         pts.append({'s_mm': _f(p.s_mm), 'pose_mm': _pose(part_tcp_pose(flange_t_part, p.frame_flange, p.psi_deg)),
                     'psi_deg': _f(p.psi_deg), 'theta_deg': _f(p.theta_deg), 'q_deg': [_f(v) for v in p.q_deg],
                     'min_clearance_mm': None, 'status': p.status})
-    t, speed = timing(res, plan.travel_speed_mm_s, cell)
+    # time the values that are written (rounded by _f), so the record holds for the stored path (review minor 2)
+    if plan.travel_speed_mm_s <= 0.0:
+        raise ValueError('travel speed must be > 0')
+    s = np.array([p['s_mm'] for p in pts])
+    q7 = np.array([p['q_deg'] + [p['theta_deg']] for p in pts])
+    t = (s - s[0]) / plan.travel_speed_mm_s
+    speed = speed_record(s, q7, plan.travel_speed_mm_s, cell, sync_params)
     kind = 'positioner_weld' if res.mode == 'C' else 'weld'
     timed = [{'kind': kind, 'points': [{'t_s': _f(ti), 'q_deg': [_f(v) for v in p.q_deg],
                                         'theta_deg': _f(p.theta_deg)} for ti, p in zip(t, res.points)]}]
@@ -128,16 +134,21 @@ def _rejected(plan: ArcPlan) -> Dict:
 
 
 def build_path_doc(plans: Sequence[ArcPlan], cell: SyncCell, flange_t_part: np.ndarray, info: PlannerInfo,
-                   header: Mapping, context: Mapping) -> Dict:
-    """D07 v2 (MINOR 2.1) document. ``header``: created_by, created_at, inputs, run_id; ``context``: context_record."""
+                   header: Mapping, context: Mapping, sync_params: SyncParams = SyncParams()) -> Dict:
+    """D07 v2 (MINOR 2.1) document. ``header``: created_by, created_at, inputs, run_id; ``context``: context_record;
+    ``sync_params``: the planner parameters that time the arcs (weld ramp, speed resolution; G1.9) — must equal the
+    ``sync`` record in ``info.params`` when one is given (what is recorded is what was used)."""
     if info.head_model not in HEAD_MODEL_RECORD:
         raise ValueError(f'unknown head model {info.head_model!r}')
     params = _jsonable(dict(info.params))
+    if 'sync' in params and params['sync'] != _jsonable(sync_params.record()):
+        raise ValueError('planner params record (sync) differs from the parameters used to time the arcs')
     seams: List[Dict] = []
     rejected: List[Dict] = []
     for plan in plans:
         (seams if plan.result.ok else rejected).append(
-            _accepted(plan, cell, np.asarray(flange_t_part, float)) if plan.result.ok else _rejected(plan))
+            _accepted(plan, cell, np.asarray(flange_t_part, float), sync_params) if plan.result.ok
+            else _rejected(plan))
     return {
         'schema_version': SCHEMA_VERSION, 'created_by': header['created_by'], 'created_at': header['created_at'],
         'inputs': [dict(i) for i in header['inputs']], 'run_id': header['run_id'], 'context': dict(context),

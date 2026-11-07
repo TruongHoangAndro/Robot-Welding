@@ -2,6 +2,8 @@
 the head content is covered by the head.yaml hash, the folder path is machine-specific (rule 5, no absolute paths).
 Needs xacro and the ament share (runs inside awm_dev)."""
 import shutil
+
+import yaml
 import sys
 from pathlib import Path
 
@@ -33,3 +35,24 @@ def test_record_is_independent_of_the_head_folder_location(tmp_path):
     assert rec_a == rec_b
     assert str(tmp_path) not in repr(rec_a)
     assert rec_a['xacro_args']['head_dir'] == '<head_dir>'
+
+
+def test_acceleration_limits_come_from_the_program_sources(tmp_path):
+    """G1.9: UR accelerations from joint_limits_v2.yaml (rad/s² → deg/s² via awm_core.units), the positioner from
+    positioner_limits.yaml — the files the program generator reads; recorded with their hashes."""
+    from awm_bringup.cell_config import load_positioner_limits, positioner_limits_path
+    from awm_core import units
+    from awm_core.hashing import sha256_file
+    from awm_seam import seam_axis
+    from awm_path.core.cell_urdf import UR_JOINTS
+    from awm_path.description import joint_limits_file, load_planning_description
+
+    job = make_ring_job(tmp_path / 'repo')
+    desc = load_planning_description(seam_axis.frames_path(job), 'hbox')
+    jl = yaml.safe_load(joint_limits_file().read_text())['joint_limits']
+    want = [float(units.rad_to_deg(jl[j]['max_acceleration'])) for j in UR_JOINTS]
+    want.append(load_positioner_limits(positioner_limits_path())['max_acceleration_deg_s2'])
+    assert list(desc.sync_cell.acceleration_limits_deg_s2) == want
+    rec = desc.as_record()
+    assert rec['joint_limits_sha256'] == sha256_file(joint_limits_file())
+    assert rec['acceleration_deg_s2'] == want

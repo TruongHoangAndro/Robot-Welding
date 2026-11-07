@@ -98,3 +98,35 @@ def test_same_input_same_doc(plans, kin):
     assert a['planner']['params_sha256'] != build_path_doc(
         plans, _cell(), FLANGE_T_PART, PlannerInfo(kin.name, 'hbox', b['planner']['params']), HEADER,
         CONTEXT)['planner']['params_sha256']
+
+
+def test_speed_record_is_acceleration_aware_and_params_recorded_are_used(plans, kin):
+    """G1.9: the accepted arc carries the spline-based speed record; a sync record that differs from the parameters
+    used to time the arcs is refused (what is recorded is what was used)."""
+    doc = _doc(plans, kin)
+    pl = doc['seams'][0]['planning']
+    assert pl['max_travel_speed_mm_s'] > 0.0 and len(pl['max_joint_speed_deg_s']) == 7
+    assert pl['speed_within_limits'] is (8.0 <= pl['max_travel_speed_mm_s'])
+    with pytest.raises(ValueError, match='differs'):
+        build_path_doc(plans, _cell(), FLANGE_T_PART, _info(kin), HEADER, CONTEXT,
+                       SyncParams(weld_ramp_accel_mm_s2=50.0))
+
+
+def test_speed_record_is_computed_on_the_values_written_to_d07(plans, kin, monkeypatch):
+    """Review minor 2: the speed record is timed on the s / q / θ stored in D07 (rounded to 9 decimals), so a reader
+    who re-times the stored path gets the same answer."""
+    import awm_path.core.d07 as d07
+    seen = []
+    real = d07.speed_record
+
+    def spy(s, q7, *a, **k):
+        seen.append((np.array(s), np.array(q7)))
+        return real(s, q7, *a, **k)
+
+    monkeypatch.setattr(d07, 'speed_record', spy)
+    doc = _doc(plans, kin)
+    pts = doc['seams'][0]['points']
+    assert len(seen) == 1
+    s, q7 = seen[0]
+    assert np.array_equal(s, [p['s_mm'] for p in pts])
+    assert np.array_equal(q7, [p['q_deg'] + [p['theta_deg']] for p in pts])
