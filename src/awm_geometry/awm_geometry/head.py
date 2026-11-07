@@ -774,7 +774,10 @@ def _export_head(step: Path, map_path: Path, root: Path, created_by: str,
     nozzle = float(tcp_map['nozzle_len_mm'])
     taught = None
     if teach is not None:
-        check_teach_component(tree, links, teach['component'])
+        teach_link = check_teach_component(tree, links, teach['component'])
+        if teach_link != tcp_map['beam_link']:
+            raise HeadError(f'TCP teach: component {teach["component"]!r} is in {teach_link}, not in frames.tcp '
+                            f'beam_link {tcp_map["beam_link"]!r}: the nozzle-mouth circle must be on the beam link')
         taught = taught_tcp(step, teach, beam_shape)
         tcp_map = dict(tcp_map, point_file_mm=taught['point_file_mm'], axis_file=taught['axis_file'])
     inv = frames.invert(file_T_tool0)
@@ -808,7 +811,7 @@ def _export_head(step: Path, map_path: Path, root: Path, created_by: str,
                         'set, recorded in head.yaml', point_t0[2])
         est = {'method': 'map', 'behind_flange': behind, 'tcp_z_tool0_mm': float(point_t0[2])}
         if taught is not None:
-            est.update(method='teach_ui', component=teach['component'], edge_id=teach['edge_id'],
+            est.update(method='teach_ui', component=teach['component'], link=teach_link, edge_id=teach['edge_id'],
                        reversed=bool(teach.get('reverse')), stickout_mm=float(teach.get('stickout_mm') or 0.0),
                        mouth_radius_mm=float(taught['radius_mm']), taught_by=teach.get('taught_by') or 'unknown',
                        taught_at=jsonio.utc_now_iso())

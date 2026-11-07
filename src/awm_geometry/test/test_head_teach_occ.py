@@ -153,6 +153,16 @@ def test_teach_name_unique_in_head_links_duplicated_outside_refused(tmp_path, oc
         head_mod.export_head(step, map_path, tmp_path / 'repo', 'test', teach)
 
 
+def test_teach_on_mount_link_refused(head, tmp_path):
+    """The teach component must lie in frames.tcp.beam_link (head_body): a circle on head_mount is never the TCP."""
+    from awm_geometry import head as head_mod
+
+    root, step, map_path = head
+    teach = {'component': 'mount:1', 'edge_id': 'E1', 'reverse': False, 'stickout_mm': 0.0}
+    with pytest.raises(head_mod.HeadError, match="beam_link 'head_body'"):
+        head_mod.export_head(step, map_path, root / 'repo_mount_link', 'test', teach)
+
+
 def test_component_outside_head_links_refused(head, tmp_path):
     """Review I2: the teach component must be inside one of the head's head_links (wrist:1 is the robot flange)."""
     from awm_geometry import head as head_mod
@@ -182,6 +192,7 @@ def test_head_yaml_records_teach_ui(head, tmp_path):
     est = doc['estimates']['tcp']
     assert est['method'] == 'teach_ui' and est['edge_id'] == edge and est['component'] == 'nozzle:1'
     assert est['stickout_mm'] == 2.5 and est['taught_by'] == 'admin' and est['taught_at']
+    assert est['link'] == 'head_body'
     assert est['behind_flange'] is False
 
 
