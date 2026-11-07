@@ -140,11 +140,20 @@ def record_version_problem(doc: Dict[str, Any]) -> Optional[str]:
 
 def _input_problems(doc: Dict[str, Any], job: Path, root: Path, follow_d07: bool) -> List[str]:
     problems: List[str] = []
-    for item in doc.get('inputs', []) or []:
-        name = str(item.get('name', ''))
+    inputs = doc.get('inputs', [])
+    if inputs is None:
+        inputs = []
+    if not isinstance(inputs, list):
+        return ['inputs: malformed input list']
+    for index, item in enumerate(inputs):
+        if not (isinstance(item, dict) and isinstance(item.get('name'), str) and item['name']
+                and isinstance(item.get('sha256'), str)):
+            problems.append(f'input #{index}: malformed input entry')
+            continue
+        name = item['name']
         logical = Path(os.path.abspath(job / name))
         path = logical.resolve()
-        if not name or not _inside(path, root):
+        if not _inside(path, root):
             problems.append(f'{name}: outside the repository ({path}); {LINK_FIX}')
             continue
         if logical != path:

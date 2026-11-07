@@ -185,3 +185,17 @@ def test_v2_path_document_without_planner_block_is_d07(tmp_path):
     doc = {'schema_version': '2.1', 'inputs': [_entry(job, 'seam_axis.json')], 'seams': [], 'rejected': []}
     v = document_verdict(job, 'path.json', root, doc)
     assert v.state == 'stale' and any('planned with an older planner; re-plan' in p for p in v.problems)
+
+
+@pytest.mark.parametrize('entry', ['seam_axis.json', {'sha256': '0' * 64}, {'name': 'seam_axis.json'}, None])
+def test_malformed_input_entry_is_a_problem(tmp_path, entry):
+    """Review minor 3: never an AttributeError."""
+    root, job = _repo(tmp_path)
+    v = document_verdict(job, 'x.json', root, {'inputs': [entry]})
+    assert v.state == 'stale' and v.problems == ('input #0: malformed input entry',)
+
+
+def test_malformed_inputs_list_is_a_problem(tmp_path):
+    root, job = _repo(tmp_path)
+    v = document_verdict(job, 'x.json', root, {'inputs': 'seam_axis.json'})
+    assert v.state == 'stale' and v.problems == ('inputs: malformed input list',)
