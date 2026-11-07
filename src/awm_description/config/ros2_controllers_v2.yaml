@@ -1,5 +1,8 @@
-# Cell v2: one controller manager, two mock hardware components (UR + awm_positioner, CP-20), two trajectory
-# controllers (DES-001 §7.1: positioner_trajectory_controller/follow_joint_trajectory).
+# Cell v2: one controller manager, two mock hardware components (UR + awm_positioner, CP-20).
+# Default (sim_mock trajectory_controllers:=split): two trajectory controllers (DES-001 §7.1:
+# positioner_trajectory_controller/follow_joint_trajectory). Option A1 (DES-001 §6.3, G1.7,
+# trajectory_controllers:=robot_positioner): one 7-joint robot_positioner_trajectory_controller instead; it claims the
+# same command interfaces, so it is never active together with the split pair. No limit is set or raised here.
 controller_manager:
   ros__parameters:
     update_rate: 250
@@ -8,6 +11,8 @@ controller_manager:
     joint_trajectory_controller:
       type: joint_trajectory_controller/JointTrajectoryController
     positioner_trajectory_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+    robot_positioner_trajectory_controller:
       type: joint_trajectory_controller/JointTrajectoryController
 
 joint_trajectory_controller:
@@ -30,6 +35,21 @@ positioner_trajectory_controller:
     state_publish_rate: 100.0
     action_monitor_rate: 50.0
     allow_partial_joints_goal: false
+    constraints:
+      stopped_velocity_tolerance: 0.01
+      goal_time: 0.5
+
+# Option A1: robot joints then positioner_joint = the order of a D09 robot_positioner segment (program.schema 2.1).
+# allow_partial_joints_goal: MoveIt arm-only plans hold positioner_joint (Assumption, G1.7).
+robot_positioner_trajectory_controller:
+  ros__parameters:
+    joints: [shoulder_pan_joint, shoulder_lift_joint, elbow_joint, wrist_1_joint, wrist_2_joint, wrist_3_joint,
+             positioner_joint]
+    command_interfaces: [position]
+    state_interfaces: [position, velocity]
+    state_publish_rate: 100.0
+    action_monitor_rate: 50.0
+    allow_partial_joints_goal: true
     constraints:
       stopped_velocity_tolerance: 0.01
       goal_time: 0.5

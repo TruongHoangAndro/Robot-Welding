@@ -1,0 +1,16 @@
+# MoveIt execution for sim_mock trajectory_controllers:=robot_positioner (G1.7, DES-001 §6.3 Option A1): one
+# 7-joint controller for the UR5e joints and positioner_joint. Default launch uses moveit_controllers_v2.yaml.
+moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
+trajectory_execution:
+  allowed_execution_duration_scaling: 1.2
+  allowed_goal_duration_margin: 0.5
+  allowed_start_tolerance: 0.01
+moveit_simple_controller_manager:
+  controller_names:
+    - robot_positioner_trajectory_controller
+  robot_positioner_trajectory_controller:
+    action_ns: follow_joint_trajectory
+    type: FollowJointTrajectory
+    default: true
+    joints: [shoulder_pan_joint, shoulder_lift_joint, elbow_joint, wrist_1_joint, wrist_2_joint, wrist_3_joint,
+             positioner_joint]
