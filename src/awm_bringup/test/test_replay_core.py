@@ -155,3 +155,29 @@ def test_config_accepts_only_the_7_joint_action(tmp_path):
     other.write_text('program_replay:\n  controller_action: /scaled_joint_trajectory_controller/follow_joint_trajectory\n')
     with pytest.raises(replay.ReplayRefused, match='robot_positioner_trajectory_controller'):
         replay.load_config(str(other))
+
+
+# --- review I3: non-finite values ----------------------------------------------------------------------------------
+
+@pytest.mark.parametrize('key, k, j', [('positions_deg', 1, 2), ('velocities_deg_s', 2, 0), ('positions_deg', 0, 6),
+                                       ('accelerations_deg_s2', 1, 5), ('time_from_start_s', 1, None)])
+@pytest.mark.parametrize('bad', [float('nan'), float('inf')])
+def test_non_finite_program_values_refused(key, k, j, bad):
+    doc = _program()
+    pt = doc['segments'][1]['points'][k]
+    if j is None:
+        pt[key] = bad
+    else:
+        pt[key][j] = bad
+    with pytest.raises(replay.ReplayRefused, match='not finite'):
+        replay.ReplayProgram.from_doc(doc)
+
+
+@pytest.mark.parametrize('bad', [float('nan'), float('inf'), float('-inf')])
+def test_non_finite_joint_state_refused(bad):
+    prog = replay.ReplayProgram.from_doc(_program())
+    current = dict(zip(ROBOT + POS, HOME), wrist_1_joint=bad)
+    with pytest.raises(replay.StartStateMismatch, match='wrist_1_joint.*not finite'):
+        replay.check_start_state(prog.segments[0], prog.joint_names, current, tol_deg=0.05)
+    with pytest.raises(replay.ReplayRefused, match='not finite'):
+        replay.deviation_deg(prog.segments[0].start_deg, prog.joint_names, current)

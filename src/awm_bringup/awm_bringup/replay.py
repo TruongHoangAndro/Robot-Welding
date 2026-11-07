@@ -7,15 +7,16 @@ planned) to the single 7-joint controller of ``sim_mock`` (DES-001 §6.3 Option 
 ``awm_core.units`` (ADR-14).
 
 Refusals (:class:`ReplayRefused`): not a 2.x program, a segment of another controller, a point without 7 values,
-a segment that does not start where the previous one ends or does not end at rest,
+a value that is not finite (NaN / inf), a segment that does not start where the previous one ends or does not end at rest,
 a controller action other than the 7-joint controller, a hardware component that is not mock hardware. Before every segment the
-current joint state must equal the segment start within ``start_state_tolerance_deg`` (:class:`StartStateMismatch`,
+current joint state must be finite and equal the segment start within ``start_state_tolerance_deg`` (:class:`StartStateMismatch`,
 DES-001 §4.2 M9 start-state check).
 """
 
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union
@@ -134,9 +135,13 @@ class ReplayProgram:
                                     f'{CONTROLLER!r} segments (one 7-joint trajectory)')
             pts = raw['points']
             for k, p in enumerate(pts):
+                if not _finite([p['time_from_start_s']]):
+                    raise ReplayRefused(f'{sid} point {k}: time_from_start_s is not finite')
                 for key in ('positions_deg', 'velocities_deg_s', 'accelerations_deg_s2'):
                     if len(p[key]) != n:
                         raise ReplayRefused(f'{sid} point {k}: {key} needs {n} values, has {len(p[key])}')
+                    if not _finite(p[key]):
+                        raise ReplayRefused(f'{sid} point {k}: {key} has a value that is not finite')
             times = tuple(float(p['time_from_start_s']) for p in pts)
             if any(b <= a for a, b in zip(times, times[1:])):
                 raise ReplayRefused(f'{sid}: time_from_start_s not strictly increasing')
@@ -182,6 +187,13 @@ def load_program(path: Union[str, Path], validate_schema: bool = True) -> Replay
     return ReplayProgram.from_doc(doc)
 
 
+def _finite(values) -> bool:
+    try:
+        return all(math.isfinite(float(v)) for v in values)
+    except (TypeError, ValueError):
+        return False
+
+
 def check_mock_hardware(components: Sequence[Tuple[str, str]]) -> None:
     """``(name, plugin)`` of every ros2_control hardware component; refuse unless all are mock hardware."""
     if not components:
@@ -197,6 +209,9 @@ def _deviations(expected_deg: Sequence[float], names: Sequence[str], current_deg
     missing = [j for j in names if j not in current_deg]
     if missing:
         raise StartStateMismatch(f'joint state has no {", ".join(missing)}')
+    bad = [j for j in names if not _finite([current_deg[j]])]
+    if bad:
+        raise StartStateMismatch(f'joint state {", ".join(f"{j} = {current_deg[j]}" for j in bad)} is not finite')
     return [(j, abs(float(current_deg[j]) - float(e))) for j, e in zip(names, expected_deg)]
 
 
