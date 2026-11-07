@@ -115,6 +115,12 @@ def test_missing_file(tmp_path, name):
     (lambda d: d['world_T_base'].update(quat_xyzw=[0, 0, 0, 2]), 'unit quaternion'),
     (lambda d: d['world_T_base'].update(position_mm=[1, 2]), 'position_mm'),
     (lambda d: d.update(unit='m'), 'unit'),
+    (lambda d: d.pop('schema_version'), 'schema_version'),
+    (lambda d: d.update(schema_version='1.0'), 'schema_version'),
+    # direction must be +X of world_T_positioner_axis (awm_seam.seam_axis.check_frames rule)
+    (lambda d: d['world_T_positioner_axis'].update(direction=[1.0, 0.0, 0.0]), r'\+X'),
+    (lambda d: d['world_T_positioner_axis'].update(direction=[0.0, 1.0, 1e-5]), r'\+X'),
+    (lambda d: d['world_T_positioner_axis'].update(point_mm=[0.0, 0.0, 0.0]), 'point_mm'),
 ])
 def test_bad_frames(tmp_path, edit, match):
     repo = make_repo(tmp_path / 'repo')

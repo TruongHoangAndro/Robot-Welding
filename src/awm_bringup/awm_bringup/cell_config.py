@@ -118,6 +118,8 @@ REPO_POSE_ARGS = ('base_xyz_mm', 'base_quat_xyzw', 'positioner_xyz_mm', 'positio
 #: Arguments that ``repo:=`` sets itself; giving one of them together with ``repo:=`` is refused (no two sources).
 REPO_CONFLICT_ARGS = REPO_POSE_ARGS + ('cell_manifest', 'head_dir')
 HEAD_MODELS = ('hbox', 'hcad')
+#: frames.yaml direction / point vs the pose of world_T_positioner_axis (= awm_seam.seam_axis.AXIS_CONVENTION_TOL).
+AXIS_CONVENTION_TOL = 1e-6
 
 
 class RepoArgError(ValueError):
@@ -165,6 +167,8 @@ def frames_launch_args(frames_yaml: PathLike) -> Dict[str, str]:
         raise RepoArgError(f'{path}: not a mapping')
     if doc.get('unit') != 'mm':
         raise RepoArgError(f'{path}: unit must be "mm", got {doc.get("unit")!r}')
+    if not str(doc.get('schema_version', '')).startswith('2.'):
+        raise RepoArgError(f'{path}: schema_version {doc.get("schema_version")!r} is not 2.x')
     for key in ('world_T_base', 'world_T_positioner_axis'):
         if not isinstance(doc.get(key), dict):
             raise RepoArgError(f'{path}: {key} missing')
@@ -176,7 +180,15 @@ def frames_launch_args(frames_yaml: PathLike) -> Dict[str, str]:
     norm = float(np.linalg.norm(direction))
     if norm < 1e-9:
         raise RepoArgError(f'{where_a}.direction is the zero vector')
-    local = quat_to_matrix(axis_q).T @ (direction / norm)
+    rot = quat_to_matrix(axis_q)
+    # Same convention as awm_seam.seam_axis.check_frames (copied, awm_bringup does not depend on awm_seam): the
+    # positioner axis is +X of world_T_positioner_axis and point_mm its origin, within AXIS_CONVENTION_TOL.
+    if np.linalg.norm(rot[:, 0] - direction / norm) > AXIS_CONVENTION_TOL:
+        raise RepoArgError(f'{where_a}: direction {direction.tolist()} is not +X of world_T_positioner_axis '
+                           '(the planner and seam_axis.json assume axis = +X)')
+    if 'point_mm' in axis and np.linalg.norm(_vector(axis, 'point_mm', 3, where_a) - axis_pos) > AXIS_CONVENTION_TOL:
+        raise RepoArgError(f'{where_a}: point_mm is not the origin of world_T_positioner_axis')
+    local = rot.T @ (direction / norm)
     return {'base_xyz_mm': _fmt(base_pos), 'base_quat_xyzw': _fmt(base_q),
             'positioner_xyz_mm': _fmt(axis_pos), 'positioner_quat_xyzw': _fmt(axis_q),
             'positioner_axis_xyz': _fmt(local)}
