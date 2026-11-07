@@ -1,9 +1,13 @@
 """One staleness rule for derived job documents (G1.17, close-out A3; DES-001 §4.3, §5.2).
 
-Every derived job document records ``inputs`` (``{name, sha256}``) with names relative to the job folder
-(``jsonio.make_header(..., job.dir)``). This module is the single rule that decides whether such a document is still
-valid; the planner CLI (``awm_path.cli``), the program generator (``awm_program.cli``) and the UI backend
-(``awm_api.jobs.document_state``) use it so they give the same answer.
+Scope: job documents written with the job folder as the base of their ``inputs`` names
+(``jsonio.make_header(..., job.dir)``): D07 ``path.json``, D09 ``programs/<rev>/program.json``, ``seam_axis.json``,
+``placement.json`` and ``cad_check.json``. This module is the single rule that decides whether such a document is
+still valid; the planner CLI (``awm_path.cli``), the program generator (``awm_program.cli``) and the UI backend
+(``awm_api.jobs.document_state``, after its wave-B switch) use it so they give the same answer. Out of scope:
+documents whose names use another base — cell documents such as ``cell/model/scene_manifest.json``,
+``cell/model/head/head.yaml``, ``cache/components.json`` and other view / CAD outputs written relative to their own
+folder (``awm_geometry``) — and readers that still call ``jsonio.check_inputs`` (``awm_verify``, ``awm_seam``).
 
 Rules, in this order, for each recorded input:
 
@@ -19,8 +23,8 @@ Rules, in this order, for each recorded input:
 
 Names resolve against the job folder only. In addition:
 
-* a D07 (a document with a ``planner`` block, or a schema 2.x path document without one) must carry ``planner.params.record_version`` equal to
-  :data:`PLANNER_RECORD_VERSION`; missing / lower → "planned with an older planner; re-plan", higher → "planned with
+* a D07 (a document with a ``planner`` block, or a schema 2.x path document without one) must carry
+  ``planner.params.record_version`` equal to :data:`PLANNER_RECORD_VERSION`; missing / lower → "planned with an older planner; re-plan", higher → "planned with
   a newer planner";
 * a D09 (a document with ``program_rev``) inherits the verdict of every JSON input that is a D07; repeated problems
   are reported once.
