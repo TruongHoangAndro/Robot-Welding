@@ -1,9 +1,10 @@
 """Weld-segment timing model and the acceleration-aware maximum travel speed (G1.9; A47; DES-001 Rev 0.5 §4.3
 step 5, §6.2; CP-59 follow-up of 2026-11-06).
 
-The model is the one the program generator (M6, ``awm_program.core.spline``) uses to time a weld segment, so that a
-path the planner reports as feasible is accepted by the program and the maximum the planner shows is the maximum the
-program accepts:
+This module is the one source of the weld timing model: the program generator (M6, ``awm_program``, G1.12) calls
+these functions to time a weld segment and to find its maximum speed, so a path the planner reports as feasible is
+accepted by the program and the maximum the planner shows is the maximum the program accepts (the equality is tested
+in ``awm_program/test/test_core_shared_timing.py``):
 
 * times along the seam arc length s for a trapezoidal speed profile rest → travel speed → rest with the weld ramp
   acceleration (:func:`weld_times`; the constant-speed part runs exactly at the travel speed relative to the part);
@@ -22,8 +23,7 @@ about 1 % of random paths). :func:`max_feasible_speed` therefore scans ``SCAN_PO
 first and bisects only between the highest feasible scan speed and the next one; a feasible request is never reported
 above the maximum. Remaining case (Assumption, named): a feasible island narrower than the scan step
 √(a_ramp · L) / ``SCAN_POINTS`` above the highest feasible scan speed can be missed — the reported maximum is then
-too low (conservative), never infeasible. The program generator (bisection on [0, request]) can also differ in such
-a case; it never accepts an infeasible speed either.
+too low (conservative), never infeasible; the program generator uses the same search, so it reports the same value.
 
 Pure numpy (B-06); degrees, mm, seconds.
 """

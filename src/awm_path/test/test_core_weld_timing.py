@@ -119,24 +119,6 @@ def test_params_record_the_ramp_and_resolution():
         SyncParams(weld_ramp_accel_mm_s2=0.0)
 
 
-def test_same_model_as_the_program_generator():
-    """Parity with awm_program (same spline, same limits, same bisection): equal maximum within the resolution."""
-    p7 = pytest.importorskip('awm_program.core.program7', reason='awm_program not built in this install space')
-    s, q7 = _wavy()
-    cell = _cell()
-    pcell = p7.ProgramCell(sync=cell, acceleration_deg_s2=tuple(ALIM), home_deg=(0.0,) * 7,
-                           robot_joints=tuple(f'j{k}' for k in range(6)), positioner_joints=('p',))
-    pparams = p7.ProgramParams(weld_ramp_accel_mm_s2=RAMP, speed_search_resolution_mm_s=RES)
-    for speed in (1.0, 6.0):
-        rep = wt.speed_report(s, q7, speed, VLIM, ALIM, RAMP, RES)
-        prog_ok = p7._within(*p7.weld_spline(s, q7, speed, pparams)[3:5], pcell)
-        assert rep['speed_within_limits'] is prog_ok
-    prog_max = p7.max_feasible_speed(s, q7, 6.0, pcell, pparams)
-    rep = wt.speed_report(s, q7, 6.0, VLIM, ALIM, RAMP, RES)
-    assert abs(rep['max_travel_speed_mm_s'] - prog_max) <= RES + 1e-9
-    assert p7._within(*p7.weld_spline(s, q7, rep['max_travel_speed_mm_s'], pparams)[3:5], pcell)
-
-
 def _random_path(seed):
     """Seeded smooth random 7-joint path (synthetic test data; seeds found by a search where feasibility is not
     monotonic in the travel speed)."""
