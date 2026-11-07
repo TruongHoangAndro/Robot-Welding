@@ -31,4 +31,6 @@ path in source. Tests run the hcad cases on a synthetic head (`test/head_fixture
 Conduit (G1.8): hbox places the capsule with the `conduit_*` args; hcad starts it at the head cable exit from
 `head.yaml` (`cable_exit_tool0_mm` + `cable_axis_tool0`, or else the rear `estimates.tcp.geometry_estimate` that
 export-head refused as the fiber / cable connector end) and runs it outward along the cable axis. Diameter and length
-stay the `conduit_dia_mm` / `conduit_len_mm` args (Assumption, TST-002 §3.1). No cable exit in `head.yaml` stops xacro.
+stay the `conduit_dia_mm` / `conduit_len_mm` args (Assumption, TST-002 §3.1). Without a cable exit in `head.yaml`
+(automatic beam_axis export) the parametric `conduit_*` args are used (Assumption). The URDF records the source as
+`<awm_conduit source="explicit|rear_estimate|parametric"/>`.

@@ -226,15 +226,43 @@ def test_hcad_conduit_clear_of_nozzle(hcad, head):
         assert _seg_dist(centres[0], centres[1], n0, n1) > r_c + r_n, link
 
 
-def test_hcad_without_cable_exit_fails(tmp_path):
-    """No cable exit in head.yaml (no explicit keys, no rear estimate): xacro stops with a message, no default."""
+def _conduit_record(xml: str) -> dict:
+    """The <awm_conduit> record of the rendered URDF (conduit source for PlanningDescription, review M6)."""
+    import xml.etree.ElementTree as ET
+    found = ET.fromstring(xml).findall('awm_conduit')
+    assert len(found) == 1, 'exactly one <awm_conduit> record expected'
+    return dict(found[0].attrib)
+
+
+def test_conduit_source_recorded(head_dir, head):
+    rec = _conduit_record(_run_xacro(head_model='hcad', head_dir=str(head_dir)).stdout)
+    expected = 'explicit' if head.get('cable_exit_tool0_mm') is not None else 'rear_estimate'
+    assert rec['source'] == expected
+    assert _conduit_record(_run_xacro(head_model='hbox').stdout)['source'] == 'parametric'
+
+
+def _no_cable_head(tmp_path):
     folder = write_synthetic_head_dir(tmp_path / 'h')
     doc = yaml.safe_load((folder / 'head.yaml').read_text())
     doc.pop('cable_exit_tool0_mm')
     doc.pop('cable_axis_tool0')
     (folder / 'head.yaml').write_text(yaml.safe_dump(doc))
+    return folder
+
+
+def test_hcad_without_cable_exit_uses_parametric_conduit(tmp_path):
+    """Review I4: an automatic (beam_axis) export has no cable exit; it still renders, with the parametric conduit
+    args (H-BOX defaults, Assumption) and the source recorded as parametric."""
+    folder = _no_cable_head(tmp_path)
     proc = _run_xacro(head_model='hcad', head_dir=str(folder))
-    assert proc.returncode != 0 and 'cable exit' in proc.stderr and 'export-head' in proc.stderr
+    assert proc.returncode == 0, proc.stderr
+    assert _conduit_record(proc.stdout)['source'] == 'parametric'
+    t = fk(URDF.from_xml_string(proc.stdout), 'conduit', root='tool0')
+    assert np.allclose(units.m_to_mm(list(t[:3, 3])), [97, 0, 110])
+    assert np.allclose(t[:3, 2], [1.0, 0.0, 0.0], atol=1e-9)
+    r = _urdf(head_model='hcad', head_dir=str(folder), conduit_x_mm=50, conduit_p_deg=0)
+    t = fk(r, 'conduit', root='tool0')
+    assert np.allclose(units.m_to_mm(list(t[:3, 3])), [50, 0, 110]) and np.allclose(t[:3, 2], [0, 0, 1], atol=1e-9)
 
 
 def test_hcad_without_head_dir_fails():
