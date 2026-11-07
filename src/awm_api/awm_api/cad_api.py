@@ -196,9 +196,12 @@ def override_state(job: Path) -> Dict[str, Any]:
 
 
 def override_reference(job: Path, state: Dict[str, Any]) -> Dict[str, Any]:
-    """The D07 / D09 ``cad_check_override`` field (CP-62) for a valid override."""
+    """The D07 / D09 ``cad_check_override`` field (CP-62) for a valid override; who / when / reason are copied from
+    the record so the audit trail survives a later DELETE or a new override (review I1)."""
+    rec = state['override']
     return {'file': OVERRIDE_FILE, 'sha256': sha256_file(job / OVERRIDE_FILE),
-            'cad_check_sha256': state['override']['cad_check_sha256'], 'check_id': OVERRIDE_CHECK}
+            'cad_check_sha256': rec['cad_check_sha256'], 'check_id': OVERRIDE_CHECK,
+            'by': rec['by'], 'created_at': rec['created_at'], 'reason': rec['reason']}
 
 
 def _current_check(job: Path, repo_root: Path) -> Dict[str, Any]:

@@ -60,9 +60,11 @@ def test_override_allows_seams_and_kinematic_plan_and_is_recorded(client, repo, 
     assert wait_run(client, h, r.json()['run_id'])['state'] == 'succeeded'
     path = json.loads((job / 'path.json').read_text())
     assert path['collision_checked'] is False
+    rec = json.loads((job / 'cad_check_override.json').read_text())
     assert path['cad_check_override'] == {'file': 'cad_check_override.json',
                                           'sha256': sha(job / 'cad_check_override.json'),
-                                          'cad_check_sha256': sha(job / 'cad_check.json'), 'check_id': 4}
+                                          'cad_check_sha256': sha(job / 'cad_check.json'), 'check_id': 4,
+                                          'by': 'adm', 'created_at': rec['created_at'], 'reason': REASON['reason']}
     r = client.post('/api/v1/jobs/J1_A/program', headers=h, json={})
     assert r.status_code == 202, r.text
     run = wait_run(client, h, r.json()['run_id'])
@@ -210,3 +212,13 @@ def test_override_change_during_plan_run_is_not_promoted(client, repo, monkeypat
     run = wait_run(client, h, r.json()['run_id'])
     assert run['state'] == 'failed' and 'override' in json.dumps(run['problem'])
     assert not (job / 'path.json').exists()
+
+
+def test_reference_survives_delete_of_the_override(client, repo, monkeypatch):
+    """Review I1: D07 / D09 keep who / when / reason after the override record is removed."""
+    job, h = overridden_job(client, repo, monkeypatch)
+    assert client.put('/api/v1/jobs/J1_A/seams', headers=h, json={'seams': [pick()]}).status_code == 200
+    assert wait_run(client, h, plan(client, h).json()['run_id'])['state'] == 'succeeded'
+    assert client.delete(URL, headers=auth(client, 'adm')).status_code == 204
+    ref = json.loads((job / 'path.json').read_text())['cad_check_override']
+    assert ref['by'] == 'adm' and ref['reason'] == REASON['reason'] and ref['created_at']
