@@ -289,3 +289,14 @@ def test_hcad_wrong_unit_fails(tmp_path):
     (folder / 'head.yaml').write_text(yaml.safe_dump(doc))
     proc = _run_xacro(head_model='hcad', head_dir=str(folder))
     assert proc.returncode != 0 and 'unit' in proc.stderr
+
+
+@pytest.mark.parametrize('tip_mm, standoff_mm', [(0.3, 0.3), (0.3, 0.5), (0.0, 0.3)])
+@pytest.mark.parametrize('model', ['hbox', 'hcad'])
+def test_nozzle_tip_not_longer_than_standoff_fails(tmp_path, model, tip_mm, standoff_mm):
+    """Review M5: tip collision length = nozzle_tip_len_mm - contact_standoff_mm must be > 0 for both heads."""
+    args = {'head_model': model, 'nozzle_tip_len_mm': tip_mm, 'contact_standoff_mm': standoff_mm}
+    if model == 'hcad':
+        args['head_dir'] = str(write_synthetic_head_dir(tmp_path / 'h'))
+    proc = _run_xacro(**args)
+    assert proc.returncode != 0 and 'nozzle_tip_len_mm' in proc.stderr and 'contact_standoff_mm' in proc.stderr

@@ -33,6 +33,11 @@
     <xacro:property name="z_tip" value="${z_tcp - float(nozzle_tip_len_mm)}"/>
     <xacro:property name="body_len" value="${float(nozzle_len_mm) - float(nozzle_tip_len_mm)}"/>
     <xacro:property name="tip_len" value="${float(nozzle_tip_len_mm) - float(contact_standoff_mm)}"/>
+    <xacro:unless value="${tip_len > 0.0}">
+      ${xacro.fatal('nozzle_tip_len_mm (' + str(nozzle_tip_len_mm) + ') must be longer than contact_standoff_mm ('
+                    + str(contact_standoff_mm) + '): the nozzle_tip collision would have length ' + str(tip_len)
+                    + ' mm (review M5)')}
+    </xacro:unless>
 
     <xacro:macro name="awm_box_link" params="name sx sy sz cx cy cz rgba">
       <link name="${name}">
