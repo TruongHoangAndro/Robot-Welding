@@ -42,7 +42,8 @@ def test_s6_head_assumptions_come_from_the_description():
     """Review minor 6: the S.6 record names the head of the description in use, not TST-002 §3.1 for every head."""
     from awm_path.core.contact import ContactParams
     from awm_path.spike_s6 import head_assumptions
-    head = {'nozzle_radius_mm': 6.0, 'contact_standoff_mm': 0.25, 'nozzle_tip_length_mm': 5.0,
+    head = {'nozzle_geometry': 'cylinder', 'nozzle_radius_mm': 6.0, 'contact_standoff_mm': 0.25,
+            'nozzle_tip_length_mm': 5.0, 'conduit_source': 'parametric', 'conduit_source_assumption': True,
             'tool0_T_tcp_mm': {'position_mm': [43.8, 0.0, 279.6], 'quat_xyzw': [0.0, 0.0, 0.0, 1.0]}}
     lines = head_assumptions('H-CAD', ContactParams(nozzle_radius_mm=6.0, standoff_mm=0.25), head)
     text = ' '.join(lines)

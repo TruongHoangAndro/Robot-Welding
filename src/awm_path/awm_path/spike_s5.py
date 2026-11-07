@@ -298,9 +298,13 @@ def _cmd_run(args) -> int:
     from awm_path.core.scoring import SceneScoreParams
     from awm_path.core.sweep import PlannerParams
     from awm_path.core.head import contact_params_for
-    from awm_path.gate_g2 import _git, _rel, launch_args_from_frames, parse_head_args, head_launch_args
+    from awm_path.gate_g2 import (_git, _rel, head_launch_args, launch_args_from_frames, parse_head_args,
+                                  preflight_head, refuse)
 
     repo, out_dir = Path(args.repo), Path(args.out_dir)
+    err = preflight_head(repo, args.head_model, args.head_dir, args.head_arg, args.f9_rule)
+    if err:
+        return refuse(err)
     job = repo / 'jobs' / args.job
     frames_file = repo / 'cell' / 'model' / 'frames.yaml'
     cell_manifest = repo / 'cell' / 'model' / 'scene_manifest.json'

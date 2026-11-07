@@ -9,6 +9,14 @@ URDF that the planning graph uses (``/robot_description`` of ``move_group``), ne
   (tool Z of ``tcp_laser``) and its end nearest to ``tcp_laser`` lies s_c before it (on the nozzle side, tool −Z).
 
 The same link names are used by every head model (H-BOX now, H-CAD in S.5c Task 2), so this reader serves both.
+
+G1.13 (cell-sim G1.8): the conduit source ``<awm_conduit source="explicit|rear_estimate|parametric"/>`` written by
+``head_conduit.xacro`` is read (exactly one, known value; no default) and recorded; ``parametric`` and
+``rear_estimate`` are Assumptions (``CONDUIT_SOURCES``). H-CAD with head.yaml ``nozzle_len_mm`` 0 renders
+``nozzle_body`` / ``nozzle_tip`` as empty links: the head is read with ``nozzle_geometry = 'none'`` (tool0_T_tcp
+still valid for kinematics) and :func:`contact_params_for` **refuses** F9 (:class:`NoNozzleError`). Decision: no
+fallback to the head mesh, because a disc taken from the mesh is a geometry the description does not state
+(no silent fallback, CP-56 one source).
 Pure Python (xml.etree + numpy), mm; URDF metres converted only through ``awm_core.units`` (ADR-14). No rclpy (B-06).
 """
 
@@ -26,6 +34,20 @@ from awm_core.frames import matrix_to_quat, rotation_angle_between, rpy_to_matri
 from awm_core.hashing import sha256_text
 from awm_path.core.contact import ContactParams, min_rim_samples
 
+#: Conduit sources of ``<awm_conduit source>`` (head_conduit.xacro) -> True when the position is an Assumption.
+CONDUIT_SOURCES = {'explicit': False, 'rear_estimate': True, 'parametric': True}
+#: Text per source for run records.
+CONDUIT_SOURCE_TEXT = {
+    'explicit': 'head.yaml cable exit (explicit keys)',
+    'rear_estimate': 'refused automatic beam estimate at the cable connector (head.yaml geometry_estimate)',
+    'parametric': 'xacro conduit_x/y/z, conduit_r/p/y args (H-BOX defaults)',
+}
+
+
+class NoNozzleError(ValueError):
+    """F9 needs the parametric nozzle_tip cylinder, and the description has none."""
+
+
 #: Tolerances of the nozzle-on-beam-axis check and of the FK cross-check (numerical only).
 AXIS_POS_TOL_MM = 1e-6
 AXIS_ANGLE_TOL_RAD = 1e-9
@@ -35,16 +57,23 @@ FK_ROT_TOL_RAD = 1e-9
 
 @dataclass(frozen=True)
 class HeadGeometry:
-    """Head values read from one robot description (mm)."""
+    """Head values read from one robot description (mm).
+
+    ``nozzle_geometry`` is ``'cylinder'`` (nozzle_tip cylinder: radius, s_c, tip length set) or ``'none'`` (H-CAD
+    with head.yaml ``nozzle_len_mm`` 0: empty nozzle links, the three nozzle values are ``None``).
+    ``conduit_source`` is the ``<awm_conduit source>`` of the description.
+    """
 
     tool0_T_tcp_mm: np.ndarray
-    nozzle_radius_mm: float
-    contact_standoff_mm: float
-    nozzle_tip_length_mm: float
+    nozzle_radius_mm: Optional[float]
+    contact_standoff_mm: Optional[float]
+    nozzle_tip_length_mm: Optional[float]
     robot_description_sha256: str
     tool_link: str
     tcp_link: str
     nozzle_link: str
+    nozzle_geometry: str
+    conduit_source: str
 
     def as_record(self) -> dict:
         """Plain dict for run records."""
@@ -52,8 +81,11 @@ class HeadGeometry:
                 'chain': [self.tool_link, self.tcp_link], 'nozzle_link': self.nozzle_link,
                 'tool0_T_tcp_mm': {'position_mm': [float(v) for v in self.tool0_T_tcp_mm[:3, 3]],
                                    'quat_xyzw': [float(v) for v in matrix_to_quat(self.tool0_T_tcp_mm[:3, :3])]},
+                'nozzle_geometry': self.nozzle_geometry,
                 'nozzle_radius_mm': self.nozzle_radius_mm, 'contact_standoff_mm': self.contact_standoff_mm,
-                'nozzle_tip_length_mm': self.nozzle_tip_length_mm}
+                'nozzle_tip_length_mm': self.nozzle_tip_length_mm,
+                'conduit_source': self.conduit_source,
+                'conduit_source_assumption': CONDUIT_SOURCES[self.conduit_source]}
 
 
 def _floats(text: Optional[str], n: int = 3) -> np.ndarray:
@@ -92,22 +124,57 @@ def _chain_mm(joints: Dict[str, ET.Element], root: str, tip: str) -> np.ndarray:
     return t
 
 
+def conduit_source_of_urdf(root: ET.Element) -> str:
+    """The single ``<awm_conduit source>`` of the description (G1.8 review M6). Missing, duplicated or unknown ->
+    ``ValueError`` (no default source: every record must state where the conduit came from)."""
+    tags = root.findall('awm_conduit')
+    if len(tags) != 1:
+        raise ValueError(f'the robot description has {len(tags)} <awm_conduit source=...> records, expected 1 '
+                         '(awm_description head_conduit.xacro, G1.8): cannot state the conduit source')
+    src = tags[0].get('source')
+    if src not in CONDUIT_SOURCES:
+        raise ValueError(f'<awm_conduit source={src!r}> is not one of {sorted(CONDUIT_SOURCES)}')
+    return src
+
+
+def _is_empty(link: ET.Element) -> bool:
+    return not link.findall('collision') and not link.findall('visual')
+
+
 def head_from_urdf(urdf_xml: str, *, tool_link: str = 'tool0', tcp_link: str = 'tcp_laser',
-                   nozzle_link: str = 'nozzle_tip') -> HeadGeometry:
+                   nozzle_link: str = 'nozzle_tip', nozzle_body_link: str = 'nozzle_body') -> HeadGeometry:
     """Read :class:`HeadGeometry` from a URDF string. Raises ``ValueError`` if a link is missing, the chain is not
-    fixed, ``nozzle_link`` has not exactly one cylinder collision, or that cylinder is not on the beam axis / not on
-    the nozzle side of ``tcp_link``."""
+    fixed, the conduit source is missing / unknown, ``nozzle_link`` has neither exactly one cylinder collision nor
+    is empty, that cylinder is not on the beam axis / not on the nozzle side of ``tcp_link``, or the nozzle is
+    half-empty: one of ``nozzle_link`` / ``nozzle_body_link`` empty and the other with geometry (review 2.c). A
+    description without a ``nozzle_body_link`` link is accepted (synthetic test URDFs; H-BOX and H-CAD always
+    render both links).
+
+    An empty ``nozzle_link`` (and empty ``nozzle_body_link`` if present) = no parametric nozzle (H-CAD with
+    head.yaml ``nozzle_len_mm`` 0): ``nozzle_geometry = 'none'``, nozzle values ``None``."""
     root = ET.fromstring(urdf_xml)
     links = {l.get('name'): l for l in root.findall('link')}
     for name in (tool_link, tcp_link, nozzle_link):
         if name not in links:
             raise ValueError(f'link {name!r} not in the robot description')
+    conduit = conduit_source_of_urdf(root)
     joints = {j.find('child').get('link'): j for j in root.findall('joint')}
     tool0_T_tcp = _chain_mm(joints, tool_link, tcp_link)
     tool0_T_nozzle = _chain_mm(joints, tool_link, nozzle_link)
+    sha = sha256_text(urdf_xml)
+    body = links.get(nozzle_body_link)
+    if _is_empty(links[nozzle_link]):
+        if body is not None and not _is_empty(body):
+            raise ValueError(f'{nozzle_link!r} is empty but {nozzle_body_link!r} has geometry: half-empty nozzle '
+                             '(expected both empty for head.yaml nozzle_len_mm 0, or a nozzle_tip cylinder)')
+        return HeadGeometry(tool0_T_tcp, None, None, None, sha, tool_link, tcp_link, nozzle_link, 'none', conduit)
+    if body is not None and _is_empty(body):
+        raise ValueError(f'{nozzle_link!r} has geometry but {nozzle_body_link!r} is empty: half-empty nozzle '
+                         '(expected both empty for head.yaml nozzle_len_mm 0, or both with geometry)')
     cyl = [c for c in links[nozzle_link].findall('collision') if c.find('geometry/cylinder') is not None]
     if len(cyl) != 1 or len(links[nozzle_link].findall('collision')) != 1:
-        raise ValueError(f'{nozzle_link!r} must have exactly one collision geometry, a cylinder')
+        raise ValueError(f'{nozzle_link!r} must have exactly one collision geometry, a cylinder (or none at all '
+                         'for head.yaml nozzle_len_mm 0)')
     c = cyl[0].find('geometry/cylinder')
     radius = float(units.m_to_mm(float(c.get('radius'))))
     length = float(units.m_to_mm(float(c.get('length'))))
@@ -120,15 +187,23 @@ def head_from_urdf(urdf_xml: str, *, tool_link: str = 'tool0', tcp_link: str = '
     near_end = centre[2] + length / 2.0             # end nearest to tcp_laser (nozzle side = −Z)
     if near_end > AXIS_POS_TOL_MM:
         raise ValueError(f'{nozzle_link!r} reaches beyond {tcp_link!r} ({near_end} mm along the beam)')
-    return HeadGeometry(tool0_T_tcp, radius, float(-near_end), length, sha256_text(urdf_xml), tool_link, tcp_link,
-                        nozzle_link)
+    return HeadGeometry(tool0_T_tcp, radius, float(-near_end), length, sha, tool_link, tcp_link, nozzle_link,
+                        'cylinder', conduit)
 
 
 def contact_params_for(head: HeadGeometry, base: ContactParams = ContactParams()) -> ContactParams:
     """F9 parameters with the nozzle (radius, s_c) of the description (CP-56 decision 2); other values from ``base``.
     ``rim_samples`` is raised (never lowered) to :func:`awm_path.core.contact.min_rim_samples` so that the rim spacing
     stays ≤ 2·s_c for the configured nozzle (review M1).
+
+    Raises :class:`NoNozzleError` for a head without a parametric nozzle (``nozzle_geometry 'none'``): F9 has no
+    disc, and none is taken from the head mesh (G1.13 decision, no silent fallback).
     """
+    if head.nozzle_geometry != 'cylinder':
+        raise NoNozzleError(
+            f'F9 contact check refused: the robot description has no parametric nozzle ({head.nozzle_link!r} without '
+            'geometry, H-CAD head.yaml nozzle_len_mm 0), so there is no nozzle disc (radius, s_c); F9 does not fall '
+            'back to the head mesh. Use a head.yaml with nozzle_len_mm > 0 (parametric nozzle, CP-56) or H-BOX')
     rim = max(int(base.rim_samples),
               min_rim_samples(head.nozzle_radius_mm, head.contact_standoff_mm, int(base.ring_samples)))
     return dataclasses.replace(base, nozzle_radius_mm=head.nozzle_radius_mm, standoff_mm=head.contact_standoff_mm,
@@ -184,5 +259,6 @@ def check_against_fk(head: HeadGeometry, tool0_T_tcp_fk_mm: np.ndarray) -> Tuple
     return dp, dr
 
 
-__all__ = ['HeadGeometry', 'head_from_urdf', 'contact_params_for', 'check_against_fk', 'HEAD_MODEL_LABELS',
+__all__ = ['HeadGeometry', 'NoNozzleError', 'CONDUIT_SOURCES', 'CONDUIT_SOURCE_TEXT', 'conduit_source_of_urdf',
+           'head_from_urdf', 'contact_params_for', 'check_against_fk', 'HEAD_MODEL_LABELS',
            'normalise_head_model', 'head_model_of_urdf', 'check_head_model']

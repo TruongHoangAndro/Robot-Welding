@@ -6,7 +6,7 @@ Nodes declare every field as a ROS parameter with this default; the YAML file ov
 from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
-from typing import List
+from typing import Iterable, List
 
 JOINTS = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint',
           'wrist_2_joint', 'wrist_3_joint']
@@ -48,7 +48,39 @@ class ChainParams:
     replay_speed_scale: float = 1.0
     max_tracking_error_rad: float = 0.02
     start_state_tolerance_rad: float = 0.001
+    #: FollowJointTrajectory action of the 6-joint arm controller. Consumer: the awm_verify replayer (v1 chain).
+    #: No awm_path code sends goals to it. It exists with ``sim.launch.py`` and with ``sim_mock.launch.py
+    #: trajectory_controllers:=split`` (default), NOT with ``trajectory_controllers:=robot_positioner`` (G1.7: only
+    #: the 7-joint ``robot_positioner_trajectory_controller``). Callers check it with
+    #: :func:`check_controller_action` before waiting for the server.
     controller_action: str = '/joint_trajectory_controller/follow_joint_trajectory'
+
+
+#: The 7-joint controller of ``sim_mock trajectory_controllers:=robot_positioner`` (G1.7, DES-001 §6.3 Option A1).
+SEVEN_JOINT_CONTROLLER_ACTION = '/robot_positioner_trajectory_controller/follow_joint_trajectory'
+
+
+class ControllerActionMissing(RuntimeError):
+    """The configured ``controller_action`` is not offered by the running graph."""
+
+
+def check_controller_action(action: str, action_names: Iterable[str]) -> None:
+    """Fail fast when ``action`` is not among the running action servers (e.g. the names of
+    ``rclpy.action.get_action_names_and_types``) instead of waiting for a server that is never started.
+
+    The message names the sim_mock launch option when the 7-joint controller runs instead (G1.7).
+    """
+    names = set(action_names)
+    if action in names:
+        return
+    if SEVEN_JOINT_CONTROLLER_ACTION in names:
+        raise ControllerActionMissing(
+            f'controller_action {action} is not running: sim_mock was launched with '
+            'trajectory_controllers:=robot_positioner (one 7-joint controller, '
+            f'{SEVEN_JOINT_CONTROLLER_ACTION}); launch it with trajectory_controllers:=split (default) for this tool')
+    raise ControllerActionMissing(
+        f'controller_action {action} is not running (no trajectory controller found): start sim.launch.py or '
+        'sim_mock.launch.py trajectory_controllers:=split (mock hardware)')
 
 
 def declare(node) -> ChainParams:

@@ -154,11 +154,43 @@ def test_run_gate_uses_the_given_tool0_T_tcp() -> None:
 def test_head_assumption_text_comes_from_the_description_values():
     """Review M2: run records state the nozzle / s_c / TCP of the description in use, not hard-coded H-BOX values."""
     from awm_path.gate_g2 import head_assumption
-    head = {'nozzle_radius_mm': 6.0, 'contact_standoff_mm': 0.25, 'nozzle_tip_length_mm': 5.0,
+    head = {'nozzle_geometry': 'cylinder', 'nozzle_radius_mm': 6.0, 'contact_standoff_mm': 0.25,
+            'nozzle_tip_length_mm': 5.0, 'conduit_source': 'explicit', 'conduit_source_assumption': False,
             'tool0_T_tcp_mm': {'position_mm': [43.8, 0.0, 279.6], 'quat_xyzw': [0.0, 0.0, 0.0, 1.0]}}
     text = head_assumption('H-CAD', ContactParams(nozzle_radius_mm=6.0, standoff_mm=0.25), head)
     assert 'H-CAD head' in text and 'Ø12 mm' in text and 's_c 0.25 mm' in text and '(43.8, 0, 279.6)' in text
     assert 'H-BOX' not in text and 'Ø20' not in text
+    assert 'conduit source explicit' in text
+
+
+@pytest.mark.parametrize('source', ['parametric', 'rear_estimate'])
+def test_head_assumption_marks_estimated_conduit_sources_as_assumptions(source):
+    """G1.13 request 2: every record states the conduit source; parametric / rear_estimate are Assumptions."""
+    from awm_path.gate_g2 import head_assumption
+    head = {'nozzle_geometry': 'cylinder', 'nozzle_radius_mm': 10.0, 'contact_standoff_mm': 0.3,
+            'nozzle_tip_length_mm': 4.7, 'conduit_source': source, 'conduit_source_assumption': True,
+            'tool0_T_tcp_mm': {'position_mm': [0.0, 0.0, 481.0], 'quat_xyzw': [0.0, 0.0, 0.0, 1.0]}}
+    text = head_assumption('H-BOX', ContactParams(), head)
+    assert f'conduit source {source} (Assumption' in text
+
+
+def test_head_assumption_refuses_a_record_without_conduit_source():
+    from awm_path.gate_g2 import head_assumption
+    head = {'nozzle_geometry': 'cylinder', 'nozzle_radius_mm': 10.0, 'contact_standoff_mm': 0.3,
+            'nozzle_tip_length_mm': 4.7,
+            'tool0_T_tcp_mm': {'position_mm': [0.0, 0.0, 481.0], 'quat_xyzw': [0.0, 0.0, 0.0, 1.0]}}
+    with pytest.raises(ValueError, match='conduit_source'):
+        head_assumption('H-BOX', ContactParams(), head)
+
+
+def test_head_assumption_without_nozzle_states_it():
+    """G1.13 request 3: nozzle_len_mm 0 -> no parametric nozzle, F9 not available (no contact params)."""
+    from awm_path.gate_g2 import head_assumption
+    head = {'nozzle_geometry': 'none', 'nozzle_radius_mm': None, 'contact_standoff_mm': None,
+            'nozzle_tip_length_mm': None, 'conduit_source': 'explicit', 'conduit_source_assumption': False,
+            'tool0_T_tcp_mm': {'position_mm': [1.0, 2.0, 300.0], 'quat_xyzw': [0.0, 0.0, 0.0, 1.0]}}
+    text = head_assumption('H-CAD', None, head)
+    assert 'no parametric nozzle' in text and 'F9 not available' in text and '(1, 2, 300)' in text
 
 
 def test_head_launch_args_pass_the_head_model_and_folder(tmp_path):
