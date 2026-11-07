@@ -254,7 +254,8 @@ def test_override_accepted_with_cable_behind_flange(tmp_path, occ):
 
 
 def test_override_behind_flange_accepted_and_recorded(tmp_path, occ):
-    """An explicit override is accepted wherever it is (the user said so), but recorded."""
+    """A map TCP behind the flange plane is accepted (set explicitly) and recorded, as long as its beam passes the
+    beam-direction check (component along tool0 +Z)."""
     step = _head_step(tmp_path / 'head.step', POSE_A)
     point_tool0, axis_tool0 = np.array([0.0, 0.0, -50.0]), np.array([0.0, 0.0, 1.0])
     cmap = _map(step, tcp={'point_file_mm': (POSE_A @ np.append(point_tool0, 1.0))[:3].tolist(),
@@ -273,8 +274,8 @@ def test_override_behind_flange_accepted_and_recorded(tmp_path, occ):
     ((100.0, 0.0, 10.0), (-1.0, 0.0, 0.0)),    # parallel to the flange plane
 ])
 def test_override_beam_towards_tool0_refused(tmp_path, occ, point_tool0, axis_tool0):
-    """Review I2: a map TCP whose beam points back towards tool0 (dot(beam, tcp) <= 0 in tool0) is refused with a
-    clear message, nothing written; the explicit-override rule ("accepted as set") does not cover a reversed beam."""
+    """Review I2: a map TCP whose beam has no component along tool0 +Z (back towards tool0 / along the flange plane)
+    is refused with a clear message, nothing written; the explicit override does not bypass the beam check."""
     from awm_geometry import head
 
     step = _head_step(tmp_path / 'head.step', POSE_A)
@@ -492,7 +493,6 @@ def test_dau_han_robot(tmp_path):
     np.testing.assert_allclose(exit_mm + doc['nozzle_len_mm'] * np.asarray(doc['beam_axis_tool0']), tcp[:3, 3],
                                atol=1e-6)
     # conduit exit for the xacro from the rear estimate (fiber / cable connector end behind the flange)
-    print('cable exit', doc['cable_exit_tool0_mm'], 'axis', doc['cable_axis_tool0'], doc['cable_exit_source'])
     assert doc['cable_exit_source'] == 'rear_estimate'
     np.testing.assert_allclose(doc['cable_exit_tool0_mm'], [-67.6, 0.0, -345.4], atol=0.5)
     assert float(np.asarray(doc['cable_axis_tool0']) @ [0.0, 0.0, -1.0]) > 0.99

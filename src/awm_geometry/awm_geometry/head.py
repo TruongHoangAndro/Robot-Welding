@@ -31,8 +31,10 @@ the map, then recorded as ``method: map`` with the geometric estimate kept for c
   estimate whose TCP lies behind the flange plane (tool0 z < 0) is refused: that is a cable / connector end, not the
   nozzle (bug of 2026-11-06); the map must then name the TCP.
 * map override ``frames.tcp.point_file_mm`` / ``axis_file`` (file frame): the TCP itself (nozzle tip + stick-out) and
-  the beam direction out of the nozzle (later taught on the UI, CP-61 draft). It is accepted wherever it lies
-  (recorded, ``behind_flange``); head.yaml then holds ``beam_exit_tool0_mm = tcp - nozzle_len_mm * beam_axis`` so
+  the beam direction out of the nozzle (or taught on the UI, CP-61). Its position is not limited (a TCP behind the
+  flange plane is recorded, ``behind_flange``), but its beam must have a component along tool0 +Z, else it is
+  refused (review I2, :func:`check_beam_direction`); head.yaml then holds
+  ``beam_exit_tool0_mm = tcp - nozzle_len_mm * beam_axis`` so
   the rule ``tcp = beam_exit + nozzle_len_mm * beam_axis`` (xacro) holds and the parametric collision nozzle ends at
   the TCP. The automatic estimate is kept beside it for comparison.
 * conduit exit (additive keys ``cable_exit_tool0_mm``, ``cable_axis_tool0`` = outward along the cable, and
@@ -592,8 +594,8 @@ def _assumptions(cmap: Dict[str, Any], tool0_method: str, tcp_method: str, tcp_b
         out.append(f"beam_exit_tool0_mm = tcp - nozzle_len_mm ({tcp['nozzle_len_mm']} mm) * beam_axis: the parametric "
                    'collision nozzle (CP-56) covers the last nozzle_len_mm before the TCP')
         if tcp_behind:
-            out.append('Warning: the map TCP lies behind the flange plane (tool0 z < 0); accepted because it was set '
-                       'explicitly')
+            out.append('Warning: the map TCP lies behind the flange plane (tool0 z < 0); kept because it was set '
+                       'explicitly and its beam passes the beam-direction check (component along tool0 +Z)')
     else:
         out.append('Assumption: beam axis = axis line of the revolved faces of the head body that reach farthest from '
                    'tool0; beam exit = farthest point of the body on that line (no REF_TCP marker, OI-23)')
@@ -807,8 +809,8 @@ def _export_head(step: Path, map_path: Path, root: Path, created_by: str,
                              f'taught TCP {teach["component"]} {teach["edge_id"]}'
                              + (' (reversed)' if teach.get('reverse') else ''))
         if behind:
-            LOG.warning('A18 frames.tcp from the map lies behind the flange plane (tool0 z %.3f mm): accepted as '
-                        'set, recorded in head.yaml', point_t0[2])
+            LOG.warning('A18 frames.tcp from the map lies behind the flange plane (tool0 z %.3f mm): kept as set '
+                        '(beam check passed), recorded in head.yaml', point_t0[2])
         est = {'method': 'map', 'behind_flange': behind, 'tcp_z_tool0_mm': float(point_t0[2])}
         if taught is not None:
             est.update(method='teach_ui', component=teach['component'], link=teach_link, edge_id=teach['edge_id'],
