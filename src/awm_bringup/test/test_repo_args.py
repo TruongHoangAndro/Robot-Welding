@@ -42,7 +42,11 @@ def make_repo(root: Path, head: bool = True) -> Path:
                 'inputs': INPUTS, 'unit': 'mm', 'frames_file': 'frames.yaml',
                 'objects': [{'object_id': 'box_test', 'role': 'cell_static', 'parent_frame': 'world',
                              'pose_mm': {'position_mm': [0, 0, -100], 'quat_xyzw': [0, 0, 0, 1]},
-                             'box_mm': [100, 100, 10]}]}
+                             'box_mm': [100, 100, 10]},
+                            {'object_id': 'holder_test', 'role': 'positioner_rotating',
+                             'parent_frame': 'positioner_flange',
+                             'pose_mm': {'position_mm': [10, 0, 200], 'quat_xyzw': [0, 0, S, S]},
+                             'box_mm': [20, 20, 20]}]}
     (model / 'scene_manifest.json').write_text(json.dumps(manifest))
     if head:
         write_synthetic_head_dir(model / 'head')

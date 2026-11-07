@@ -181,12 +181,16 @@ def _check_repo(repo: Path, tmp_path: Path, replay: bool) -> None:
             ps = _call(node, scene, GetPlanningScene.Request(components=PlanningSceneComponents(components=comp)))
             objs = {o.id: o for o in ps.scene.world.collision_objects}
             assert set(ids) <= set(objs), sorted(set(ids) - set(objs))
+            # world objects at pose_mm; rotating objects at world_T_flange(theta applied) . pose_mm
+            assert info['theta_deg'] == pytest.approx(0.0, abs=1e-9)
+            world_t_flange = _lookup(node, buf, 'positioner_flange')
+            parents = {'world': np.eye(4), 'positioner_flange': world_t_flange}
+            assert {e['parent_frame'] for e in manifest['objects']} == set(parents)
             for entry in manifest['objects']:
-                if entry['parent_frame'] == 'world':
-                    o = objs[entry['object_id']]
-                    assert o.header.frame_id == 'world'
-                    _assert_pose(_msg_pose_mm(o.pose.position, o.pose.orientation), _pose_mm(entry['pose_mm']),
-                                 entry['object_id'])
+                o = objs[entry['object_id']]
+                assert o.header.frame_id == 'world'
+                _assert_pose(_msg_pose_mm(o.pose.position, o.pose.orientation),
+                             parents[entry['parent_frame']] @ _pose_mm(entry['pose_mm']), entry['object_id'])
 
             # Head: H-CAD tcp_laser in tool0 from head.yaml
             got = _fk(node, fk, 'tcp_laser', 'tool0', NAMES, [units.deg_to_rad(v) for v in start])
