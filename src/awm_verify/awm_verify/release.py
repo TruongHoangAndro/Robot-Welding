@@ -3,6 +3,8 @@
 scope ``simulation``: needs a PASS verification report (D15); marked as not valid for production.
 scope ``production``: additionally needs PASS dry-run (A72) and trial-weld (A73) records of the
 same, unchanged program.
+Every scope (CP-58, CP-62): no kinematic-only program, no program carrying a CP-62 ``cad_check_override``, and no
+release while the job's ``cad_check.json`` (CP-60) is red or stale.
 
     ros2 run awm_verify release --job <dir> --rev P001 --approved-by "N. Name" --scope simulation
 """
@@ -16,7 +18,7 @@ import os
 import stat
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 from awm_core import jsonio
 from awm_core.hashing import sha256_file
@@ -45,19 +47,67 @@ def _lock_tree(root: Path) -> None:
 GATE_SCOPES = ('simulation', 'trial', 'production')
 
 
-def release_gate(program: Dict, scope: str) -> None:
-    """Refuse a v2 program (D09 2.x) that may not be released in ``scope`` — for **every** scope (CP-58, G1.5):
+#: CP-60 cross-check of the job (``awm_core.cad_roles.CHECK_FILE``), read from the job folder of the program
+CAD_CHECK_FILE = 'cad_check.json'
+#: D07 / D09 field naming the CP-62 override a kinematic-only run relied on
+OVERRIDE_FIELD = 'cad_check_override'
+#: CP-60 check 4: rotating set swept over the theta range vs static (the only check CP-62 lets an Admin override)
+SWEPT_CHECK_ID = 4
 
-    * ``collision_checked`` not ``true`` (``false`` = kinematic only, Goal 1; absent = never attested);
-    * any segment with ``collision_checked: false`` (e.g. a joint-interpolated air move);
-    * any weld event without a process assignment (``wps_id`` / ``preset`` null: no D06 yet).
 
-    v1 programs (schema 1.x) are not affected: their collision check is the A71 report. Raises ReleaseError."""
+def cad_check_gate(job_dir: Union[str, Path], scope: str) -> None:
+    """CP-62 item 3 / CP-60: refuse a release while the job's ``cad_check.json`` is red or stale (any scope).
+
+    * no ``cad_check.json`` (job made before CP-60, manual placement): nothing to check, old behaviour;
+    * unreadable or schema-invalid → refused;
+    * stale → refused. Staleness = **hash check** of the recorded ``inputs`` against the job folder
+      (``jsonio.check_inputs``, the reader rule of ``awm_verify``); ``awm_core.staleness`` (G1.17) is not on this
+      branch's base — switch to it when it is merged;
+    * check 4 red → refused whether or not a CP-62 override exists (the override is for kinematic planning only);
+    * any other check red → refused as well (checks 1, 5, 6 are never overridden; CP-60 red blocks Plan).
+
+    A yellow check does not block. Raises ReleaseError."""
+    path = Path(job_dir) / CAD_CHECK_FILE
+    if not path.is_file():
+        return
+    try:
+        doc = jsonio.read_json(path, 'v2/cad_check', base_dir=Path(job_dir))
+    except jsonio.StaleInputError as exc:
+        raise ReleaseError(f'{CAD_CHECK_FILE} is stale (job STEP, roles, axis pick or cell frames changed since the '
+                           f'cross-check): {exc}; re-run the cross-check; no {scope} release (CP-60, CP-62)') from exc
+    except jsonio.SchemaValidationError as exc:
+        raise ReleaseError(f'{CAD_CHECK_FILE} is unreadable: {exc}; no {scope} release (CP-60)') from exc
+    red = [c['id'] for c in doc['checks'] if c['status'] == 'red']
+    if SWEPT_CHECK_ID in red:
+        raise ReleaseError(f'{CAD_CHECK_FILE} check 4 (swept rotating set vs static) is red: every release scope '
+                           f'refuses while check 4 is red, with or without a CP-62 override; no {scope} release')
+    if red or doc['status'] == 'red':
+        raise ReleaseError(f'{CAD_CHECK_FILE} is red (checks {red}); no {scope} release (CP-60)')
+
+
+def release_gate(program: Dict, scope: str, job_dir: Optional[Union[str, Path]] = None) -> None:
+    """Refuse a program that may not be released in ``scope`` — for **every** scope (CP-58, G1.5, CP-62):
+
+    * any program carrying ``cad_check_override`` (kinematic-only planning under a CP-62 override, never releasable);
+    * with ``job_dir`` (the job folder of the program): its ``cad_check.json`` red or stale (:func:`cad_check_gate`);
+    * v2 (D09 2.x) only: ``collision_checked`` not ``true`` (``false`` = kinematic only, Goal 1; absent = never
+      attested); any segment with ``collision_checked: false`` (e.g. a joint-interpolated air move); any weld event
+      without a process assignment (``wps_id`` / ``preset`` null: no D06 yet).
+
+    The v2 field checks do not apply to v1 programs (schema 1.x): their collision check is the A71 report.
+    Raises ReleaseError."""
     if scope not in GATE_SCOPES:
         raise ReleaseError(f'scope must be one of {GATE_SCOPES}, got {scope!r}')
+    rev = program.get('program_rev', '?')
+    if program.get(OVERRIDE_FIELD) is not None:
+        ref = program[OVERRIDE_FIELD]
+        who = ref.get('by', '?') if isinstance(ref, dict) else '?'
+        raise ReleaseError(f'program {rev} carries {OVERRIDE_FIELD} (by {who}): kinematic-only planning under a '
+                           f'CP-62 override, never releasable; no {scope} release')
+    if job_dir is not None:
+        cad_check_gate(job_dir, scope)
     if not str(program.get('schema_version', '')).startswith('2.'):
         return
-    rev = program.get('program_rev', '?')
     if program.get('collision_checked') is not True:
         raise ReleaseError(f'program {rev} has collision_checked: {program.get("collision_checked", "absent")} — '
                            f'kinematic only, collision not checked; no {scope} release (DES-001 rule 4, CP-58)')
@@ -88,7 +138,7 @@ def release(job: JobPaths, rev: str, approved_by: str, scope: str, note: str = '
         raw = json.loads(program.read_text(encoding='utf-8'))
     except json.JSONDecodeError as exc:
         raise ReleaseError(f'program {rev} is not valid JSON: {exc}') from exc
-    release_gate(raw, scope)
+    release_gate(raw, scope, job.dir)
     jsonio.read_json(program, 'program', base_dir=job.dir)  # inputs unchanged
     program_sha = sha256_file(program)
     report_path = job.report_json(rev)
