@@ -36,3 +36,15 @@ def test_compress_rows_merges_runs_with_the_same_verdict():
     runs = compress_rows(rows)
     assert [(r['theta_from_deg'], r['theta_to_deg'], r['states'], r['clearance_lb_mm']) for r in runs] == [
         (0.0, -1.0, 2, 10.0), (-2.0, -3.0, 2, 5.0), (-4.0, -4.0, 1, 10.0)]
+
+
+def test_s6_head_assumptions_come_from_the_description():
+    """Review minor 6: the S.6 record names the head of the description in use, not TST-002 §3.1 for every head."""
+    from awm_path.core.contact import ContactParams
+    from awm_path.spike_s6 import head_assumptions
+    head = {'nozzle_radius_mm': 6.0, 'contact_standoff_mm': 0.25, 'nozzle_tip_length_mm': 5.0,
+            'tool0_T_tcp_mm': {'position_mm': [43.8, 0.0, 279.6], 'quat_xyzw': [0.0, 0.0, 0.0, 1.0]}}
+    lines = head_assumptions('H-CAD', ContactParams(nozzle_radius_mm=6.0, standoff_mm=0.25), head)
+    text = ' '.join(lines)
+    assert 'H-CAD head' in text and 'Ø12 mm' in text and '(43.8, 0, 279.6)' in text
+    assert 'TST-002 §3.1' not in text and "rule (b) 'rising'" in text

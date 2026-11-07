@@ -33,7 +33,7 @@ import numpy as np
 
 from awm_core import jsonio, units
 from awm_path.core.mode_c import failing_ranges, interval_bounds
-from awm_path.gate_g2 import add_head_cli
+from awm_path.gate_g2 import add_head_cli, head_assumption
 
 CREATED_BY = 'awm_path.spike_s6'
 SEAM_FILE = 's6_spike_seam.json'
@@ -269,6 +269,16 @@ def _contact_profile(ctx, pose, span_deg, direction, step_deg) -> Dict[str, Any]
             'failing_ranges': failing_ranges([float(t) for t in th], [c.ok for c in res])}
 
 
+def head_assumptions(head_model: str, contact_params, head_record: Mapping[str, Any]) -> List[str]:
+    """Head and F9 assumption lines of the S.6 record from the description in use (review minor 6; the head line is
+    :func:`awm_path.gate_g2.head_assumption`, flat nozzle disc)."""
+    return [head_assumption(head_model, contact_params, head_record) + '; flat nozzle disc',
+            f'F9 point tolerance {contact_params.point_tolerance_mm:g} mm (TST-002 gives no value); rule (b) '
+            f'{contact_params.rule_b!r}' + (' (CP-56: only faces rising above the contact plane by more than the '
+                                            'tolerance count; the tolerance is also the plane tolerance)'
+                                            if contact_params.rule_b == 'rising' else ' (S.4 rule, reproduction)')]
+
+
 def _cmd_run(args) -> int:
     import dataclasses
     import yaml
@@ -480,13 +490,7 @@ def _cmd_run(args) -> int:
                     'TST-002 §11 not filled (S.7, lead)'],
         'assumptions': [
             'part, robot base and positioner axis poses from CAD component placements, no REF_* markers (OI-23)',
-            f'{args.head_model} head (TST-002 §3.1), nozzle Ø{2.0 * contact_params.nozzle_radius_mm:g} mm flat disc, '
-            f's_c {contact_params.standoff_mm:g} mm, TCP at the nozzle tip (I2 / OI-15); nozzle, s_c and tool0_T_tcp '
-            'read from the robot description in use (S.5c Task 0, CP-56 one source)',
-            f'F9 point tolerance {contact_params.point_tolerance_mm:g} mm (TST-002 gives no value); rule (b) '
-            f'{contact_params.rule_b!r}' + (' (CP-56: only faces rising above the contact plane by more than the '
-                                            'tolerance count; the tolerance is also the plane tolerance)'
-                                            if contact_params.rule_b == 'rising' else ' (S.4 rule, reproduction)'),
+            *head_assumptions(args.head_model, contact_params, scene.head.as_record()),
             f'B-03 angular step: margin {margin} mm (= F4 padding_mm; TST-002 / DES-001 give no margin value), '
             'c = weld clearance verified at every checked angle; between checked angles only c − r_max·Δθ/2 is '
             'guaranteed',
