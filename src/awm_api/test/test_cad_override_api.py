@@ -371,3 +371,21 @@ def test_override_by_must_be_an_existing_admin(client, repo, monkeypatch):
         assert got['valid'] is False and 'Admin' in got['problem'], who
         r = plan(client, h)
         assert r.status_code == 409 and r.json()['type'].endswith('cad-check-override-invalid'), who
+
+
+def test_overridden_program_is_refused_by_release_gate(client, repo, monkeypatch):
+    """Review minor 8: a P001 planned with a CP-62 override is refused by awm_verify release_gate in every scope
+    (CP-62 point 3; awm_verify called, not changed)."""
+    import pytest
+    from awm_verify.release import GATE_SCOPES, ReleaseError, release_gate
+    job, h = overridden_job(client, repo, monkeypatch)
+    assert client.put('/api/v1/jobs/J1_A/seams', headers=h, json={'seams': [pick()]}).status_code == 200
+    assert wait_run(client, h, plan(client, h).json()['run_id'])['state'] == 'succeeded'
+    assert wait_run(client, h, client.post('/api/v1/jobs/J1_A/program', headers=h,
+                                           json={}).json()['run_id'])['state'] == 'succeeded'
+    program = json.loads((job / 'programs' / 'P001' / 'program.json').read_text())
+    assert program['cad_check_override']['by'] == 'adm'
+    assert GATE_SCOPES
+    for scope in GATE_SCOPES:
+        with pytest.raises(ReleaseError, match='collision'):
+            release_gate(program, scope)
