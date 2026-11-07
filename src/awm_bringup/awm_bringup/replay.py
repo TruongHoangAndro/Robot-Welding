@@ -7,10 +7,10 @@ planned) to the single 7-joint controller of ``sim_mock`` (DES-001 §6.3 Option 
 ``awm_core.units`` (ADR-14).
 
 Refusals (:class:`ReplayRefused`): not a 2.x program, a segment of another controller, a point without 7 values,
-a value that is not finite (NaN / inf), a segment that does not start where the previous one ends or does not end at rest,
-a controller action other than the 7-joint controller, a hardware component that is not mock hardware. Before every segment the
-current joint state must be finite and equal the segment start within ``start_state_tolerance_deg`` (:class:`StartStateMismatch`,
-DES-001 §4.2 M9 start-state check). A refusal after the
+a value that is not finite (NaN / inf), a segment that does not start where the previous one ends or does not end
+at rest, a controller action other than the 7-joint controller, a hardware component that is not mock hardware.
+Before every segment the current joint state must be finite and equal the segment start within
+``start_state_tolerance_deg`` (:class:`StartStateMismatch`, DES-001 §4.2 M9 start-state check). A refusal after the
 first segment leaves the earlier segments executed: status ``partial``.
 """
 
