@@ -24,6 +24,7 @@ import {
   type Run,
   type Session,
 } from '../lib/api';
+import { tcpRows } from '../lib/cellinfo';
 import { CELL_ROLES, effectiveRoles, relPaths, type Assignment, type TreeNode } from '../lib/roles';
 import { UP_AXES, type UpAxis } from '../lib/topology';
 
@@ -110,8 +111,10 @@ export function CellPage({ session }: { session: Session }) {
         return getCellStatus(token).then(setStatus);
       })
       .catch((e: Error) => {
-        setError(e.message);
-        if (e instanceof ApiError) setProblems(e.problem?.errors?.map((x) => x.message) ?? []);
+        // audit m4: a refusal with a problem list is shown once, under the tree; other errors in the view
+        const list = e instanceof ApiError ? (e.problem?.errors?.map((x) => x.message) ?? []) : [];
+        setProblems(list);
+        setError(list.length ? null : e.message);
       });
   };
   const showEdges = (start: () => Promise<{ run_id: string; key: string }>) => {
@@ -158,7 +161,16 @@ export function CellPage({ session }: { session: Session }) {
                 <Row k="positioner axis">
                   {status.axis ? `${status.axis.edge_id} · r ${status.axis.radius_mm.toFixed(3)} mm · ${status.axis.state}` : 'not picked'}
                 </Row>
-                <Row k="TCP">{status.head.head_yaml ? 'head model present' : 'no head model'}</Row>
+                <Row k="head CAD">
+                  {status.head.step ? `head CAD present (head.step${status.head.map ? ', cad_map_head.yaml' : '; map missing'})` : 'no head CAD (head.step)'}
+                </Row>
+                <Row k="TCP">
+                  {status.head.tcp?.xyz_mm
+                    ? `${status.head.tcp.method ?? 'mapped'} · tool0 ${status.head.tcp.xyz_mm.map((v) => v.toFixed(2)).join(', ')} mm`
+                    : status.head.head_yaml
+                      ? 'head model present'
+                      : 'no head model'}
+                </Row>
                 <Row k="model">{status.model.saved ? 'saved' : 'not saved'}</Row>
                 {status.stale_jobs.length > 0 && <div className="warn">Jobs to re-check / re-plan: {status.stale_jobs.join(', ')}</div>}
               </>
@@ -254,6 +266,17 @@ export function CellPage({ session }: { session: Session }) {
                     </button>
                   )}
                 </>
+              )}
+              {status?.head.tcp && (
+                <div data-testid="tcp-values">
+                  <b>Current TCP (head.yaml, tool0 frame)</b>
+                  {tcpRows(status.head.tcp).map(([k, v]) => (
+                    <Row key={k} k={k}>
+                      {v}
+                    </Row>
+                  ))}
+                  <div className="muted">Nominal value from the CAD (CP-61); the measured TCP of A51 replaces it on the robot. Every path planned with another TCP is stale.</div>
+                </div>
               )}
             </Panel>
           )}

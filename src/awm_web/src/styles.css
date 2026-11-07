@@ -88,3 +88,6 @@ aside.wide { width: 380px; }
 .pickview { height: 46vh; }
 .cadbanner { padding: 6px 8px; border-radius: 4px; margin: 6px 0; font-size: 12px; }
 .cadbanner.green { background: #173b24; } .cadbanner.yellow { background: #4a3f12; } .cadbanner.red, .cadbanner.stale { background: #4d1d1d; }
+.cadbanner.overridden { background: #3d2a52; border-left: 3px solid #b48cff; }
+.override-form { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; padding: 6px; border: 1px dashed #b48cff; border-radius: 4px; }
+.override-form textarea { width: 100%; box-sizing: border-box; background: #1b1e24; color: inherit; border: 1px solid #444; }
