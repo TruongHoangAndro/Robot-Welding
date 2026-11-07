@@ -177,3 +177,11 @@ def test_document_state_has_the_awm_api_signature():
     params = list(inspect.signature(document_state).parameters)
     assert params == ['job', 'name', 'repo_root', 'doc']
     assert inspect.signature(document_state).parameters['doc'].default is None
+
+
+def test_v2_path_document_without_planner_block_is_d07(tmp_path):
+    """Review minor 2: a schema 2.x path document whose planner block is missing gets the version check."""
+    root, job = _repo(tmp_path)
+    doc = {'schema_version': '2.1', 'inputs': [_entry(job, 'seam_axis.json')], 'seams': [], 'rejected': []}
+    v = document_verdict(job, 'path.json', root, doc)
+    assert v.state == 'stale' and any('planned with an older planner; re-plan' in p for p in v.problems)

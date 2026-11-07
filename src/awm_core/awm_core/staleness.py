@@ -19,7 +19,7 @@ Rules, in this order, for each recorded input:
 
 Names resolve against the job folder only. In addition:
 
-* a D07 (a document with a ``planner`` block) must carry ``planner.params.record_version`` equal to
+* a D07 (a document with a ``planner`` block, or a schema 2.x path document without one) must carry ``planner.params.record_version`` equal to
   :data:`PLANNER_RECORD_VERSION`; missing / lower → "planned with an older planner; re-plan", higher → "planned with
   a newer planner";
 * a D09 (a document with ``program_rev``) inherits the verdict of every JSON input that is a D07.
@@ -117,13 +117,17 @@ def _read(path: Path) -> Optional[Dict[str, Any]]:
 
 
 def is_d07(doc: Dict[str, Any]) -> bool:
-    """A weld-path document (D07): has a ``planner`` block."""
-    return isinstance(doc.get('planner'), dict)
+    """A weld-path document (D07): has a ``planner`` block, or is a schema 2.x path document (``seams`` and
+    ``rejected``) whose planner block is missing — it then fails the record-version check."""
+    if isinstance(doc.get('planner'), dict):
+        return True
+    return str(doc.get('schema_version', '')).startswith('2.') and 'seams' in doc and 'rejected' in doc
 
 
 def record_version_problem(doc: Dict[str, Any]) -> Optional[str]:
     """None if the D07 record version is current, else the problem text."""
-    params = doc['planner'].get('params')
+    planner = doc.get('planner')
+    params = planner.get('params') if isinstance(planner, dict) else None
     got = params.get(RECORD_VERSION_KEY) if isinstance(params, dict) else None
     if not isinstance(got, int) or isinstance(got, bool) or got < PLANNER_RECORD_VERSION:
         return (f'{OLDER_PLANNER} (planner.params.{RECORD_VERSION_KEY} {got!r}, current '
