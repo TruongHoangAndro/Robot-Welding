@@ -340,3 +340,34 @@ def test_program_without_the_field_is_quarantined(client, repo, monkeypatch):
     assert len(q) == 1 and q[0].name.startswith('P001-') and (q[0] / 'program.json').is_file()
     assert 'path.json' in (q[0] / 'QUARANTINE.txt').read_text()
     assert client.get('/api/v1/jobs/J1_A', headers=h).json()['programs'] == []
+
+
+def _tamper(job, **changes):
+    doc = json.loads((job / 'cad_check_override.json').read_text())
+    for k, v in changes.items():
+        if k == 'input_sha':
+            doc['inputs'][0]['sha256'] = v
+        else:
+            doc[k] = v
+    (job / 'cad_check_override.json').write_text(json.dumps(doc))
+
+
+def test_override_needs_matching_input_hash(client, repo, monkeypatch):
+    """Minor 5: inputs[0].sha256 must equal cad_check_sha256."""
+    job, h = overridden_job(client, repo, monkeypatch)
+    _tamper(job, input_sha='0' * 64)
+    got = client.get(URL, headers=h).json()
+    assert got['valid'] is False and 'inputs' in got['problem']
+    r = client.put('/api/v1/jobs/J1_A/seams', headers=h, json={'seams': [pick()]})
+    assert r.status_code == 409 and r.json()['type'].endswith('cad-check-override-invalid')
+
+
+def test_override_by_must_be_an_existing_admin(client, repo, monkeypatch):
+    """Minor 5: a record naming a non-Admin or an unknown user is not valid."""
+    job, h = overridden_job(client, repo, monkeypatch)
+    for who in ('eng', 'ghost'):
+        _tamper(job, by=who)
+        got = client.get(URL, headers=h).json()
+        assert got['valid'] is False and 'Admin' in got['problem'], who
+        r = plan(client, h)
+        assert r.status_code == 409 and r.json()['type'].endswith('cad-check-override-invalid'), who

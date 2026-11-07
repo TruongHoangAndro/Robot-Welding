@@ -16,7 +16,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Optional
+from typing import Any, Callable, Collection, Dict, List, Literal, Optional
 
 import yaml
 from fastapi import APIRouter, Depends, File, Form, Response, UploadFile
@@ -174,9 +174,10 @@ def _red_detail(reds: List[Dict[str, Any]]) -> str:
     return '; '.join(f"check {c['id']}: {c.get('note', c['status'])}" for c in reds)
 
 
-def override_state(job: Path) -> Dict[str, Any]:
+def override_state(job: Path, admins: Collection[str]) -> Dict[str, Any]:
     """CP-62 override record of a job and whether it applies to the current ``cad_check.json``:
-    ``{override, valid, problem, kind}``; kind = missing | invalid | void | ok."""
+    ``{override, valid, problem, kind}``; kind = missing | invalid | void | ok. Invalid also when ``inputs[0]`` does
+    not record the same hash as ``cad_check_sha256`` or ``by`` is not an Admin of the users store (``admins``)."""
     path = job / OVERRIDE_FILE
     doc = jobs.read_json(path)
     if doc is None:
@@ -186,6 +187,14 @@ def override_state(job: Path) -> Dict[str, Any]:
     except jsonio.SchemaValidationError as exc:
         return {'override': doc, 'valid': False, 'kind': 'invalid',
                 'problem': f'{OVERRIDE_FILE} does not match {OVERRIDE_SCHEMA}: {exc}'}
+    inputs = doc.get('inputs') or [{}]
+    if inputs[0].get('name') != cad_roles.CHECK_FILE or inputs[0].get('sha256') != doc['cad_check_sha256']:
+        return {'override': doc, 'valid': False, 'kind': 'invalid',
+                'problem': f'{OVERRIDE_FILE}: inputs[0] does not record {cad_roles.CHECK_FILE} with the hash in '
+                           'cad_check_sha256'}
+    if doc['by'] not in admins:
+        return {'override': doc, 'valid': False, 'kind': 'invalid',
+                'problem': f'{OVERRIDE_FILE}: recorded by {doc["by"]!r}, who is not an Admin of the users store'}
     check = job / cad_roles.CHECK_FILE
     if not check.is_file() or sha256_file(check) != doc['cad_check_sha256']:
         return {'override': doc, 'valid': False, 'kind': 'void',
@@ -215,7 +224,7 @@ def _current_check(job: Path, repo_root: Path) -> Dict[str, Any]:
     return doc
 
 
-def cad_gate(job: Path, repo_root: Path, collision: str = 'off') -> Optional[Dict[str, Any]]:
+def cad_gate(job: Path, repo_root: Path, admins: Collection[str], collision: str = 'off') -> Optional[Dict[str, Any]]:
     """CP-60 gate for seam picking and Plan: a job with roles needs a current cross-check that is not red.
 
     CP-62: a red check passes only when check 4 is the only red check, the check is current, a valid Admin override
@@ -232,7 +241,7 @@ def cad_gate(job: Path, repo_root: Path, collision: str = 'off') -> Optional[Dic
         return None
     reds = red_checks(doc)
     only4 = bool(reds) and all(c.get('id') == OVERRIDE_CHECK for c in reds)
-    state = override_state(job) if only4 else {'kind': 'missing'}
+    state = override_state(job, admins) if only4 else {'kind': 'missing'}
     if state['kind'] == 'missing':
         detail = _red_detail(reds) or 'status red'
         if only4:
@@ -253,7 +262,7 @@ def cad_gate(job: Path, repo_root: Path, collision: str = 'off') -> Optional[Dic
 
 
 def register(api: APIRouter, settings: Settings, runs: RunManager, require: Callable[..., Any],
-             busy: Callable[[RunBusyError], ProblemError]) -> None:
+             busy: Callable[[RunBusyError], ProblemError], admins: Collection[str]) -> None:
     root = settings.repo_root
     cad = root.joinpath(*cad_roles.CELL_CAD_DIR)
     template_path = root.joinpath(*cad_roles.TEMPLATE_FILE)
@@ -505,7 +514,7 @@ def register(api: APIRouter, settings: Settings, runs: RunManager, require: Call
     @api.get('/jobs/{job_id}/check/override')
     def override_get(job_id: str, _u: User = Depends(require(*CELL_READ))) -> Dict[str, Any]:
         job = jobs.job_dir(settings.jobs_dir, job_id)
-        state = override_state(job)
+        state = override_state(job, admins)
         if state['kind'] == 'missing':
             raise ProblemError(404, 'no-override', 'No override', detail='no CP-62 override recorded for this job')
         return {k: state[k] for k in ('override', 'valid', 'problem')}

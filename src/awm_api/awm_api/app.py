@@ -156,6 +156,7 @@ def _busy(exc: RunBusyError) -> ProblemError:
 
 def create_app(settings: Settings) -> FastAPI:
     users = load_users(settings.secrets_file)  # fails early with a clear message
+    admins = frozenset(name for name, u in users.items() if u.role == 'Admin')  # CP-62 override authors
     tokens = TokenStore(settings.token_ttl_s)
     runs = RunManager(settings.runs_dir, kill_grace_s=settings.kill_grace_s)
     robot = RobotModel(settings)
@@ -342,14 +343,14 @@ def create_app(settings: Settings) -> FastAPI:
                   _u: User = Depends(require(*EDIT_SEAMS))) -> Dict[str, Any]:
         job = jobs.job_dir(settings.jobs_dir, job_id)
         _check_picks(body.seams)
-        cad_api.cad_gate(job, settings.repo_root)  # CP-60: no seam picking on a red / stale cross-check
+        cad_api.cad_gate(job, settings.repo_root, admins)  # CP-60: no seam picking on a red / stale cross-check
         has_placement = (job / 'placement.json').is_file()
         stamp = _dt.datetime.now(_dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
         work = settings.repo_root / 'logs' / 'seam_saves' / f'{job_id}-{stamp}-{secrets.token_hex(3)}'
         picks = [p.model_dump() for p in body.seams]
         try:
             with runs.slot('seams', job_id):
-                cad_api.cad_gate(job, settings.repo_root)  # again inside the slot (review minor 3)
+                cad_api.cad_gate(job, settings.repo_root, admins)  # again inside the slot (review minor 3)
                 doc = adapters.build_seams(settings, job, picks, work, build_axis=has_placement)
         except RunBusyError as exc:
             raise _busy(exc) from exc
@@ -360,7 +361,7 @@ def create_app(settings: Settings) -> FastAPI:
     def promote_gated(run_dir: Path, job: Path, collision: str, override: Optional[Dict[str, Any]]) -> Dict[str, str]:
         """Plan promotion with the CP-60 / CP-62 gate evaluated again while the run still holds the slot (review
         minor 3): a cross-check or override that became stale, red or void during the run is never promoted."""
-        again = cad_api.cad_gate(job, settings.repo_root, collision)
+        again = cad_api.cad_gate(job, settings.repo_root, admins, collision)
         if again != override:
             raise RuntimeError('the CP-62 override changed during the run; nothing promoted')
         return adapters.promote_plan(run_dir, job, override)
@@ -371,7 +372,7 @@ def create_app(settings: Settings) -> FastAPI:
         job = jobs.job_dir(settings.jobs_dir, job_id)
         collision = body.collision if body else 'off'
         # CP-60: Plan blocked by a red / stale cross-check; CP-62: a valid check-4 override lets a kinematic plan pass
-        override = cad_api.cad_gate(job, settings.repo_root, collision)
+        override = cad_api.cad_gate(job, settings.repo_root, admins, collision)
         if collision != 'off':
             raise ProblemError(409, 'collision-unavailable', 'Collision planning not available',
                                detail='Goal 1 plans kinematic only (CP-58, collision_checked false); collision-on '
@@ -515,7 +516,7 @@ def create_app(settings: Settings) -> FastAPI:
         except WebSocketDisconnect:
             pass
 
-    cad_api.register(api, settings, runs, require, _busy)
+    cad_api.register(api, settings, runs, require, _busy, admins)
     app.include_router(api)
     _mount_front_end(app, settings)
     return app
