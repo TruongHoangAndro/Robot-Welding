@@ -73,7 +73,7 @@ def backend(tmp_path_factory):
     with SimLaunch(log_dir=tmp, launch_file='sim_mock.launch.py', launch_args=args) as sim:
         rclpy.init()
         node = rclpy.create_node('awm_path_cell_backend_test')
-        b = MoveGroupCellScene(node, cell, job / 'placement.json', job, head_model='H-BOX (test)')
+        b = MoveGroupCellScene(node, cell, job / 'placement.json', job, head_model='H-BOX')
         try:
             try:
                 b.load(timeout_s=180.0)
@@ -124,7 +124,7 @@ def test_record_and_scene_hash(backend) -> None:
     assert rec['content']['f4_padding_mm']['nozzle_tip'] == 0.0
     assert rec['content']['f4_padding_mm']['head_body'] == pytest.approx(3.0)
     assert rec['content']['clearance_links'] == ['head_body', 'head_mount', 'conduit']
-    assert rec['content']['head_model'] == 'H-BOX (test)'
+    assert rec['content']['head_model'] == 'H-BOX'
     assert len(rec['content']['robot_description_sha256']) == 64
     assert len(rec['content']['robot_description_semantic_sha256']) == 64
     assert len(b.scene_hash) == 64 and rec['scene_hash'] == b.scene_hash
@@ -192,4 +192,12 @@ def test_cell_manifest_must_match_the_loaded_scene(backend) -> None:
     other.write_text(cell.read_text().replace('-900', '-901'))
     wrong = MoveGroupCellScene(b.node, other, job / 'placement.json', job)
     with pytest.raises(SceneFileError, match='manifest'):
+        wrong.load(timeout_s=30.0)
+
+
+def test_head_label_must_match_the_running_description(backend) -> None:
+    """Review I1: a run labelled H-CAD on a graph launched with the H-BOX head is refused at load()."""
+    b, tmp, cell, job = backend
+    wrong = MoveGroupCellScene(b.node, cell, job / 'placement.json', job, head_model='H-CAD')
+    with pytest.raises(ValueError, match='H-CAD'):
         wrong.load(timeout_s=30.0)

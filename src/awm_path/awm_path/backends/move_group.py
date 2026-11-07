@@ -198,6 +198,8 @@ class MoveGroupCellScene:
             if time.monotonic() > deadline:
                 raise MoveItServiceError('/robot_description or /robot_description_semantic not received')
             rclpy.spin_once(self.node, timeout_sec=0.05)
+        from awm_path.core.head import check_head_model
+        check_head_model(self._robot_description, self.head_model)   # review I1: label = description in use
         for c in (self._valid, self._apply, self._fk):
             if not c.wait_for_service(timeout_sec=timeout_s):
                 raise MoveItServiceError(f'service {c.srv_name} not available')

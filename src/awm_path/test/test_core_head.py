@@ -120,3 +120,26 @@ def test_contact_params_for_derives_rim_samples_from_radius_and_standoff() -> No
     assert p.rim_samples % p.ring_samples == 0 and p.rim_samples > ContactParams().rim_samples
     small = contact_params_for(head_from_urdf(_urdf(nozzle_r_mm=4.0, s_c_mm=0.3)))
     assert small.rim_samples == ContactParams().rim_samples          # default already dense enough
+
+
+def _with_head_body(urdf: str, geometry: str) -> str:
+    link = (f'<link name="head_body"><collision><geometry>{geometry}</geometry></collision></link>'
+            '<joint name="tool0_to_head_body" type="fixed"><parent link="tool0"/><child link="head_body"/></joint>')
+    return urdf.replace('</robot>', link + '</robot>')
+
+
+def test_head_model_of_the_description_and_label_check() -> None:
+    """Review I1: the loaded description must match the head label of the run (H-CAD = mesh head_body collision,
+    H-BOX = box)."""
+    from awm_path.core.head import check_head_model, head_model_of_urdf, normalise_head_model
+    box = _with_head_body(_urdf(), '<box size="0.194 0.035 0.381"/>')
+    mesh = _with_head_body(_urdf(), '<mesh filename="file:///x/head_body_hull.stl" scale="0.001 0.001 0.001"/>')
+    assert head_model_of_urdf(box) == 'hbox' and head_model_of_urdf(mesh) == 'hcad'
+    assert normalise_head_model('H-CAD') == 'hcad' and normalise_head_model('hbox') == 'hbox'
+    with pytest.raises(ValueError, match='head model'):
+        normalise_head_model('H-FOO')
+    check_head_model(mesh, 'H-CAD')
+    with pytest.raises(ValueError, match='H-CAD'):
+        check_head_model(box, 'H-CAD')
+    with pytest.raises(ValueError, match='head_body'):
+        head_model_of_urdf(_urdf())

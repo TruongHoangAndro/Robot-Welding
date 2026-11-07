@@ -285,7 +285,7 @@ def _cmd_run(args) -> int:
     from awm_path.core.seam_input import fit_circle, frames_at
     from awm_path.core.sweep import PlannerParams, sweep, tcp_pose, write_candidates_csv
     from awm_path.core.head import contact_params_for
-    from awm_path.gate_g2 import _git, _rel, launch_args_from_frames, parse_head_args
+    from awm_path.gate_g2 import _git, _rel, launch_args_from_frames, parse_head_args, head_launch_args
     from awm_path.spike_s5 import build_seams_doc
 
     repo, out_dir, inp = Path(args.repo), Path(args.out_dir), Path(args.input)
@@ -318,6 +318,7 @@ def _cmd_run(args) -> int:
     kin = UrAnalyticKinematics()
     head_tag = args.head_model.lower().replace('-', '')
     launch_args = dict(launch_args_from_frames(frames_file), cell_manifest=str(cell_manifest.resolve()),
+                       **head_launch_args(args.head_model, args.head_dir, repo),
                        **parse_head_args(args.head_arg))
     cases: Dict[str, Any] = {}
     t_all = time.perf_counter()

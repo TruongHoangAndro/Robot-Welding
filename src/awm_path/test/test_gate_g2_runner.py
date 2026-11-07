@@ -159,3 +159,22 @@ def test_head_assumption_text_comes_from_the_description_values():
     text = head_assumption('H-CAD', ContactParams(nozzle_radius_mm=6.0, standoff_mm=0.25), head)
     assert 'H-CAD head' in text and 'Ø12 mm' in text and 's_c 0.25 mm' in text and '(43.8, 0, 279.6)' in text
     assert 'H-BOX' not in text and 'Ø20' not in text
+
+
+def test_head_launch_args_pass_the_head_model_and_folder(tmp_path):
+    """Review I1: runners pass head_model (and head_dir for H-CAD) to sim_mock, as load_planning_description does."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'awm_description' / 'test'))
+    pytest.importorskip('awm_bringup.cell_config', reason='awm_bringup not built')
+    from head_fixture import write_synthetic_head_dir
+    from awm_path.gate_g2 import head_launch_args
+    assert head_launch_args('H-BOX', None, tmp_path) == {'head_model': 'hbox'}
+    head = write_synthetic_head_dir(tmp_path / 'cell' / 'model' / 'head')
+    assert head_launch_args('H-CAD', None, tmp_path) == {'head_model': 'hcad', 'head_dir': str(head.resolve())}
+    other = write_synthetic_head_dir(tmp_path / 'other' / 'head')
+    assert head_launch_args('hcad', str(other), tmp_path)['head_dir'] == str(other.resolve())
+    with pytest.raises(ValueError):
+        head_launch_args('H-CAD', None, tmp_path / 'empty')
+    with pytest.raises(ValueError, match='head model'):
+        head_launch_args('H-XYZ', None, tmp_path)

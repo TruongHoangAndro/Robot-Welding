@@ -138,6 +138,20 @@ def parse_head_args(items: Optional[Sequence[str]]) -> Dict[str, str]:
     return out
 
 
+def head_launch_args(head_model: str, head_dir: Optional[str], repo: Path) -> Dict[str, str]:
+    """``sim_mock`` launch args of the head model named by the run (review I1), as ``load_planning_description``
+    renders it: ``{'head_model': 'hbox'}`` or ``{'head_model': 'hcad', 'head_dir': <absolute folder>}`` (default
+    ``<repo>/cell/model/head``, checked with ``awm_bringup.cell_config.check_head_dir``)."""
+    from awm_path.core.head import normalise_head_model
+    model = normalise_head_model(head_model)
+    if model == 'hbox':
+        return {'head_model': 'hbox'}
+    from awm_bringup.cell_config import check_head_dir
+    folder = str(Path(head_dir or Path(repo) / 'cell' / 'model' / 'head').resolve())
+    check_head_dir(folder)
+    return {'head_model': 'hcad', 'head_dir': folder}
+
+
 def head_assumption(head_model: str, contact_params, head_record: Mapping[str, Any]) -> str:
     """Assumption line of a run record built from the head of the description in use (``scene.head.as_record()``)
     and the F9 parameters (review M2: no hard-coded head values)."""
@@ -150,6 +164,9 @@ def head_assumption(head_model: str, contact_params, head_record: Mapping[str, A
 
 def add_head_cli(ap: argparse.ArgumentParser) -> None:
     """Common runner options: head description args and the F9 rule (b) variant (records keep both)."""
+    ap.add_argument('--head-dir', default=None,
+                    help='H-CAD head folder with head.yaml (default <repo>/cell/model/head); passed to sim_mock with '
+                         'head_model:=hcad when --head-model is H-CAD')
     ap.add_argument('--head-arg', action='append', default=[], metavar='KEY=VALUE',
                     help='xacro arg of the head description passed to sim_mock (repeatable), e.g. nozzle_dia_mm=12')
     ap.add_argument('--f9-rule', choices=('rising', 'unsigned'), default='rising',
@@ -242,6 +259,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     pose_doc = yaml.safe_load(poses_file.read_text())
     poses, seams = load_pose_specs(pose_doc)
     launch_args = dict(launch_args_from_frames(frames), cell_manifest=str(cell_manifest.resolve()),
+                       **head_launch_args(args.head_model, args.head_dir, repo),
                        **parse_head_args(args.head_arg))
     kin = UrAnalyticKinematics()
     with SimLaunch(log_dir=args.log_dir, launch_file='sim_mock.launch.py', launch_args=launch_args) as sim:
@@ -273,7 +291,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         'scene_backend': scene.record, 'kinematics_backend': kin.name, 'head_model': args.head_model,
         'psi_case': 'n/a (scene sanity)', 'contact_params': contact_params.as_record(),
         'head_args': parse_head_args(args.head_arg), 'f9_rule': args.f9_rule,
-        'weld_clearance_mm': WELD_CLEARANCE_MM, 'launch_args': {k: v for k, v in launch_args.items()
+        'weld_clearance_mm': WELD_CLEARANCE_MM, 'launch_args': {k: ('<head_dir>' if k == 'head_dir' else v)
+                                                               for k, v in launch_args.items()
                                                                if k != 'cell_manifest'},
         'wall_time_s': wall, 'assumptions': [
             'part and base poses from CAD component placements, no REF_* markers (OI-23)',

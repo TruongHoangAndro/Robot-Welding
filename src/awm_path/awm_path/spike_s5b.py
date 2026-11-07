@@ -383,7 +383,7 @@ def _cmd_run(args) -> int:
     from awm_path.core.scoring import SceneScoreParams
     from awm_path.core.sweep import PlannerParams, required_points
     from awm_path.core.head import contact_params_for
-    from awm_path.gate_g2 import _git, _rel, launch_args_from_frames, parse_head_args
+    from awm_path.gate_g2 import _git, _rel, launch_args_from_frames, parse_head_args, head_launch_args
     from awm_path.spike_s5 import _rotation_rate_deg_per_mm
 
     t_run = time.perf_counter()
@@ -423,6 +423,7 @@ def _cmd_run(args) -> int:
     while length / (2 * n_max) >= inp['pitch_min_mm']:
         n_max *= 2
     launch_args = dict(launch_args_from_frames(frames_file), cell_manifest=str(cell_manifest.resolve()),
+                       **head_launch_args(args.head_model, args.head_dir, repo),
                        **parse_head_args(args.head_arg))
     results: Dict[str, Any] = {}
     not_run: List[str] = []

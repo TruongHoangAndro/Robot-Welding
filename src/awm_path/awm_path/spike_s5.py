@@ -297,7 +297,7 @@ def _cmd_run(args) -> int:
     from awm_path.core.scoring import SceneScoreParams
     from awm_path.core.sweep import PlannerParams
     from awm_path.core.head import contact_params_for
-    from awm_path.gate_g2 import _git, _rel, launch_args_from_frames, parse_head_args
+    from awm_path.gate_g2 import _git, _rel, launch_args_from_frames, parse_head_args, head_launch_args
 
     repo, out_dir = Path(args.repo), Path(args.out_dir)
     job = repo / 'jobs' / args.job
@@ -318,6 +318,7 @@ def _cmd_run(args) -> int:
     kin = UrAnalyticKinematics()
     head_tag = args.head_model.lower().replace('-', '')
     launch_args = dict(launch_args_from_frames(frames_file), cell_manifest=str(cell_manifest.resolve()),
+                       **head_launch_args(args.head_model, args.head_dir, repo),
                        **parse_head_args(args.head_arg))
     results: Dict[str, Any] = {}
     with SimLaunch(log_dir=args.log_dir, launch_file='sim_mock.launch.py', launch_args=launch_args) as sim:

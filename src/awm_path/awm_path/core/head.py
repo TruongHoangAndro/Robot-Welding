@@ -135,6 +135,44 @@ def contact_params_for(head: HeadGeometry, base: ContactParams = ContactParams()
                                rim_samples=rim)
 
 
+#: Head model labels of the runners / records → description head_model (sim_mock ``head_model`` arg).
+HEAD_MODEL_LABELS = {'hbox': 'hbox', 'hcad': 'hcad'}
+
+
+def normalise_head_model(label: str) -> str:
+    """``'H-BOX'`` / ``'hbox'`` → ``'hbox'``, ``'H-CAD'`` / ``'hcad'`` → ``'hcad'``; anything else is refused."""
+    key = str(label).strip().lower().replace('-', '').replace('_', '')
+    if key not in HEAD_MODEL_LABELS:
+        raise ValueError(f'unknown head model {label!r}: expected H-BOX (hbox) or H-CAD (hcad)')
+    return HEAD_MODEL_LABELS[key]
+
+
+def head_model_of_urdf(urdf_xml: str, body_link: str = 'head_body') -> str:
+    """Head model a description was rendered with: ``'hcad'`` if the ``head_body`` collision is a mesh (CAD hull),
+    ``'hbox'`` if it is a box (TST-002 §3.1 envelope). Raises ``ValueError`` otherwise."""
+    root = ET.fromstring(urdf_xml)
+    links = [l for l in root.findall('link') if l.get('name') == body_link]
+    if len(links) != 1:
+        raise ValueError(f'link {body_link!r} not (uniquely) in the robot description')
+    kinds = {g.tag for c in links[0].findall('collision') for geo in c.findall('geometry') for g in geo}
+    if kinds == {'mesh'}:
+        return 'hcad'
+    if kinds == {'box'}:
+        return 'hbox'
+    raise ValueError(f'{body_link!r} collision geometry {sorted(kinds)} is neither a box (H-BOX) nor a mesh (H-CAD)')
+
+
+def check_head_model(urdf_xml: str, label: str) -> str:
+    """Refuse a description whose head is not the one named by the run label (review I1: an ``H-CAD`` record must
+    not be computed on H-BOX geometry). Returns the normalised model."""
+    want = normalise_head_model(label)
+    have = head_model_of_urdf(urdf_xml)
+    if have != want:
+        raise ValueError(f'run labelled {label!r} ({want}) but the robot description in use has the {have} head: pass '
+                         f'head_model:={want} (and head_dir for hcad) to the launch')
+    return want
+
+
 def check_against_fk(head: HeadGeometry, tool0_T_tcp_fk_mm: np.ndarray) -> Tuple[float, float]:
     """Cross-check with ``tool0_T_tcp`` from the running graph (e.g. ``/compute_fk``). Returns (mm, rad) errors;
     raises ``ValueError`` beyond the numerical tolerances."""
@@ -146,4 +184,5 @@ def check_against_fk(head: HeadGeometry, tool0_T_tcp_fk_mm: np.ndarray) -> Tuple
     return dp, dr
 
 
-__all__ = ['HeadGeometry', 'head_from_urdf', 'contact_params_for', 'check_against_fk']
+__all__ = ['HeadGeometry', 'head_from_urdf', 'contact_params_for', 'check_against_fk', 'HEAD_MODEL_LABELS',
+           'normalise_head_model', 'head_model_of_urdf', 'check_head_model']
