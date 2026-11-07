@@ -109,3 +109,14 @@ def test_record_has_hash_and_values() -> None:
     assert rec['robot_description_sha256'] == sha256_text(xml)
     assert rec['nozzle_radius_mm'] == pytest.approx(6.0)
     assert rec['tool0_T_tcp_mm']['position_mm'] == pytest.approx([0.0, 0.0, 481.0])
+
+
+def test_contact_params_for_derives_rim_samples_from_radius_and_standoff() -> None:
+    """Review M1: rim spacing 2πr / rim_samples ≤ 2·s_c for the configured nozzle (a face crossing the rim is never
+    missed), rim_samples a multiple of ring_samples (ψ invariance of the sample set kept)."""
+    head = head_from_urdf(_urdf(nozzle_r_mm=10.0, s_c_mm=0.05))
+    p = contact_params_for(head)
+    assert 2.0 * math.pi * p.nozzle_radius_mm / p.rim_samples <= 2.0 * p.standoff_mm + 1e-12
+    assert p.rim_samples % p.ring_samples == 0 and p.rim_samples > ContactParams().rim_samples
+    small = contact_params_for(head_from_urdf(_urdf(nozzle_r_mm=4.0, s_c_mm=0.3)))
+    assert small.rim_samples == ContactParams().rim_samples          # default already dense enough

@@ -24,7 +24,7 @@ import numpy as np
 from awm_core import units
 from awm_core.frames import matrix_to_quat, rotation_angle_between, rpy_to_matrix
 from awm_core.hashing import sha256_text
-from awm_path.core.contact import ContactParams
+from awm_path.core.contact import ContactParams, min_rim_samples
 
 #: Tolerances of the nozzle-on-beam-axis check and of the FK cross-check (numerical only).
 AXIS_POS_TOL_MM = 1e-6
@@ -126,8 +126,13 @@ def head_from_urdf(urdf_xml: str, *, tool_link: str = 'tool0', tcp_link: str = '
 
 def contact_params_for(head: HeadGeometry, base: ContactParams = ContactParams()) -> ContactParams:
     """F9 parameters with the nozzle (radius, s_c) of the description (CP-56 decision 2); other values from ``base``.
+    ``rim_samples`` is raised (never lowered) to :func:`awm_path.core.contact.min_rim_samples` so that the rim spacing
+    stays ≤ 2·s_c for the configured nozzle (review M1).
     """
-    return dataclasses.replace(base, nozzle_radius_mm=head.nozzle_radius_mm, standoff_mm=head.contact_standoff_mm)
+    rim = max(int(base.rim_samples),
+              min_rim_samples(head.nozzle_radius_mm, head.contact_standoff_mm, int(base.ring_samples)))
+    return dataclasses.replace(base, nozzle_radius_mm=head.nozzle_radius_mm, standoff_mm=head.contact_standoff_mm,
+                               rim_samples=rim)
 
 
 def check_against_fk(head: HeadGeometry, tool0_T_tcp_fk_mm: np.ndarray) -> Tuple[float, float]:

@@ -358,3 +358,10 @@ def test_clip_triangles_above_keeps_exactly_the_part_above_the_plane() -> None:
         frac = np.mean((pts - origin) @ u > h_min)
         got = area(pieces[owner == i]).sum() if np.any(owner == i) else 0.0
         assert got == pytest.approx(frac * area(tris[i]), abs=0.02 * area(tris[i]) + 1e-9)
+
+
+def test_contact_params_refuse_a_rim_too_sparse_for_the_standoff() -> None:
+    """Review M1: 2π·r / rim_samples > 2·s_c would let a face cross the rim between two samples unseen."""
+    with pytest.raises(ValueError, match='rim'):
+        ContactParams(nozzle_radius_mm=10.0, standoff_mm=0.05)          # 0.175 mm spacing > 0.1 mm
+    ContactParams(nozzle_radius_mm=10.0, standoff_mm=0.05, rim_samples=648)
