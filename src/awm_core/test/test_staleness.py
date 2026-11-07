@@ -88,18 +88,30 @@ def test_symlink_leaving_repository_is_stale(tmp_path):
     _d07(job, head_rel='../../cell/model/head/head.yaml')
     v2 = document_verdict(job, 'path.json', root)
     assert v2.state == 'stale' and any('outside the repository' in p for p in v2.problems)
-    assert staleness.outside_repo([head / 'head.yaml', job / 'seam_axis.json'], root) == [head / 'head.yaml']
+    assert staleness.linked_or_outside([head / 'head.yaml', job / 'seam_axis.json'], root) == [head / 'head.yaml']
 
 
-def test_symlink_inside_repository_is_ok(tmp_path):
+def test_symlink_inside_repository_is_refused_and_stale(tmp_path):
+    """Review I1: a link inside the repository can be retargeted later without any recorded hash changing."""
     root, job = _repo(tmp_path)
     real = root / 'cell' / 'model' / 'head_v1'
     head = root / 'cell' / 'model' / 'head'
     head.rename(real)
     os.symlink(real, head)
+    assert staleness.linked_or_outside([head / 'head.yaml', job / 'seam_axis.json'], root) == [head / 'head.yaml']
+    _d07(job)  # logical name through the link
+    v = document_verdict(job, 'path.json', root)
+    assert v.state == 'stale' and any('symbolic link' in p for p in v.problems), v.problems
+
+
+def test_folder_replaced_by_a_link_after_planning_is_stale(tmp_path):
+    root, job = _repo(tmp_path)
     _d07(job)
-    assert document_state(job, 'path.json', root) == 'ok'
-    assert staleness.outside_repo([head / 'head.yaml'], root) == []
+    head = root / 'cell' / 'model' / 'head'
+    real = root / 'cell' / 'model' / 'head_v2'
+    head.rename(real)
+    os.symlink(real, head)
+    assert document_state(job, 'path.json', root) == 'stale'
 
 
 def test_repository_root_given_through_a_symlink(tmp_path):

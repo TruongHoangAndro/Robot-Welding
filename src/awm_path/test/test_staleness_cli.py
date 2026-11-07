@@ -95,7 +95,7 @@ def test_head_folder_linked_out_of_the_repository_is_refused(tmp_path):
     _link_head_out(tmp_path, job)
     out = tmp_path / 'p.json'
     rc, stdout, err = _plan(job.dir, out, '--head-model', 'hcad')
-    assert rc == 1 and 'outside the repository' in err and 'head.yaml' in err, err
+    assert rc == 1 and 'outside the repository' in err and 'head.yaml' in err and 'cp -rL' in err, err
     assert not out.exists()
 
 
@@ -108,16 +108,15 @@ def test_head_dir_outside_the_repository_is_refused(tmp_path):
     assert not out.exists()
 
 
-def test_head_folder_linked_inside_the_repository_is_accepted(tmp_path):
+def test_head_folder_linked_inside_the_repository_is_refused(tmp_path):
+    """Review I1: the link could be retargeted later while the recorded target stays unchanged."""
     job = make_ring_job(tmp_path / 'repo')
     model = job.repo.cell_dir / 'model'
     real = write_synthetic_head_dir(model / 'heads' / 'v1')
     os.symlink(real, model / 'head')
     rc, stdout, err = _plan(job.dir, job.path_json, '--head-model', 'hcad')
-    assert rc in (0, 2), err
-    doc = json.loads(job.path_json.read_text())
-    assert '../../cell/model/heads/v1/head.yaml' in {i['name'] for i in doc['inputs']}
-    assert staleness.document_state(job.dir, 'path.json', job.repo.root) == 'ok'
+    assert rc == 1 and 'symbolic link' in err and 'cp -rL' in err, err
+    assert not job.path_json.exists()
 
 
 def test_seam_axis_with_an_input_outside_the_repository_is_refused(tmp_path):

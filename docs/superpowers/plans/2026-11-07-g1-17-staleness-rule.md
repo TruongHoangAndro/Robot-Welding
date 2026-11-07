@@ -31,7 +31,13 @@ Write scope (named by the lead, AGENT_TEAM.md §1 exception): `src/awm_path`, `s
   released and hashed; an input outside it can change or vanish without the repository knowing, and a skipped check
   is a silent fallback (design rule 4). The normal flow (S10 head import) writes the head into `cell/model/head`, so
   only test / demo repositories that link the head are affected; they get one clear answer from every checker.
-  Links that resolve inside the repository stay allowed (recorded by their resolved path).
+  **Review I1 (2026-11-07): no symbolic link on an input path at all, inside the repository either.** A link inside
+  the repository was recorded by its resolved target while plan and generate render the logical path; retargeting
+  the link later changed the head without any recorded hash changing. Now `staleness.linked_or_outside` refuses at
+  plan time (and in generate) any input whose path below the repository root differs from its resolved path, with
+  the same message and fix (copy the folder, `cp -rL`) for links inside and outside; the verdict reports a recorded
+  input reached through a link (e.g. a folder replaced by a link after planning) as stale. The root itself may be
+  reached through a link.
 * **D2 — one function, `awm_core.staleness`.** `document_verdict(job, name, repo_root, doc=None) -> Verdict`
   (`state` ∈ {missing, ok, stale}, ordered `problems`, `message()`), and `document_state(...) -> str` with exactly the
   signature of `awm_api.jobs.document_state`, so the wave-B switch is one line

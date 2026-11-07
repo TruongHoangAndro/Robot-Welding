@@ -12,9 +12,10 @@ Contract agreed with the web agent (``awm_api`` planner adapter, G1.4)::
   disagreement, H-CAD head folder missing;
 * ``--out`` receives D07 v2 MINOR 2.1 with ``collision_checked: false`` (validated before it is written) and
   ``planner.params.record_version`` = ``awm_core.staleness.PLANNER_RECORD_VERSION`` (G1.17);
-* inputs (seam_axis.json, seams.json, placement.json, frames.yaml, head.yaml) must resolve inside the repository
-  root, symlinks followed: an input outside it (e.g. a head folder linked to another repository) is refused before
-  planning (G1.17, ``awm_core.staleness``), so every reader gives the same verdict.
+* inputs (seam_axis.json, seams.json, placement.json, frames.yaml, head.yaml) must be plain files inside the
+  repository root: an input reached through a symbolic link (inside or outside the repository, e.g. a linked head
+  folder) or outside the root is refused before planning (G1.17, ``awm_core.staleness``), so every reader checks the
+  same file and gives the same verdict.
 
 ``python3 -m awm_path.cli check --job <dir> [--path <file>]`` prints the problems and ``state <ok|stale|missing>`` of
 a D07 by the shared staleness rule (``awm_core.staleness.document_verdict``; the same rule ``awm_program`` and
@@ -180,12 +181,12 @@ def plan(args: argparse.Namespace) -> int:
     inputs = [job.dir / 'seam_axis.json', job.seams_json, seam_axis.placement_path(job), frames_yaml]
     if args.head_model == 'hcad':
         inputs.append(Path(head_dir) / 'head.yaml')
-    outside = staleness.outside_repo(inputs, job.repo.root)
-    if outside:
-        raise Refused('input(s) outside the repository ' + str(job.repo.root.resolve()) + ': '
-                      + ', '.join(f'{p} -> {p.resolve()}' for p in outside)
-                      + '; a D07 records only inputs inside the repository so that every reader (awm_program, '
-                        'awm_api) can check them; replace the link by a copy (e.g. cp -rL) and plan again')
+    linked = staleness.linked_or_outside(inputs, job.repo.root)
+    if linked:
+        raise Refused('input(s) reached through a symbolic link or outside the repository '
+                      + str(job.repo.root.resolve()) + ': ' + ', '.join(f'{p} -> {p.resolve()}' for p in linked)
+                      + '; a D07 records only plain files inside the repository so that every reader (awm_program, '
+                        f'awm_api) checks the same file; {staleness.LINK_FIX} and plan again')
     progress(0.02, f'rendering the robot description (head_model {args.head_model})')
     from awm_path.description import load_planning_description
     try:
