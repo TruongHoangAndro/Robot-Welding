@@ -24,6 +24,10 @@ positioner_trajectory_controller; ``robot_positioner`` = DES-001 §6.3 Option A1
 robot_positioner_trajectory_controller (arm joints then positioner_joint, one controller manager, mock hardware) used
 by MoveIt and by the D09 replay CLI ``ros2 run awm_bringup replay_program``. Both claim the same command interfaces;
 only one set is spawned.
+In ``robot_positioner`` mode the split controllers are not running: the actions named by
+``awm_bringup.scene_sync.CONTROLLER_ACTION`` (positioner_trajectory_controller) and by ``controller_action`` in
+``config/awm_params.yaml`` (joint_trajectory_controller) do not exist. SceneSync fails at once with a message; use
+``split`` for checkers / planners that move the positioner or the arm through those actions.
 
 Head model (Goal 1 G1.1): ``head_model:=hbox`` (default, parametric envelope) or ``hcad`` (Fusion head CAD meshes and
 tcp_laser from ``<head_dir>/head.yaml``, A18 export). For hcad the folder is checked first (head.yaml, mesh files and

@@ -12,7 +12,9 @@ wrong. Rules for every checker:
    ``TOL_DEG``. A refused request is never reported as valid.
 
 Mock hardware only (ADR-13): the helper sends trajectories to ``positioner_trajectory_controller`` within the limits
-of ``positioner_limits.yaml``.
+of ``positioner_limits.yaml``. That controller exists only with ``sim_mock trajectory_controllers:=split`` (default);
+with ``robot_positioner`` (one 7-joint controller, G1.7) :meth:`SceneSync.set_positioner_and_wait` fails at once
+with a message (:func:`check_controller_mode`) instead of waiting for a server that is never started.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ TOL_DEG = 0.01
 JOINT = 'positioner_joint'
 STATUS_TOPIC = '/awm/cell_scene/status'
 CONTROLLER_ACTION = '/positioner_trajectory_controller/follow_joint_trajectory'
+SEVEN_JOINT_ACTION = '/robot_positioner_trajectory_controller/follow_joint_trajectory'
 
 
 class PositionerMismatch(RuntimeError):
@@ -61,6 +64,15 @@ def check_robot_state(robot_state, status: Union[None, str, dict], joint: str = 
     """:func:`check_positioner` for a ``moveit_msgs/RobotState`` (e.g. ``GetStateValidity.Request.robot_state``)."""
     js = robot_state.joint_state
     return check_positioner(js.name, js.position, status, joint, tol_deg)
+
+
+def check_controller_mode(action_names_and_types) -> None:
+    """Raise when the 7-joint controller runs and the split positioner controller does not (wrong launch mode)."""
+    names = {name for name, _types in action_names_and_types}
+    if SEVEN_JOINT_ACTION in names and CONTROLLER_ACTION not in names:
+        raise RuntimeError(f'{CONTROLLER_ACTION} is not running: sim_mock was launched with '
+                           'trajectory_controllers:=robot_positioner (one 7-joint controller). Checkers that move the '
+                           'positioner (SceneSync, awm_path move_group backend) need trajectory_controllers:=split')
 
 
 def trajectory_duration_s(delta_deg: float, lim: Dict[str, float], margin: float = 1.25) -> float:
@@ -118,6 +130,8 @@ class SceneSync:
             raise ValueError(f'{theta_deg} deg outside the positioner limits {lim["lower_deg"]}..{lim["upper_deg"]}')
         st = self.wait_loaded(timeout_s)
         if abs(theta_deg - st['theta_deg']) > TOL_DEG / 10:
+            from rclpy.action import get_action_names_and_types
+            check_controller_mode(get_action_names_and_types(self.node))
             if not self.action.wait_for_server(timeout_sec=timeout_s):
                 raise TimeoutError(f'{CONTROLLER_ACTION} not available')
             dur = trajectory_duration_s(theta_deg - st['theta_deg'], lim)

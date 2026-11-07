@@ -40,3 +40,14 @@ def test_trajectory_duration_respects_limits():
     # cubic segment: peak speed 1.5 d / T, peak acceleration 6 d / T^2 -- both within the limits
     assert 1.5 * 90.0 / t <= 30.0 and 6 * 90.0 / t ** 2 <= 50.0
     assert trajectory_duration_s(0.0, lim) > 0
+
+
+def test_split_controller_missing_fails_fast():
+    """Review M2: in trajectory_controllers:=robot_positioner mode the split positioner controller is not spawned;
+    the helper says so instead of waiting for a server that never comes."""
+    from awm_bringup.scene_sync import CONTROLLER_ACTION, check_controller_mode
+    seven = ('/robot_positioner_trajectory_controller/follow_joint_trajectory', ['control_msgs/action/FollowJointTrajectory'])
+    with pytest.raises(RuntimeError, match='trajectory_controllers:=split'):
+        check_controller_mode([seven])
+    check_controller_mode([seven, (CONTROLLER_ACTION, ['control_msgs/action/FollowJointTrajectory'])])
+    check_controller_mode([])     # nothing discovered yet: no verdict, normal wait
