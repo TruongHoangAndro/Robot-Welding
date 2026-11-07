@@ -199,3 +199,17 @@ def test_status_head_tcp_unreadable_yaml_is_none(client, repo):
     hd.mkdir(parents=True)
     (hd / 'head.yaml').write_text(': not yaml [')
     assert client.get(CELL, headers=auth(client, 'eng')).json()['head']['tcp'] is None
+
+
+def test_status_head_tcp_non_dict_estimates(client, repo):
+    """Review minor 6: a non-dict estimates.tcp gives the mapped TCP without the teach record, never a 500."""
+    hd = repo / 'cell' / 'model' / 'head'
+    hd.mkdir(parents=True)
+    base = HEAD_YAML.split('estimates:')[0]
+    for est in ('estimates:\n  tcp: "teach_ui"\n', 'estimates:\n  tcp: [1, 2]\n', 'estimates: 5\n'):
+        (hd / 'head.yaml').write_text(base + est)
+        r = client.get(CELL, headers=auth(client, 'eng'))
+        assert r.status_code == 200, (est, r.text)
+        assert r.json()['head']['tcp'] == {'method': None, 'xyz_mm': [43.8, 0.0, 279.6],
+                                           'quat_xyzw': [0.0, 0.5, 0.0, 0.8660254037844386],
+                                           'beam_axis_tool0': [0.8660254037844386, 0.0, 0.5]}, est

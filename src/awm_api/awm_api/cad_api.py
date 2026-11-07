@@ -130,7 +130,10 @@ def head_tcp_record(path: Path) -> Optional[Dict[str, Any]]:
         return None
     if not isinstance(doc, dict) or not isinstance(doc.get('tool0_T_tcp_mm'), dict):
         return None
-    est = ((doc.get('estimates') or {}).get('tcp') or {}) if isinstance(doc.get('estimates'), dict) else {}
+    ests = doc.get('estimates')
+    est = ests.get('tcp') if isinstance(ests, dict) else None
+    if not isinstance(est, dict):  # review minor 6: unexpected shapes give the mapped TCP only, never a 500
+        est = {}
     out: Dict[str, Any] = {'method': est.get('method'), 'xyz_mm': doc['tool0_T_tcp_mm'].get('xyz'),
                            'quat_xyzw': doc['tool0_T_tcp_mm'].get('quat_xyzw'),
                            'beam_axis_tool0': doc.get('beam_axis_tool0')}
