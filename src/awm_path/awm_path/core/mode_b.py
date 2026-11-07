@@ -161,20 +161,16 @@ def _union_length(intervals: Sequence[Interval], length: float) -> Tuple[float, 
 
 
 def bins_covered(intervals: Sequence[Interval], length: float, bin_mm: float) -> List[bool]:
-    """Per bin [k·bin, min((k+1)·bin, L)] of a closed seam: True when the whole bin lies inside one interval."""
+    """Per bin [k·bin, min((k+1)·bin, L)] of a closed seam: True when the whole bin lies inside **one** interval
+    (one continuous window = one weld segment). Two intervals that touch or overlap are not merged (review M4: a bin
+    straddling two windows needs a stop between them); only the pieces of one interval split by the seam start are
+    joined, and a bin never crosses the seam start."""
     nb = max(1, int(math.ceil(length / bin_mm - _TOL)))
-    pieces = _pieces(intervals, length)
-    # merge touching pieces (a wrap splits one interval into two pieces)
-    merged: List[List[float]] = []
-    for a, b in pieces:
-        if merged and a <= merged[-1][1] + _TOL:
-            merged[-1][1] = max(merged[-1][1], b)
-        else:
-            merged.append([a, b])
+    pieces = [p for iv in intervals for p in _pieces([iv], length)]
     out = []
     for k in range(nb):
         lo, hi = k * bin_mm, min((k + 1) * bin_mm, length)
-        out.append(any(a <= lo + _TOL and hi <= b + _TOL for a, b in merged))
+        out.append(any(a <= lo + _TOL and hi <= b + _TOL for a, b in pieces))
     return out
 
 

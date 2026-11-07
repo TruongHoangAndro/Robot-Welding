@@ -98,3 +98,11 @@ def test_cover_sets_one_window_per_angle_ranked_by_join_overlap():
     assert cover_sets(win, 10.0, 5.0, 2) == []
     best = best_cover(win, 10.0, 2)
     assert best['thetas'] == [0.0, 60.0] and best['covered_pct'] == pytest.approx(100.0)
+
+
+def test_bins_covered_needs_one_interval_not_a_union_of_two():
+    """Review M4: a bin straddling two windows (same θ) needs a stop between them → not covered by one window."""
+    assert bins_covered([(0.0, 1.5), (1.5, 4.0)], 4.0, 1.0) == [True, False, True, True]
+    assert bins_covered([(0.0, 1.5), (0.8, 4.0)], 4.0, 1.0) == [True, True, True, True]   # [1,2) inside the 2nd
+    # one interval across the seam start still counts as one interval (wrap pieces of the same interval)
+    assert bins_covered([(3.0, 5.0)], 4.0, 1.0) == [True, False, False, True]
