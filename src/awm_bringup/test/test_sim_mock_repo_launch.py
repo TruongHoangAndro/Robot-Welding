@@ -61,8 +61,11 @@ def _msg_pose_mm(position, orientation) -> np.ndarray:
 
 
 def _angle_deg(r_a: np.ndarray, r_b: np.ndarray) -> float:
-    c = (np.trace(r_a.T @ r_b) - 1.0) / 2.0
-    return float(units.rad_to_deg(math.acos(max(-1.0, min(1.0, c)))))
+    """Rotation angle between two rotations; atan2 form, accurate near 0 (acos loses ~1e-6 deg there)."""
+    r = r_a.T @ r_b
+    sin = 0.5 * np.linalg.norm([r[2, 1] - r[1, 2], r[0, 2] - r[2, 0], r[1, 0] - r[0, 1]])
+    cos = 0.5 * (np.trace(r) - 1.0)
+    return float(units.rad_to_deg(math.atan2(sin, cos)))
 
 
 def _assert_pose(got: np.ndarray, want: np.ndarray, name: str) -> None:
