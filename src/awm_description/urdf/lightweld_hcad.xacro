@@ -83,6 +83,16 @@
                                        else [ex_file[i] + noz * ax[i] for i in python.range(3)]}"/>
     <!-- Beam exit = start of the parametric nozzle: nozzle_len_mm behind the TCP (map / teach) or the file value. -->
     <xacro:property name="ex" value="${[tcp[i] - noz * ax[i] for i in python.range(3)] if tcp_explicit else ex_file}"/>
+    <!-- Automatic estimate (or no method): head.yaml TCP must follow the rule within 1 micrometre (review M4). -->
+    <xacro:property name="tcp_rule_tol_mm" value="${10**-3}"/>
+    <xacro:property name="tcp_file" value="${[float(v) for v in hy['tool0_T_tcp_mm']['xyz']]}"/>
+    <xacro:property name="tcp_rule_err" value="${sqrt((tcp_file[0] - tcp[0])**2 + (tcp_file[1] - tcp[1])**2
+                                                + (tcp_file[2] - tcp[2])**2)}"/>
+    <xacro:if value="${not tcp_explicit and not tcp_rule_err &lt;= tcp_rule_tol_mm}">
+      ${xacro.fatal(hdir + '/head.yaml: tool0_T_tcp_mm.xyz differs from beam_exit_tool0_mm + nozzle_len_mm * '
+                    + 'beam_axis_tool0 by ' + str(tcp_rule_err) + ' mm (> ' + str(tcp_rule_tol_mm) + ' mm, method ' + str(tcp_method)
+                    + '); re-run awm_geometry export-head')}
+    </xacro:if>
     <xacro:property name="tq" value="${[float(v) for v in hy['tool0_T_tcp_mm']['quat_xyzw']]}"/>
     <xacro:awm_quat_rpy q="${tq}" name="tcp_rpy"/>
     <!-- Z column of the tcp rotation must be the beam direction (tool Z = beam, DES-001 §5.3). -->

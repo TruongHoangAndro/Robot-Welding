@@ -356,3 +356,21 @@ def test_hcad_zero_nozzle_leaves_out_the_parametric_nozzle(tmp_path):
     xyz_mm = np.asarray(units.m_to_mm(list(fk(r, 'tcp_laser', root='tool0')[:3, 3])))
     assert np.max(np.abs(xyz_mm - np.asarray(head['tool0_T_tcp_mm']['xyz']))) <= TOL_MM
     assert np.max(np.abs(xyz_mm - np.asarray(head['beam_exit_tool0_mm']))) <= TOL_MM
+
+
+@pytest.mark.parametrize('method', ['beam_axis', None])
+@pytest.mark.parametrize('shift_mm, ok', [(0.0005, True), (0.002, False), (1.0, False)])
+def test_hcad_automatic_tcp_must_follow_the_rule(tmp_path, method, shift_mm, ok):
+    """Review M4: for the automatic estimate (or no method) tool0_T_tcp_mm.xyz must equal beam_exit + noz * axis
+    within 1e-3 mm, otherwise xacro stops (a stale or edited head.yaml)."""
+    folder = write_synthetic_head_dir(tmp_path / 'h')
+    doc = yaml.safe_load((folder / 'head.yaml').read_text())
+    if method is None:
+        doc['estimates'].pop('tcp')
+    doc['tool0_T_tcp_mm']['xyz'][0] += shift_mm
+    (folder / 'head.yaml').write_text(yaml.safe_dump(doc))
+    proc = _run_xacro(head_model='hcad', head_dir=str(folder))
+    if ok:
+        assert proc.returncode == 0, proc.stderr
+    else:
+        assert proc.returncode != 0 and 'tool0_T_tcp_mm' in proc.stderr and 'beam_exit' in proc.stderr
