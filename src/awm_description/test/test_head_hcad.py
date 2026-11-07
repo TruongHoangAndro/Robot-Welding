@@ -99,11 +99,40 @@ def test_hcad_tcp_equals_head_yaml(hcad, head):
     assert np.allclose(t[:3, 2], axis / np.linalg.norm(axis), atol=1e-9)
 
 
-@pytest.mark.parametrize('nozzle_len_mm', [25.0, 52.5])
-def test_hcad_tcp_follows_nozzle_len(head_dir, head, nozzle_len_mm):
-    r = _urdf(head_model='hcad', head_dir=str(head_dir), nozzle_len_mm=nozzle_len_mm)
+@pytest.mark.parametrize('delta_mm', [-15.0, 12.5, 1e-3])
+def test_hcad_nozzle_len_differing_from_head_yaml_refused(head_dir, head, delta_mm):
+    """Review C1: the nozzle length is part of the TCP record of head.yaml (map / CP-61 teach); an explicit
+    nozzle_len_mm arg that differs from it (> 1e-6 mm) stops xacro instead of moving tcp_laser silently."""
+    proc = _run_xacro(head_model='hcad', head_dir=str(head_dir), nozzle_len_mm=float(head['nozzle_len_mm']) + delta_mm)
+    assert proc.returncode != 0 and 'nozzle_len_mm' in proc.stderr and 'head.yaml' in proc.stderr
+
+
+def test_hcad_nozzle_len_equal_to_head_yaml_accepted(head_dir, head):
+    r = _urdf(head_model='hcad', head_dir=str(head_dir), nozzle_len_mm=head['nozzle_len_mm'])
     xyz_mm = np.asarray(units.m_to_mm(list(fk(r, 'tcp_laser', root='tool0')[:3, 3])))
-    assert np.max(np.abs(xyz_mm - _expected_tcp_mm(head, nozzle_len_mm))) <= TOL_MM
+    assert np.max(np.abs(xyz_mm - np.asarray(head['tool0_T_tcp_mm']['xyz']))) <= TOL_MM
+
+
+@pytest.mark.parametrize('method', ['map', 'teach_ui'])
+def test_hcad_taught_tcp_from_head_yaml(tmp_path, method):
+    """Review C1: for a map / teach_ui TCP, tcp_laser = tool0_T_tcp_mm.xyz of head.yaml even when beam_exit does
+    not satisfy the rule exactly, and the nozzle cylinders are built backwards from that TCP (nozzle_len_mm of
+    head.yaml, here 30 mm, no xacro arg needed)."""
+    folder = write_map_override_head_dir(tmp_path / 'h', nozzle_len_mm=30.0)
+    doc = yaml.safe_load((folder / 'head.yaml').read_text())
+    doc['estimates']['tcp']['method'] = method
+    doc['beam_exit_tool0_mm'] = [v + 2.0 for v in doc['beam_exit_tool0_mm']]   # stale / rounded exit
+    (folder / 'head.yaml').write_text(yaml.safe_dump(doc))
+    r = _urdf(head_model='hcad', head_dir=str(folder))
+    tcp = np.asarray(doc['tool0_T_tcp_mm']['xyz'], float)
+    xyz_mm = np.asarray(units.m_to_mm(list(fk(r, 'tcp_laser', root='tool0')[:3, 3])))
+    assert np.max(np.abs(xyz_mm - tcp)) <= TOL_MM
+    axis = np.asarray(doc['beam_axis_tool0'], float)
+    axis = axis / np.linalg.norm(axis)
+    b0, _b1, _r = _segment(r, 'nozzle_body')
+    _t0, t1, _r = _segment(r, 'nozzle_tip')
+    assert np.max(np.abs(b0 - (tcp - 30.0 * axis))) <= TOL_MM
+    assert np.linalg.norm(tcp - t1) == pytest.approx(0.3, abs=TOL_MM)
 
 
 def test_hbox_tcp_from_args():
