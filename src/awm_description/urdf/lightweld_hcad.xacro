@@ -19,7 +19,15 @@
                                Assumption (head.yaml, OI-23): no REF_TCP marker; nozzle is parametric (CP-56, OI-15).
        nozzle_body, nozzle_tip cylinders Ø nozzle_dia on the beam axis from the beam exit; the tip collision stops
                                contact_standoff_mm before tcp_laser (F9), as in H-BOX. Assumption until IPG data (I2).
-       conduit                 parametric capsule, same args and defaults as H-BOX (Assumption; not in the head CAD). -->
+       conduit                 capsule (dia / len = conduit_dia_mm / conduit_len_mm args, Assumption TST-002 §3.1; the
+                               fiber / wire conduit is not in the head CAD) starting at the head cable exit and running
+                               outward along the cable axis (G1.8). Cable exit from head.yaml, in this order:
+                               (1) cable_exit_tool0_mm + cable_axis_tool0 (explicit, proposed export-head keys);
+                               (2) estimates.tcp.geometry_estimate with behind_flange true = the automatic beam estimate
+                                   export-head refused because it found the fiber / cable connector end (bug of
+                                   2026-11-06): exit = its tcp_tool0_mm - head.yaml nozzle_len_mm * its axis.
+                               No cable exit -> xacro stops (no default position). conduit_x/y/z_mm and conduit_r/p/y_deg
+                               are H-BOX only. Assumption: the conduit leaves the connector straight for conduit_len_mm. -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
   <xacro:include filename="$(find awm_description)/urdf/units.xacro"/>
   <xacro:include filename="$(find awm_description)/urdf/rotations.xacro"/>
@@ -67,6 +75,30 @@
     <xacro:unless value="${zc[0] * ax[0] + zc[1] * ax[1] + zc[2] * ax[2] > 1.0 - 1e-9}">
       ${xacro.fatal(hdir + '/head.yaml: tool0_T_tcp_mm Z axis is not beam_axis_tool0')}
     </xacro:unless>
+
+    <!-- Cable exit (point mm, unit outward axis) in tool0, see header. -->
+    <xacro:property name="g_est" value="${((hy.get('estimates') or dict()).get('tcp') or dict()).get('geometry_estimate') or dict()}"/>
+    <xacro:property name="ce_src" value="${'explicit' if hy.get('cable_exit_tool0_mm') is not None
+                                           and hy.get('cable_axis_tool0') is not None
+                                           else ('rear_estimate' if g_est.get('behind_flange') is True
+                                                 and g_est.get('tcp_tool0_mm') is not None
+                                                 and g_est.get('beam_axis_tool0') is not None else '')}"/>
+    <xacro:unless value="${bool(ce_src)}">
+      ${xacro.fatal(hdir + '/head.yaml: no cable exit (neither cable_exit_tool0_mm / cable_axis_tool0 nor a rear '
+                    + 'geometry_estimate behind the flange); the conduit capsule has no position. Re-run awm_geometry '
+                    + 'export-head with the cable exit')}
+    </xacro:unless>
+    <xacro:property name="ce_a_raw" value="${[float(v) for v in (hy['cable_axis_tool0'] if ce_src == 'explicit'
+                                                                  else g_est['beam_axis_tool0'])]}"/>
+    <xacro:property name="ce_a_n" value="${sqrt(ce_a_raw[0]**2 + ce_a_raw[1]**2 + ce_a_raw[2]**2)}"/>
+    <xacro:property name="ce_a" value="${[v / ce_a_n for v in ce_a_raw]}"/>
+    <xacro:property name="ce_p" value="${[float(v) for v in hy['cable_exit_tool0_mm']] if ce_src == 'explicit'
+                                         else [float(g_est['tcp_tool0_mm'][i]) - float(hy['nozzle_len_mm']) * ce_a[i]
+                                               for i in python.range(3)]}"/>
+    <!-- Rotation taking +Z to the cable axis (shortest arc; 180 deg about X when the axis is -Z). -->
+    <xacro:property name="ce_q" value="${[-ce_a[1], ce_a[0], 0.0, 1.0 + ce_a[2]] if 1.0 + ce_a[2] > 1e-12
+                                         else [1.0, 0.0, 0.0, 0.0]}"/>
+    <xacro:awm_quat_rpy q="${ce_q}" name="ce_rpy"/>
 
     <!-- Nozzle split along the beam (s = distance from the beam exit, mm). -->
     <xacro:property name="body_len" value="${noz - float(nozzle_tip_len_mm)}"/>
@@ -122,8 +154,8 @@
                              rgba="0.80 0.20 0.20 1"/>
 
     <xacro:awm_head_conduit parent="${parent}" dia_mm="${conduit_dia_mm}" len_mm="${conduit_len_mm}"
-      x_mm="${conduit_x_mm}" y_mm="${conduit_y_mm}" z_mm="${conduit_z_mm}"
-      r_deg="${conduit_r_deg}" p_deg="${conduit_p_deg}" y_deg="${conduit_y_deg}"/>
+      x_mm="${ce_p[0]}" y_mm="${ce_p[1]}" z_mm="${ce_p[2]}"
+      r_deg="${ce_rpy[0] / rad_per_deg}" p_deg="${ce_rpy[1] / rad_per_deg}" y_deg="${ce_rpy[2] / rad_per_deg}"/>
 
     <!-- tcp_laser: on the beam axis at the nozzle end = contact point on the seam (DES-001 §5.3, Assumption until
          IPG data, OI-2 / OI-23). Tool Z = beam direction. -->

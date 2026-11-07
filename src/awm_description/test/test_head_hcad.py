@@ -150,10 +150,62 @@ def test_hcad_nozzle_on_beam_axis(hcad, head):
     assert np.linalg.norm(tcp - t1) == pytest.approx(0.3, abs=TOL_MM)
 
 
-def test_hcad_conduit_is_parametric(hcad):
-    conduit = hcad.link_map['conduit'].collisions
-    assert [type(c.geometry).__name__ for c in conduit] == ['Cylinder', 'Sphere', 'Sphere']
-    assert np.allclose(units.m_to_mm(list(fk(hcad, 'conduit', root='tool0')[:3, 3])), [97, 0, 110])
+def _cable_exit(head):
+    """Expected cable exit (point mm, unit outward axis) in tool0 from head.yaml, computed independently of xacro:
+    explicit cable_exit_tool0_mm / cable_axis_tool0, else the refused rear estimate of export-head (connector end =
+    estimate TCP - nozzle_len_mm * estimate axis)."""
+    if head.get('cable_exit_tool0_mm') is not None:
+        p, a = np.asarray(head['cable_exit_tool0_mm'], float), np.asarray(head['cable_axis_tool0'], float)
+    else:
+        g = head['estimates']['tcp']['geometry_estimate']
+        a = np.asarray(g['beam_axis_tool0'], float)
+        a = a / np.linalg.norm(a)
+        p = np.asarray(g['tcp_tool0_mm'], float) - float(head['nozzle_len_mm']) * a
+    return p, a / np.linalg.norm(a)
+
+
+def _seg_dist(p0, p1, q0, q1):
+    """Smallest distance between segments p0-p1 and q0-q1 (dense sampling, test only; 0.05 mm steps)."""
+    n = 2000
+    s = np.linspace(0.0, 1.0, n)[:, None]
+    a = p0 + s * (p1 - p0)
+    b = q0 + s * (q1 - q0)
+    return float(np.min(np.linalg.norm(a[:, None, :] - b[None, :, :], axis=2)))
+
+
+def test_hcad_conduit_at_cable_exit(hcad, head):
+    """G1.8: the conduit capsule starts at the head cable exit (head.yaml data) and runs outward along the cable
+    axis; its dimensions stay the parametric Assumption (Ø30 x 300 mm, TST-002 §3.1)."""
+    exit_mm, axis = _cable_exit(head)
+    col = hcad.link_map['conduit'].collisions
+    assert [type(c.geometry).__name__ for c in col] == ['Cylinder', 'Sphere', 'Sphere']
+    t = fk(hcad, 'conduit', root='tool0')
+    assert np.max(np.abs(np.asarray(units.m_to_mm(list(t[:3, 3]))) - exit_mm)) <= TOL_MM
+    assert np.allclose(t[:3, 2], axis, atol=1e-9)
+    radius = units.m_to_mm(col[1].geometry.radius)
+    assert radius == pytest.approx(15.0) and units.m_to_mm(col[0].geometry.length) == pytest.approx(270.0)
+
+
+def test_hcad_conduit_clear_of_nozzle(hcad, head):
+    """The capsule (axis segment between its sphere centres, radius r) does not overlap the nozzle cylinders."""
+    t = fk(hcad, 'conduit', root='tool0')
+    col = hcad.link_map['conduit'].collisions
+    centres = [np.asarray(units.m_to_mm(list((t @ origin_matrix(c.origin))[:3, 3]))) for c in col[1:]]
+    r_c = units.m_to_mm(col[1].geometry.radius)
+    for link in ('nozzle_body', 'nozzle_tip'):
+        n0, n1, r_n = _segment(hcad, link)
+        assert _seg_dist(centres[0], centres[1], n0, n1) > r_c + r_n, link
+
+
+def test_hcad_without_cable_exit_fails(tmp_path):
+    """No cable exit in head.yaml (no explicit keys, no rear estimate): xacro stops with a message, no default."""
+    folder = write_synthetic_head_dir(tmp_path / 'h')
+    doc = yaml.safe_load((folder / 'head.yaml').read_text())
+    doc.pop('cable_exit_tool0_mm')
+    doc.pop('cable_axis_tool0')
+    (folder / 'head.yaml').write_text(yaml.safe_dump(doc))
+    proc = _run_xacro(head_model='hcad', head_dir=str(folder))
+    assert proc.returncode != 0 and 'cable exit' in proc.stderr and 'export-head' in proc.stderr
 
 
 def test_hcad_without_head_dir_fails():

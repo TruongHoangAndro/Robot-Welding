@@ -20,7 +20,8 @@ All pose / size arguments are mm, degrees and unit quaternions (ADR-14). Empty H
 
 Head model (Goal 1 G1.1): ``head_model:=hbox`` (default, parametric envelope) or ``hcad`` (Fusion head CAD meshes and
 tcp_laser from ``<head_dir>/head.yaml``, A18 export). For hcad the folder is checked first (head.yaml, mesh files and
-their SHA-256: awm_bringup.cell_config.check_head_dir); nozzle_* and conduit_* args apply to both models.
+their SHA-256: awm_bringup.cell_config.check_head_dir); nozzle_*, conduit_dia_mm and conduit_len_mm apply to both
+models; for hcad the conduit capsule sits at the head.yaml cable exit (conduit_x/y/z, conduit_r/p/y are H-BOX only, G1.8).
 """
 
 from launch import LaunchDescription
@@ -128,6 +129,6 @@ def generate_launch_description():
                               description='padding on every robot link except nozzle_tip (TST-002 F4, D16)'),
     ]
     decls += [DeclareLaunchArgument(n, default_value=d, description=t) for n, (d, t) in POSE_ARGS.items()]
-    decls += [DeclareLaunchArgument(n, default_value='', description='head xacro arg (H-BOX; nozzle / conduit also H-CAD); empty = default')
+    decls += [DeclareLaunchArgument(n, default_value='', description='head xacro arg (H-BOX; nozzle_*, conduit_dia / len also H-CAD); empty = default')
               for n in XACRO_ARGS]
     return LaunchDescription(decls + [OpaqueFunction(function=_launch_setup)])

@@ -28,7 +28,8 @@
   <xacro:arg name="head_dir" default=""/>
 
   <!-- H-BOX head (TST-002 Rev 0.3 draft §3.1). Every value: Assumption, except head_w/d/h (data-sheet envelope).
-       The nozzle_* / contact_standoff / conduit_* args are used by both head models. -->
+       The nozzle_* / contact_standoff / conduit_dia / conduit_len args are used by both head models; conduit_x/y/z and
+       conduit_r/p/y only by H-BOX (H-CAD: capsule at the head.yaml cable exit, G1.8). -->
   <xacro:arg name="mount_w_mm" default="100"/>          <!-- Assumption: no mount drawing -->
   <xacro:arg name="mount_d_mm" default="100"/>          <!-- Assumption -->
   <xacro:arg name="mount_h_mm" default="60"/>           <!-- Assumption -->
