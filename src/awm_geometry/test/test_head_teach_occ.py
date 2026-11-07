@@ -78,13 +78,49 @@ def test_stickout_moves_tcp_along_beam(head, tmp_path):
     np.testing.assert_allclose(doc['tool0_T_tcp_mm']['xyz'], NOZZLE_END + [0.0, 0.0, 5.0], atol=TOL)
 
 
-def test_reverse_flips_beam(head, tmp_path):
-    """Reverse on the nozzle mouth: the beam points into the head; the TCP stays at the tip (z > 0), axis -Z."""
+def test_reverse_into_head_refused(head, tmp_path):
+    """Review I2: reverse on the nozzle mouth makes the beam point back into the head (tool0 -Z, TCP at +z). DES-001
+    §5.3: tcp_laser Z = beam direction, out of the nozzle, away from tool0 -> refused, nothing written."""
     root, step, map_path = head
     edge = _circle_at(step, 'nozzle:1', _file(NOZZLE_END), tmp_path)
     code, doc = _teach(root, step, map_path, edge, 'nozzle:1', '--tcp-reverse')
-    assert code == 0
-    np.testing.assert_allclose(doc['beam_axis_tool0'], [0.0, 0.0, -1.0], atol=TOL)
+    assert code != 0 and doc is None
+
+
+def test_reverse_into_head_refused_message(head, tmp_path):
+    from awm_geometry import head as head_mod
+
+    root, step, map_path = head
+    edge = _circle_at(step, 'nozzle:1', _file(NOZZLE_END), tmp_path)
+    teach = {'component': 'nozzle:1', 'edge_id': edge, 'reverse': True, 'stickout_mm': 0.0}
+    with pytest.raises(head_mod.HeadError, match='points back towards tool0'):
+        head_mod.export_head(step, map_path, root / 'repo_reverse_msg', 'test', teach)
+    assert not (root / 'repo_reverse_msg' / 'cell' / 'model' / 'head').exists()
+
+
+def test_beam_without_tool0_z_component_refused(head, tmp_path):
+    """Teach also needs a beam component along tool0 +Z: the cross-rod end circle (x 15, beam +X in tool0) has
+    dot(beam, tcp) > 0 but runs sideways, parallel to the flange plane -> refused."""
+    from awm_geometry import head as head_mod
+
+    root, step, map_path = head
+    edge = _circle_at(step, 'crossrod:1', _file(np.array([15.0, -60.0, 100.0])), tmp_path)
+    teach = {'component': 'crossrod:1', 'edge_id': edge, 'reverse': False, 'stickout_mm': 0.0}
+    with pytest.raises(head_mod.HeadError, match='no component along tool0 \\+Z'):
+        head_mod.export_head(step, map_path, root / 'repo_crossrod', 'test', teach)
+
+
+def test_component_outside_head_links_refused(head, tmp_path):
+    """Review I2: the teach component must be inside one of the head's head_links (wrist:1 is the robot flange)."""
+    from awm_geometry import head as head_mod
+
+    root, step, map_path = head
+    edge = _circle_at(step, 'wrist:1', POSE_A[:3, 3], tmp_path)
+    teach = {'component': 'wrist:1', 'edge_id': edge, 'reverse': False, 'stickout_mm': 0.0}
+    with pytest.raises(head_mod.HeadError, match='not in head_links'):
+        head_mod.export_head(step, map_path, root / 'repo_wrist', 'test', teach)
+    code, doc = _teach(root, step, map_path, edge, 'wrist:1')
+    assert code != 0 and doc is None
 
 
 def test_cable_end_edge_refused(head, tmp_path):

@@ -356,7 +356,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--repo', required=True, help='repository root (cell/model/head is written)')
     p.add_argument('--tcp-component', default=None, help='CP-61 teach: component of the nozzle-mouth circle')
     p.add_argument('--tcp-edge', default=None, help='CP-61 teach: edge id E<n> of export-view --component')
-    p.add_argument('--tcp-reverse', action='store_true', help='CP-61 teach: flip the beam axis')
+    p.add_argument('--tcp-reverse', action='store_true',
+                   help='CP-61 teach: flip the beam axis (refused if the beam then points back towards tool0)')
     p.add_argument('--stickout-mm', type=float, default=0.0, help='CP-61 teach: TCP beyond the mouth along the beam')
     p.add_argument('--taught-by', default=None, help='CP-61 teach: user name recorded in head.yaml')
     p = sub.add_parser('job-placement')

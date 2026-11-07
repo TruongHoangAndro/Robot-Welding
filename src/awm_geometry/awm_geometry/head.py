@@ -625,6 +625,34 @@ def export_head(step: Path, map_path: Path, repo_root: Path, created_by: str,
         return _export_head(Path(step), Path(map_path), root, created_by, teach)
 
 
+BEAM_TOL = 1e-6  # numerical tolerance of the beam-direction checks (unit vector component / mm)
+
+
+def check_teach_component(tree: List[Dict[str, Any]], links: Dict[str, List[int]], component: str) -> str:
+    """Return the head link that owns the teach component; refuse a component outside the head's ``head_links``
+    (review I2: e.g. a circle on the robot flange or on another cell component)."""
+    owned = {j: link for link, idx in links.items() for i in idx for j in _subtree(tree, i)}
+    hits = [i for i in owned if tree[i]['instance_name'] == component]
+    if len(hits) != 1:
+        raise HeadError(f'TCP teach: component {component!r} is not in head_links (or not unique there: '
+                        f'{len(hits)} matches); pick the nozzle-mouth circle on a component of the head links '
+                        f'{sorted(links)}')
+    return owned[hits[0]]
+
+
+def check_beam_direction(point_t0: np.ndarray, axis_t0: np.ndarray, source: str) -> None:
+    """Refuse a TCP whose beam points back towards tool0 (review I2).
+
+    DES-001 §5.3: tcp_laser Z = beam direction, out of the nozzle. A beam with ``dot(axis, tcp) <= 0`` in tool0 runs
+    back towards the flange: the parametric nozzle would sit beyond the tip and the planner would put the head on
+    the wrong side of the seam. The real LightWELD head (beam (0.866, 0, 0.5), TCP (43.8, 0, 279.6) mm) passes."""
+    if float(axis_t0 @ point_t0) <= BEAM_TOL:
+        raise HeadError(f'{source}: the beam axis {np.round(axis_t0, 5).tolist()} points back towards tool0 (TCP '
+                        f'{np.round(point_t0, 3).tolist()} mm in tool0, dot = {float(axis_t0 @ point_t0):.3f} mm): '
+                        'tcp_laser Z must be the beam out of the nozzle, away from the flange (DES-001 §5.3). Flip '
+                        'frames.tcp axis_file / do not reverse the taught circle')
+
+
 def taught_tcp(step: Path, teach: Dict[str, Any], body_shape) -> Dict[str, Any]:
     """CP-61: TCP from the nozzle-mouth circle picked on the UI (file frame, mm).
 
@@ -692,6 +720,7 @@ def _export_head(step: Path, map_path: Path, root: Path, created_by: str,
     nozzle = float(tcp_map['nozzle_len_mm'])
     taught = None
     if teach is not None:
+        check_teach_component(tree, links, teach['component'])
         taught = taught_tcp(step, teach, beam_shape)
         tcp_map = dict(tcp_map, point_file_mm=taught['point_file_mm'], axis_file=taught['axis_file'])
     inv = frames.invert(file_T_tool0)
@@ -717,6 +746,15 @@ def _export_head(step: Path, map_path: Path, root: Path, created_by: str,
         if behind and taught is not None:
             raise HeadError(f'taught TCP lies behind the flange plane (tool0 z {point_t0[2]:.3f} mm): the picked circle '
                             f'{teach["component"]} {teach["edge_id"]} is not the nozzle mouth (cable / connector end?)')
+        if taught is not None:
+            check_beam_direction(point_t0, axis_t0, f'taught TCP {teach["component"]} {teach["edge_id"]}'
+                                 + (' (reversed)' if teach.get('reverse') else ''))
+            if axis_t0[2] <= BEAM_TOL:
+                raise HeadError(f'taught TCP {teach["component"]} {teach["edge_id"]}: the beam axis '
+                                f'{np.round(axis_t0, 5).tolist()} points back towards tool0 (no component along '
+                                'tool0 +Z): the beam must leave the nozzle away from the flange (DES-001 §5.3)')
+        else:
+            check_beam_direction(point_t0, axis_t0, 'frames.tcp from the map')
         if behind:
             LOG.warning('A18 frames.tcp from the map lies behind the flange plane (tool0 z %.3f mm): accepted as '
                         'set, recorded in head.yaml', point_t0[2])
