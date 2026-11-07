@@ -255,7 +255,7 @@ def test_override_accepted_with_cable_behind_flange(tmp_path, occ):
 def test_override_behind_flange_accepted_and_recorded(tmp_path, occ):
     """An explicit override is accepted wherever it is (the user said so), but recorded."""
     step = _head_step(tmp_path / 'head.step', POSE_A)
-    point_tool0, axis_tool0 = np.array([0.0, 0.0, -50.0]), np.array([0.0, 0.0, -1.0])
+    point_tool0, axis_tool0 = np.array([0.0, 0.0, -50.0]), np.array([0.0, 0.0, 1.0])
     cmap = _map(step, tcp={'point_file_mm': (POSE_A @ np.append(point_tool0, 1.0))[:3].tolist(),
                            'axis_file': (POSE_A[:3, :3] @ axis_tool0).tolist()})
     code, out = _export(tmp_path, step, cmap)
@@ -268,8 +268,8 @@ def test_override_behind_flange_accepted_and_recorded(tmp_path, occ):
 
 @pytest.mark.parametrize('point_tool0, axis_tool0', [
     ((0.0, -60.0, 240.0), (0.0, 0.0, -1.0)),   # tip in front of the flange, beam back into the head
-    ((0.0, 0.0, -50.0), (0.0, 0.0, 1.0)),      # behind the flange, beam towards the flange
-    ((100.0, 0.0, 10.0), (-1.0, 0.0, 0.0)),    # beside the flange, beam towards the tool0 axis
+    ((200.0, 0.0, 50.0), (0.995, 0.0, -0.1)),  # beam mostly sideways but tilted back towards the flange plane
+    ((100.0, 0.0, 10.0), (-1.0, 0.0, 0.0)),    # parallel to the flange plane
 ])
 def test_override_beam_towards_tool0_refused(tmp_path, occ, point_tool0, axis_tool0):
     """Review I2: a map TCP whose beam points back towards tool0 (dot(beam, tcp) <= 0 in tool0) is refused with a
@@ -277,7 +277,7 @@ def test_override_beam_towards_tool0_refused(tmp_path, occ, point_tool0, axis_to
     from awm_geometry import head
 
     step = _head_step(tmp_path / 'head.step', POSE_A)
-    p, a = np.array(point_tool0), np.array(axis_tool0)
+    p, a = np.array(point_tool0), np.array(axis_tool0) / np.linalg.norm(axis_tool0)
     cmap = _map(step, tcp={'point_file_mm': (POSE_A @ np.append(p, 1.0))[:3].tolist(),
                            'axis_file': (POSE_A[:3, :3] @ a).tolist(), 'nozzle_len_mm': 40.0})
     map_path = tmp_path / 'cad_map_head.yaml'
@@ -286,6 +286,19 @@ def test_override_beam_towards_tool0_refused(tmp_path, occ, point_tool0, axis_to
         head.export_head(step, map_path, tmp_path / 'repo', 'test')
     assert 'frames.tcp' in str(err.value)
     assert not (tmp_path / 'repo' / 'cell' / 'model' / 'head').exists()
+
+
+def test_override_beam_forward_beside_head_accepted(tmp_path, occ):
+    """TCP (-120, 0, 60) with the beam (0.866, 0, 0.5): the beam leaves away from the flange although it points
+    sideways past the tool0 axis -> accepted (one criterion: beam component along tool0 +Z)."""
+    step = _head_step(tmp_path / 'head.step', POSE_A)
+    p, a = np.array([-120.0, 0.0, 60.0]), np.array([0.866, 0.0, 0.5])
+    a = a / np.linalg.norm(a)
+    cmap = _map(step, tcp={'point_file_mm': (POSE_A @ np.append(p, 1.0))[:3].tolist(),
+                           'axis_file': (POSE_A[:3, :3] @ a).tolist(), 'nozzle_len_mm': 40.0})
+    code, out = _export(tmp_path, step, cmap)
+    assert code == 0
+    np.testing.assert_allclose(miniyaml.load(out / 'head.yaml')['beam_axis_tool0'], a, atol=1e-9)
 
 
 def test_override_tilted_beam_accepted(tmp_path, occ):

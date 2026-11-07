@@ -641,7 +641,7 @@ def export_head(step: Path, map_path: Path, repo_root: Path, created_by: str,
         return _export_head(Path(step), Path(map_path), root, created_by, teach)
 
 
-BEAM_TOL = 1e-6  # numerical tolerance of the beam-direction checks (unit vector component / mm)
+BEAM_TOL = 1e-6  # numerical tolerance of the beam-direction check (unit vector component)
 
 
 def check_teach_component(tree: List[Dict[str, Any]], links: Dict[str, List[int]], component: str) -> str:
@@ -657,16 +657,19 @@ def check_teach_component(tree: List[Dict[str, Any]], links: Dict[str, List[int]
 
 
 def check_beam_direction(point_t0: np.ndarray, axis_t0: np.ndarray, source: str) -> None:
-    """Refuse a TCP whose beam points back towards tool0 (review I2).
+    """Refuse a TCP whose beam does not leave the head away from the flange (review I2). One criterion for the map
+    override and the UI teach: the beam axis must have a component along tool0 +Z, ``axis_t0[2] > BEAM_TOL``.
 
-    DES-001 §5.3: tcp_laser Z = beam direction, out of the nozzle. A beam with ``dot(axis, tcp) <= 0`` in tool0 runs
-    back towards the flange: the parametric nozzle would sit beyond the tip and the planner would put the head on
-    the wrong side of the seam."""
-    if float(axis_t0 @ point_t0) <= BEAM_TOL:
-        raise HeadError(f'{source}: the beam axis {np.round(axis_t0, 5).tolist()} points back towards tool0 (TCP '
-                        f'{np.round(point_t0, 3).tolist()} mm in tool0, dot = {float(axis_t0 @ point_t0):.3f} mm): '
-                        'tcp_laser Z must be the beam out of the nozzle, away from the flange (DES-001 §5.3). Flip '
-                        'frames.tcp axis_file / do not reverse the taught circle')
+    DES-001 §5.3: tcp_laser Z = beam direction, out of the nozzle. A beam with no +Z component runs back towards the
+    flange or along its plane: the parametric nozzle would sit beyond the tip and the planner would put the head on
+    the wrong side of the seam. Chosen over ``dot(axis, tcp)`` and over the beam-link bbox centre because it does not
+    depend on where the TCP lies beside the tool0 axis or on the body shape (a sideways beam tilted back towards the
+    flange passes both of those tests). ``point_t0`` is only reported."""
+    if float(axis_t0[2]) <= BEAM_TOL:
+        raise HeadError(f'{source}: the beam axis {np.round(axis_t0, 5).tolist()} (TCP '
+                        f'{np.round(point_t0, 3).tolist()} mm, tool0) has no component along tool0 +Z: it points back '
+                        'towards tool0 / along the flange plane. tcp_laser Z must be the beam out of the nozzle, away '
+                        'from the flange (DES-001 §5.3). Flip frames.tcp axis_file / do not reverse the taught circle')
 
 
 def taught_tcp(step: Path, teach: Dict[str, Any], body_shape) -> Dict[str, Any]:
@@ -781,15 +784,9 @@ def _export_head(step: Path, map_path: Path, root: Path, created_by: str,
         if behind and taught is not None:
             raise HeadError(f'taught TCP lies behind the flange plane (tool0 z {point_t0[2]:.3f} mm): the picked circle '
                             f'{teach["component"]} {teach["edge_id"]} is not the nozzle mouth (cable / connector end?)')
-        if taught is not None:
-            check_beam_direction(point_t0, axis_t0, f'taught TCP {teach["component"]} {teach["edge_id"]}'
-                                 + (' (reversed)' if teach.get('reverse') else ''))
-            if axis_t0[2] <= BEAM_TOL:
-                raise HeadError(f'taught TCP {teach["component"]} {teach["edge_id"]}: the beam axis '
-                                f'{np.round(axis_t0, 5).tolist()} points back towards tool0 (no component along '
-                                'tool0 +Z): the beam must leave the nozzle away from the flange (DES-001 §5.3)')
-        else:
-            check_beam_direction(point_t0, axis_t0, 'frames.tcp from the map')
+        check_beam_direction(point_t0, axis_t0, 'frames.tcp from the map' if taught is None else
+                             f'taught TCP {teach["component"]} {teach["edge_id"]}'
+                             + (' (reversed)' if teach.get('reverse') else ''))
         if behind:
             LOG.warning('A18 frames.tcp from the map lies behind the flange plane (tool0 z %.3f mm): accepted as '
                         'set, recorded in head.yaml', point_t0[2])
