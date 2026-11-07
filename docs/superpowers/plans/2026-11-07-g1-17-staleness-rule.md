@@ -58,23 +58,23 @@ Write scope (named by the lead, AGENT_TEAM.md §1 exception): `src/awm_path`, `s
 
 ## Tasks
 
-- [ ] T1 `awm_core/test/test_staleness.py` (red): unchanged inputs → ok; changed / missing input → stale; input via a
+- [x] T1 `awm_core/test/test_staleness.py` (red): unchanged inputs → ok; changed / missing input → stale; input via a
       symlink leaving the repository → stale with "outside the repository"; symlink inside the repository → ok;
       D07 without / older / newer `record_version` → stale with the texts; non-D07 needs no version; D09 with a
       stale D07 input → stale; `document_state` signature = API's; missing / unreadable document → missing.
-- [ ] T2 `awm_core/staleness.py` (green).
-- [ ] T3 `awm_path` tests (red): plan with a head folder linked out of the repository → refused, nothing written;
+- [x] T2 `awm_core/staleness.py` (green).
+- [x] T3 `awm_path` tests (red): plan with a head folder linked out of the repository → refused, nothing written;
       D07 written by plan has `planner.params.record_version == PLANNER_RECORD_VERSION` and the shared verdict is ok;
       `check` subcommand ok / stale; version guard on the head / description record keys.
-- [ ] T4 `awm_path/cli.py` (green).
-- [ ] T5 `awm_program` tests (red): D07 without `record_version` → refused "planned with an older planner; re-plan";
+- [x] T4 `awm_path/cli.py` (green).
+- [x] T5 `awm_program` tests (red): D07 without `record_version` → refused "planned with an older planner; re-plan";
       symlinked-out head → same verdict from `awm_path.cli check`, `awm_program.cli generate` and
       `awm_core.staleness.document_state`.
-- [ ] T6 `awm_program/cli.py` (green).
-- [ ] T7 golden fixture (`awm_path/test/test_golden_g13.py`): copy the D07 inputs (placement.json, part.json, head
+- [x] T6 `awm_program/cli.py` (green).
+- [x] T7 golden fixture (`awm_path/test/test_golden_g13.py`): copy the D07 inputs (placement.json, part.json, head
       folder) instead of linking them out of the temporary repository; run G1.3 + G1.5 golden tests with
       `AWM_SPIKE_REPO` and `AWM_OCC_PYTHON`.
-- [ ] T8 package check: `scripts/dx "colcon build --symlink-install --packages-select awm_core awm_path awm_program
+- [x] T8 package check: `scripts/dx "colcon build --symlink-install --packages-select awm_core awm_path awm_program
       && colcon test --packages-select awm_core awm_path awm_program && colcon test-result --verbose"`.
 
 ## Follow-ups for other owners
