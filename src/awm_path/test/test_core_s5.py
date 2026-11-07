@@ -181,3 +181,11 @@ def test_coverage_reject_reason_names_the_causes():
     r = coverage_reject_reason([None, 'nozzle', 'F4', 'nozzle', None])
     assert r == 'no path: C2 fails at 3 of 5 points (causes: nozzle 2, F4 1)'
     assert coverage_reject_reason([None, None]) is None
+
+
+def test_unreachable_point_is_ik_even_when_f9_fails():
+    """Review minor 7: no kinematically valid candidate → 'IK' (unreachable), even if F9 also fails there."""
+    layers = [[_c(0, 0, None, None, reason='no_ik_unreachable')]]
+    cols = _cols(layers, [[False]], f4=[[None]], clr=[[None]], contact=[[False]])
+    pts = classify_points(layers, cols)
+    assert point_classes(pts) == ['IK']

@@ -157,27 +157,27 @@ def point_classes(points: Sequence[Mapping[str, Any]], nozzle_links: Sequence[st
                   ) -> List[Optional[str]]:
     """Class (= rejection cause) of each point without a valid node (None = covered):
 
-    * ``nozzle`` (CP-56 decision 2) if F9 fails at the point, or if no candidate passes F4 and every F4 contact of the
-      point involves a nozzle link (``nozzle_tip`` / ``nozzle_body``): the configured nozzle is the cause, the
+    * ``IK`` if no candidate is kinematically valid (unreachable; checked first, review minor 7: a point no head
+      can reach is not blamed on the nozzle);
+    * else ``nozzle`` (CP-56 decision 2) if F9 fails at the point, or if no candidate passes F4 and every F4 contact
+      of the point involves a nozzle link (``nozzle_tip`` / ``nozzle_body``): the configured nozzle is the cause, the
       Engineer changes the setup or the cell owner fits another nozzle (details in ``contact_reason`` / ``pairs``);
-    * else ``IK`` if no candidate is kinematically valid;
     * else ``F4`` if no candidate passes F4 (another link collides);
     * else ``clearance``."""
     out: List[Optional[str]] = []
     for p in points:
+        c = p['counts']
+        kin_valid = sum(v for k, v in c.items() if k in ('f4_invalid', 'clearance', 'contact', 'valid'))
         if p['valid_nodes'] > 0:
             out.append(None)
+        elif kin_valid == 0:
+            out.append('IK')
         elif not p['contact_ok']:
             out.append('nozzle')
+        elif c.get('clearance', 0) == 0 and c.get('contact', 0) == 0:
+            out.append('nozzle' if _nozzle_only(p.get('pairs', {}), nozzle_links) else 'F4')
         else:
-            c = p['counts']
-            kin_valid = sum(v for k, v in c.items() if k in ('f4_invalid', 'clearance', 'contact', 'valid'))
-            if kin_valid == 0:
-                out.append('IK')
-            elif c.get('clearance', 0) == 0 and c.get('contact', 0) == 0:
-                out.append('nozzle' if _nozzle_only(p.get('pairs', {}), nozzle_links) else 'F4')
-            else:
-                out.append('clearance')
+            out.append('clearance')
     return out
 
 
