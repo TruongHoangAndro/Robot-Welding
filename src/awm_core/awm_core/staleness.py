@@ -22,7 +22,8 @@ Names resolve against the job folder only. In addition:
 * a D07 (a document with a ``planner`` block, or a schema 2.x path document without one) must carry ``planner.params.record_version`` equal to
   :data:`PLANNER_RECORD_VERSION`; missing / lower → "planned with an older planner; re-plan", higher → "planned with
   a newer planner";
-* a D09 (a document with ``program_rev``) inherits the verdict of every JSON input that is a D07.
+* a D09 (a document with ``program_rev``) inherits the verdict of every JSON input that is a D07; repeated problems
+  are reported once.
 
 An unreadable or absent document is ``missing``.
 """
@@ -189,7 +190,7 @@ def document_verdict(job: PathLike, name: str, repo_root: PathLike,
         doc = _read(job / name)
     if doc is None:
         return Verdict(MISSING)
-    problems = _problems(doc, job, Path(repo_root).resolve(), follow_d07='program_rev' in doc)
+    problems = list(dict.fromkeys(_problems(doc, job, Path(repo_root).resolve(), follow_d07='program_rev' in doc)))
     return Verdict(STALE, tuple(problems)) if problems else Verdict(OK)
 
 

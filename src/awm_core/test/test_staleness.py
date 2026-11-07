@@ -199,3 +199,12 @@ def test_malformed_inputs_list_is_a_problem(tmp_path):
     root, job = _repo(tmp_path)
     v = document_verdict(job, 'x.json', root, {'inputs': 'seam_axis.json'})
     assert v.state == 'stale' and v.problems == ('inputs: malformed input list',)
+
+
+def test_program_problems_are_deduplicated(tmp_path):
+    """Review minor 4: a D07 listed twice (or a problem repeated) is reported once."""
+    root, job = _repo(tmp_path)
+    _d07(job, version=None)
+    doc = {'program_rev': 'P001', 'inputs': [_entry(job, 'path.json'), _entry(job, 'path.json')]}
+    v = document_verdict(job, 'programs/P001/program.json', root, doc)
+    assert v.state == 'stale' and len(v.problems) == len(set(v.problems)) == 1, v.problems
