@@ -1,0 +1,46 @@
+# G1.9 — Acceleration-aware maximum travel speed in the planner (D07)
+
+Date: 2026-11-07 · Agent: planner · Branch: `g1-9-accel-speed` (from GotoCode 4df0f25)
+References: DES-001 Rev 0.5 §4.3 step 5 (A47 time parameterisation, owned by M4), §6.2 (segments start / end at
+rest), ADR-14 (units), CP-59 follow-up of 2026-11-06 (travel speed = Engineer input; refuse with the feasible maximum
+shown; never slow silently; never raise limits), PROGRESS.md Goal 1 next step (4).
+
+## Problem
+
+`awm_path.core.sync.timing` reports `max_travel_speed_mm_s` / `speed_within_limits` from joint and positioner
+**velocity** limits only (finite differences at constant speed). `awm_program` times the weld as a clamped C2 cubic
+spline over a trapezoidal arc-length profile (ramp 5 mm/s², Assumption) and checks **velocity and acceleration**
+limits. Golden J2: D07 says 3.21 mm/s, the program accepts only ≤ 2.39 mm/s → plan "ok", program refused.
+
+## Decision (inside `src/awm_path` only)
+
+* `awm_program` imports `awm_path` (not the reverse), so the planner cannot import `awm_program.core.spline`.
+  A47 is an M4 function: the weld timing model (trapezoidal arc-length profile + clamped cubic + exact spline maxima)
+  goes into **`awm_path/core/weld_timing.py`**, a faithful copy of the `awm_program` model. Request to program-verify:
+  replace the copy in `awm_program.core.spline` / `timing` by imports from `awm_path.core.weld_timing` (one source)
+  and read the ramp acceleration from D07 `planner.params.sync`.
+* Limits: same sources as `awm_program.description` — UR accelerations from
+  `awm_description/config/joint_limits_v2.yaml` (rad/s² → deg/s² through `awm_core.units`), positioner from
+  `positioner_limits.yaml` (`awm_bringup.cell_config`). Carried in `SyncCell` (new required fields
+  `joint_acceleration_deg_s2`, `theta_acceleration_deg_s2`; no velocity-only fallback).
+* `SyncParams` gains `weld_ramp_accel_mm_s2 = 5.0` and `speed_search_resolution_mm_s = 0.01` (Assumptions, same
+  values as `ProgramParams`), recorded in D07 `planner.params.sync`.
+* `timing()` keeps the D07 contract keys (schema `planning` has `additionalProperties: false`):
+  `speed_within_limits` = the spline at the requested speed is inside velocity **and** acceleration limits;
+  `max_travel_speed_mm_s` = largest speed (bisection on (0, √(a_ramp·L)), rounded down to the resolution) inside
+  both; `max_joint_speed_deg_s` = exact spline velocity maxima at the requested speed. D07 `timed` times unchanged
+  (t = Δs / v; the program re-times). Schema description texts ("velocity limit") → request to the lead.
+
+## Tasks
+
+- [x] T1 Plan (this file).
+- [ ] T2 Tests first (`src/awm_path/test/test_core_weld_timing.py`): synthetic 7-joint path where the velocity-only
+  maximum is feasible for velocity but breaks an acceleration limit → `speed_within_limits` false and the reported
+  maximum < velocity-only maximum; the reported maximum is accepted by the same model and maximum + 0.02 mm/s is
+  refused; parity with `awm_program.core.program7.max_feasible_speed` / `_within` (within 0.01 mm/s, the search
+  resolution); missing acceleration limits refused; `SyncCell` / description carry the accelerations.
+- [ ] T3 Implement `weld_timing.py`, `SyncCell` fields, `SyncParams` fields, `timing()`, description loader.
+- [ ] T4 Update the existing synthetic `SyncCell` builders in `awm_path` tests.
+- [ ] T5 Golden (if `AWM_SPIKE_REPO`): J1 / J2 max speed planner vs program.
+- [ ] T6 `scripts/dx "colcon build --symlink-install --packages-select awm_core awm_path && colcon test
+  --packages-select awm_path && colcon test-result --verbose"`; report.
