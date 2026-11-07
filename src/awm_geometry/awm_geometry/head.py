@@ -645,14 +645,30 @@ BEAM_TOL = 1e-6  # numerical tolerance of the beam-direction check (unit vector 
 
 
 def check_teach_component(tree: List[Dict[str, Any]], links: Dict[str, List[int]], component: str) -> str:
-    """Return the head link that owns the teach component; refuse a component outside the head's ``head_links``
-    (review I2: e.g. a circle on the robot flange or on another cell component)."""
-    owned = {j: link for link, idx in links.items() for i in idx for j in _subtree(tree, i)}
-    hits = [i for i in owned if tree[i]['instance_name'] == component]
+    """Return the head link that owns the teach component (review I2).
+
+    The name is resolved file-wide with the rule of :func:`assembly.read_components`, which then loads the circle:
+    instance or product name equal to ``component`` (instance suffix ``:n`` ignored), first match on each branch. It
+    must name exactly one node, and that node must lie inside the head's ``head_links`` (not on the robot flange or
+    another cell component). So the node checked here is the node read by ``part.load_part``."""
+    def matches(text: Optional[str]) -> bool:
+        return bool(text) and (text == component or text.rsplit(':', 1)[0] == component)
+
+    hits: List[int] = []
+    below: set = set()
+    for node in tree:  # depth-first order: parents come first
+        if node['parent'] in below:
+            below.add(node['index'])
+        elif matches(node['instance_name']) or matches(node['product_name']):
+            hits.append(node['index'])
+            below.add(node['index'])
     if len(hits) != 1:
-        raise HeadError(f'TCP teach: component {component!r} is not in head_links (or not unique there: '
-                        f'{len(hits)} matches); pick the nozzle-mouth circle on a component of the head links '
-                        f'{sorted(links)}')
+        raise HeadError(f'TCP teach: component {component!r} matches {len(hits)} components in the file (expected 1)'
+                        + ('' if not hits else ': ' + '; '.join(tree[i]['path'] for i in hits)))
+    owned = {j: link for link, idx in links.items() for i in idx for j in _subtree(tree, i)}
+    if hits[0] not in owned:
+        raise HeadError(f'TCP teach: component {tree[hits[0]]["path"]!r} is not in head_links; pick the nozzle-mouth '
+                        f'circle on a component of the head links {sorted(links)}')
     return owned[hits[0]]
 
 

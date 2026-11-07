@@ -69,17 +69,18 @@ def _flange():
     return BRepAlgoAPI_Cut(_cyl(31.5, (0.0, 0.0, -10.0), 10.0), _cyl(3.0, (0.0, -25.0, -6.0), 6.0)).Shape()
 
 
-def _head_step(path, pose, surface_body=False, cable=False):
+def _head_step(path, pose, surface_body=False, cable=False, body_extra=(), top_extra=()):
     """Write the synthetic head CAD with the flange (and the head with it) at ``pose`` in the file.
 
     ``cable``: add a long cable cylinder hanging behind the flange (tool0 -Z), reaching farther from tool0 than the
-    nozzle (the real head CAD: fiber / cable connector end, bug of 2026-11-06)."""
+    nozzle (the real head CAD: fiber / cable connector end, bug of 2026-11-06). ``body_extra`` / ``top_extra``: more
+    nodes below the head body / beside the robot and the tool (name-matching tests)."""
     from awm_geometry import testparts
 
     body = (_open_box(*BODY_BOX)[0] if surface_body else _box(*BODY_BOX))
     extra = [{'name': 'cable', 'shape': _cyl(*CABLE)}] if cable else []
     head_children = [
-        {'name': 'body', 'placement_mm': frames.invert(INNER), 'children': extra + [
+        {'name': 'body', 'placement_mm': frames.invert(INNER), 'children': extra + list(body_extra) + [
             {'name': 'skin', 'shape': body},
             {'name': 'nozzle', 'shape': _cyl(10.0, (0.0, -60.0, 200.0), 40.0)},
             {'name': 'wire', 'shape': _cyl(1.0, (0.0, -90.0, 40.0), 140.0)},
@@ -91,7 +92,7 @@ def _head_step(path, pose, surface_body=False, cable=False):
     testparts.write_tree_assembly(path, 'robot', [
         {'name': 'wrist', 'placement_mm': pose, 'shape': _flange()},
         {'name': 'tool', 'placement_mm': pose @ INNER, 'children': head_children},
-    ])
+    ] + list(top_extra))
     return path
 
 
