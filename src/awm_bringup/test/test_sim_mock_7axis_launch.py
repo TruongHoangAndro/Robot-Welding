@@ -5,11 +5,11 @@ Mock hardware only. Two launches, each starting at the mock start state (``initi
 1. ``test_replay_synthetic`` (always): only the 7-joint controller is active (split pair not loaded); a synthetic
    2-segment program (test data, not part data) is replayed, final ``/joint_states`` = last point; a program that
    does not start at the current state is refused (exit 2) and nothing moves.
-2. ``test_replay_golden`` (golden data through env vars, skipped with the reason when unset): ``AWM_GOLDEN_REPO`` =
-   job repository of the old-flow golden part (e.g. ``.worktrees/demo/golden_repo_g1``), ``AWM_GOLDEN_JOB``
-   (default ``564082_A``), ``AWM_GOLDEN_PROGRAM_REV`` (default: the newest ``programs/P###``). The J1 + J2 program
-   (two seams, weld segments in ``sync`` / ``C``) is replayed synchronised; final ``/joint_states`` = last D09 point
-   within ``final_tolerance_deg``; per-segment tracking error is logged (``G17 {json}`` with ``pytest -s``).
+2. ``test_replay_golden`` (session fixture ``golden``, ``conftest.py``, G1.22: repository rebuilt from the cell STEP
+   by ``scripts/golden_rebuild.py``; skipped with ``AWM_CELL_STEP not set`` otherwise): the J1 + J2 program of the
+   rebuild (two seams, weld segments in ``sync``) is replayed synchronised in ``sim_mock repo:=<golden repo>``;
+   final ``/joint_states`` = last D09 point within ``final_tolerance_deg``; per-segment tracking error is logged
+   (``G17 {json}`` with ``pytest -s``).
 """
 
 import json
@@ -141,19 +141,9 @@ def test_replay_synthetic(tmp_path):
             rclpy.try_shutdown()
 
 
-def _golden_program() -> Path:
-    root = os.environ.get('AWM_GOLDEN_REPO')
-    if not root:
-        pytest.skip('AWM_GOLDEN_REPO not set (old-flow golden job repository with a G1.5 program)')
-    job = Path(root) / 'jobs' / os.environ.get('AWM_GOLDEN_JOB', '564082_A')
-    rev = os.environ.get('AWM_GOLDEN_PROGRAM_REV')
-    revs = sorted(p.name for p in (job / 'programs').glob('P[0-9][0-9][0-9]') if (p / 'program.json').is_file())
-    assert revs, f'no programs/P###/program.json in {job}'
-    return job / 'programs' / (rev or revs[-1]) / 'program.json'
-
-
-def test_replay_golden(tmp_path):
-    path = _golden_program()
+def test_replay_golden(tmp_path, golden):
+    path = Path(golden['repo']) / golden['program']['file']
+    assert path.is_file(), path
     doc = json.loads(path.read_text())
     prog = replay.load_program(path)
     welds = [s for s in doc['segments'] if s['kind'] in ('weld', 'positioner_weld')]
@@ -161,7 +151,8 @@ def test_replay_golden(tmp_path):
     assert prog.segments[0].start_deg == pytest.approx(_start_deg(), abs=0.05), \
         'golden program does not start at the sim_mock start state'
     cycle = sum(s.duration_s for s in prog.segments)
-    with SimLaunch(log_dir=tmp_path, launch_file='sim_mock.launch.py', launch_args=ARGS) as sim:
+    args = dict(ARGS, repo=golden['repo'])  # the cell the program was planned in (G1.16)
+    with SimLaunch(log_dir=tmp_path, launch_file='sim_mock.launch.py', launch_args=args) as sim:
         rclpy.init()
         node = rclpy.create_node('awm_g17_golden_test')
         try:

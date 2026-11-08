@@ -1,0 +1,126 @@
+# Golden part 564082: every pick of the browser chain, as data (G1.22, close-out C1, Truong 2026-11-08).
+# Read by scripts/golden_rebuild.py, which rebuilds the whole golden repository from the cell STEP alone
+# (AWM_CELL_STEP). Test data, never source (CLAUDE.md design rule 2): component names, edge ids, roles and speeds of
+# the golden part live only here. Units: mm, deg, s (ADR-14).
+#
+# Sources of the values: RUN_DEMO_CP60.md and golden_repo_cp60 (cell roles.json, axis_pick.json, cad_map_head.yaml)
+# of 2026-11-06, the Goal 1 audit of 2026-11-07 (Part1 circle E3 r 15, nozzle circle E3955, joints JE9 / JE11) and the
+# decision of 2026-11-08 (duplicate welding tool = exclude, OI-23). Every value is checked by the script against the
+# CAD; a mismatch stops the rebuild (no fallback).
+schema: awm_golden_rebuild/0.1
+
+users:                                   # throwaway accounts of the rebuild repository (random passwords, not kept)
+  admin: golden-adm
+  engineer: golden-eng
+
+tolerances:
+  radius_mm: 0.001                       # picked circle radius vs the value below
+  tcp_mm: 0.01                           # taught TCP in tool0 vs expected
+  tcp_deg: 0.01                          # taught beam axis / tcp_laser Z in tool0 vs expected
+  joint_length_mm: 0.05                  # closed joint ring length vs expected
+
+cell:
+  up_axis: '+Y'                          # Fusion export, Y up in the file (DES-001 §5.3)
+  roles:                                 # S10 Roles tab; components not listed are static (cad_roles default)
+    - {path: '2500001:1', role: static}
+    - {path: '564082-Assembly-3 parts:2', role: exclude}      # the part comes with the job
+    - {path: 'Jig:1', role: static}
+    - {path: 'Part1:1', role: rotary_fixture}
+    - {path: 'HTPK20S5M150-A-C15:1', role: rotary_fixture}
+    - {path: 'HTPK20S5M150-A-C15:2', role: static}
+    - {path: 'Timing Belts:1', role: static}
+    - {path: 'Rotary Shaft:1', role: static}
+    - {path: '60CM30X_3D:1', role: static}
+    - {path: 'GSACL25-8-12:1', role: static}
+    - {path: 'Part2:1', role: rotary_fixture}
+    - {path: 'Part3:1', role: rotary_fixture}
+    - {path: 'HTPK20S5M150-A-C15:3', role: static}
+    - {path: 'HTPK20S5M150-A-C15:4', role: rotary_fixture}
+    - {path: 'Timing Belts:2', role: static}
+    - {path: 'UR5E/UR7E:1', role: robot}
+    - {path: 'Part5:1', role: static}
+    - {path: 'ASSY, Welding tool:1', role: exclude}           # duplicate head at the top level (OI-23, 2026-11-08)
+  collision:
+    'Jig:1': mesh                        # its hull would cover J1 (CP-60 ledger, Task 4)
+  contact_tolerance_mm: 1.0
+  positioner_axis:                       # S10 Positioner axis tab: the large circle of Part1 on the axis
+    component_path: 'Part1:1'
+    edge_id: E3
+    radius_mm: 15.0
+    reverse: false
+
+head:
+  # CP-61 needs the wrist-3 flange and the mount in one assembly: the robot component (arm + mount + LightWELD) is
+  # cut from the cell STEP into cell/cad/head.step with make-job-step; the head map below is written next to it
+  # with that file's SHA-256 (Dau_han_robot.step is no longer needed).
+  component: 'UR5E/UR7E:1'
+  up_axis: '+Y'
+  map:
+    roles:
+      head_cad:
+        - {path: 'UR5E/UR7E:1 / ASSY, Welding tool:1', depth: 2}   # the head on the robot, not the duplicate
+      ignore:                            # robot geometry always from ur_description (ADR-16)
+        - 'C-1000257:1'
+        - 'C-1000248:1'
+        - 'C-1000249:1'
+        - 'C-1000250:1'
+        - 'C-1000251:1'
+        - 'C-2007861:1'
+        - 'C-2007038:1'
+    head_links:
+      head_body: ['LightWELD:1']
+      head_mount: ['Tool for LightWELD:1']
+    frames:
+      tool0:
+        robot_link: 'C-2007038:1'        # wrist 3 flange face touches the mount
+        mount: 'Tool for LightWELD:1'
+        pin_radius_mm: 3.0
+        pin_axis: '-Y'
+      tcp:
+        beam_link: head_body
+        nozzle_len_mm: 40.0              # parametric collision nozzle (CP-56; I2 / OI-15)
+  tcp_teach:                             # S10 Tool / TCP tab: the small circle at the nozzle mouth
+    component: 'LightWELD:1'
+    edge_id: E3955
+    radius_mm: 2.5
+    reverse: false
+    stickout_mm: 0.0
+  expected_tcp_tool0_mm: [43.829, 0.0, 279.606]   # Truong's mark of 2026-11-06 (Assumption until OI-2 / OI-13)
+  expected_beam_axis_tool0: [0.866025, 0.0, 0.5]  # beam out of the nozzle, 60 deg from the flange axis
+
+job:
+  part_no: '564082'
+  part_rev: A
+  up_axis: '+Y'
+  components:                            # make-job-step (CP-60): rotating set (OI-27) + the golden part
+    - 'Part1:1'
+    - 'Part2:1'
+    - 'Part3:1'
+    - 'HTPK20S5M150-A-C15:1'
+    - 'HTPK20S5M150-A-C15:4'
+    - '564082-Assembly-3 parts:2'
+  roles:
+    - {path: 'Part1:1', role: rotary_fixture}
+    - {path: 'Part2:1', role: rotary_fixture}
+    - {path: 'Part3:1', role: rotary_fixture}
+    - {path: 'HTPK20S5M150-A-C15:1', role: rotary_fixture}
+    - {path: 'HTPK20S5M150-A-C15:4', role: rotary_fixture}
+    - {path: '564082-Assembly-3 parts:2', role: part}
+  positioner_axis:                       # S2: the same r 15 circle of Part1, in the job file (components view)
+    edge_id: E3
+    radius_mm: 15.0
+    reverse: false
+  cross_check_red: [4]                   # expected: only check 4 red (jig / belts touch the rotating set, OI-23)
+  override_reason: >-
+    G1.22 golden rebuild: check 4 is red because the bearing seats of Jig:1 and the timing belts are not separate
+    components in the cell CAD (OI-23); kinematic-only planning, collision is Goal 2 (CP-62, decision 2026-11-08).
+  seams:                                 # S2 joint list: J1 coaxial with the positioner axis, J2 off the axis
+    - {seam_id: S01, label: J1, joint_edge_id: JE9, length_mm: 83.786, coaxial: true}
+    - {seam_id: S02, label: J2, joint_edge_id: JE11, length_mm: 83.786, coaxial: false}
+  seam_defaults:
+    joint_type: butt
+    reversed: false
+    arcs: 1
+    arc_overlap_mm: 2.0
+    positioner_mode: sync                # CP-59 default
+  travel_speed_mm_s: 2.3                 # below the feasible maxima of the golden run (J2 2.39, J1 6.96 mm/s)

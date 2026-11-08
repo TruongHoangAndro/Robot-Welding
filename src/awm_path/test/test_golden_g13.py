@@ -1,11 +1,11 @@
-"""G1.3 golden run: plan CLI on a copy of the spike job (golden part 564082), J1 + J2 in ``sync``, J1 in ``C``.
+"""G1.3 golden run: plan CLI on a copy of the golden job (golden part 564082), J1 + J2 in ``sync``, J1 in ``C``.
 
-Golden data only through environment variables (skipped with the reason when unset): ``AWM_SPIKE_REPO`` (repository
-root with cell/model/frames.yaml, cell/model/head/ and jobs/<job>/), ``AWM_SPIKE_JOB`` (default 564082_A),
-``AWM_SPIKE_J1`` / ``AWM_SPIKE_J2`` (joint edge ids, default JE2 / JE4 = the spike record) and ``AWM_OCC_PYTHON``
-(OCC sampler for the seams). The spike files are linked into a temporary repository, never written; the files a
-D07 / D09 records as inputs (part.json, placement.json, the head folder) are copied instead, because inputs that
-resolve outside the repository are refused (G1.17, ``awm_core.staleness``).
+Golden data from the session fixture ``golden`` (``conftest.py``, G1.22): the repository rebuilt from the cell STEP
+by ``scripts/golden_rebuild.py`` (skipped with ``AWM_CELL_STEP not set`` otherwise); job folder and the J1 / J2 joint
+edge ids come from its summary (data file ``awm_bringup/test/data/golden_part.yaml``). ``AWM_OCC_PYTHON`` = OCC
+sampler for the seams. The golden files are copied into a temporary repository, never written: seam_axis.json /
+D07 / D09 record model.step, the CP-60 roles / axis picks, part.json, placement.json and the head folder as inputs,
+and inputs that resolve outside the repository are refused (G1.17, ``awm_core.staleness``).
 
 Acceptance (master plan G1.3): every arc 100 % in its mode or rejected with failing s ranges and reasons; |Δq| ≤ 5°
 on all 7 joints; FK of q reproduces the planned TCP pose (sync ≤ 0.01 mm / 0.01°, Mode C within the F8 tolerance of
@@ -31,33 +31,37 @@ pytest.importorskip('xacro', reason='xacro not available (run inside awm_dev)')
 
 _JOB_FILES = ('model.step', 'cache/model.brep', 'cache/collision.stl', 'cache/collision_faces.json',
               'cache/view/topology.json')
-#: Recorded as inputs of seam_axis.json / D07 / D09: copied into the temporary repository (G1.17).
 _JOB_COPIES = ('part.json', 'placement.json')
 
 
-def _repo(tmp_path: Path, modes):
-    root = os.environ.get('AWM_SPIKE_REPO')
-    if not root:
-        pytest.skip('AWM_SPIKE_REPO not set (golden-part spike job)')
-    if not os.environ.get(occ_bridge.ENV_VAR):
-        pytest.skip(f'{occ_bridge.ENV_VAR} not set (OCC sampler)')
+def _copy_placement_inputs(src: Path, dst: Path) -> None:
+    """CP-60 placement.json records the job and cell roles / axis picks as inputs (G1.17 refuses missing ones): copy
+    every input that is not linked or copied yet (small JSON / YAML files)."""
+    for item in json.loads((src / 'placement.json').read_text())['inputs']:
+        target = dst / item['name']
+        if not os.path.lexists(target):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src / item['name'], target)
+
+
+def _repo(tmp_path: Path, golden, modes):
+    assert os.environ.get(occ_bridge.ENV_VAR), f'{occ_bridge.ENV_VAR} not set (OCC sampler)'
     from awm_seam import joint_cli
-    src_repo = Path(root)
-    name = os.environ.get('AWM_SPIKE_JOB', '564082_A')
+    src_repo = Path(golden['repo'])
+    name = golden['job_id']
     src = src_repo / 'jobs' / name
     dst = tmp_path / 'repo' / 'jobs' / name
     (dst / 'cache' / 'view').mkdir(parents=True)
-    for rel in _JOB_FILES:
-        os.symlink(src / rel, dst / rel)
-    for rel in _JOB_COPIES:
+    for rel in _JOB_FILES + _JOB_COPIES:
         shutil.copyfile(src / rel, dst / rel)
     model = tmp_path / 'repo' / 'cell' / 'model'
     model.mkdir(parents=True)
     shutil.copyfile(src_repo / 'cell' / 'model' / 'frames.yaml', model / 'frames.yaml')
     shutil.copytree(src_repo / 'cell' / 'model' / 'head', model / 'head')
+    _copy_placement_inputs(src, dst)
     topo = json.loads((dst / 'cache' / 'view' / 'topology.json').read_text())
     joints = {j['joint_edge_id']: j for j in topo['joints']}
-    ids = (os.environ.get('AWM_SPIKE_J1', 'JE2'), os.environ.get('AWM_SPIKE_J2', 'JE4'))
+    ids = (golden['joints']['J1'], golden['joints']['J2'])
     seams = [{'seam_id': f'S0{k + 1}', 'edges': [joints[ids[k]]['edge_a']], 'joint_type': 'butt', 'sequence': k + 1,
               'arcs': 1, 'arc_overlap_mm': 2.0, 'positioner_mode': m} for k, m in enumerate(modes)]
     picks = tmp_path / 'picks.json'
@@ -109,8 +113,8 @@ def _payload(doc):
     return d
 
 
-def test_golden_sync_j1_j2(tmp_path):
-    job = _repo(tmp_path, ('sync', 'sync'))
+def test_golden_sync_j1_j2(tmp_path, golden):
+    job = _repo(tmp_path, golden, ('sync', 'sync'))
     rc, out = _plan(job, tmp_path / 'a.json')
     assert rc in (0, 2), out
     doc = jsonio.read_json(tmp_path / 'a.json', 'v2/path')
@@ -123,9 +127,9 @@ def test_golden_sync_j1_j2(tmp_path):
     print('GOLDEN', out.strip().splitlines()[-1])
 
 
-def test_golden_mode_c_j1(tmp_path):
+def test_golden_mode_c_j1(tmp_path, golden):
     from awm_path.core.sync import SyncParams
-    job = _repo(tmp_path, ('C',))
+    job = _repo(tmp_path, golden, ('C',))
     rc, out = _plan(job, tmp_path / 'c.json')
     assert rc in (0, 2), out
     doc = jsonio.read_json(tmp_path / 'c.json', 'v2/path')

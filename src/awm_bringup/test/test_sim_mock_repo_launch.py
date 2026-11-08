@@ -2,9 +2,9 @@
 
 Mock hardware only. ``test_sim_mock_synthetic_repo`` (always on) runs the same frame / scene / head checks on the
 tiny generated repository of ``test_repo_args.py`` (non-identity base: the CP-60 import puts world at the UR base, so
-there world_T_base is identity). ``test_sim_mock_repo``: repository ``AWM_CP60_REPO`` (a repository after the CP-60
-cell import, e.g. ``.worktrees/demo/golden_repo_cp60``; not in git, read only). Skipped with the
-reason when the variable is not set; the always-on argument / refusal tests are in ``test_repo_args.py``.
+there world_T_base is identity). ``test_sim_mock_repo``: the golden repository of the session fixture ``golden``
+(``conftest.py``, G1.22: CP-60 cell import rebuilt from the cell STEP by ``scripts/golden_rebuild.py``; read only),
+skipped with ``AWM_CELL_STEP not set`` otherwise; the always-on argument / refusal tests are in ``test_repo_args.py``.
 
 Checks, with no pose typed by hand:
 - TF ``world -> base_link`` and ``world -> positioner_axis`` = ``cell/model/frames.yaml`` (≤ 1e-6 mm, ≤ 1e-6 deg);
@@ -16,7 +16,6 @@ Checks, with no pose typed by hand:
 
 import json
 import math
-import os
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -43,15 +42,11 @@ from test_repo_args import make_repo  # noqa: E402
 from test_sim_mock_7axis_launch import (NAMES, _joint_state_deg, _replay, _start_deg,  # noqa: E402
                                         _synthetic_program, _wait_ready)
 
-ENV = 'AWM_CP60_REPO'
 TOL_MM, TOL_DEG = 1e-6, 1e-6
 
 
-def _repo() -> Path:
-    value = os.environ.get(ENV, '').strip()
-    if not value:
-        pytest.skip(f'{ENV} not set (job repository after the CP-60 cell import, not in git)')
-    repo = Path(value)
+def _repo(golden) -> Path:
+    repo = Path(golden['repo'])
     assert (repo / 'cell' / 'model' / 'frames.yaml').is_file(), f'{repo}: no cell/model/frames.yaml'
     return repo
 
@@ -123,8 +118,8 @@ def _fk(node, client, link, frame, names, values):
     return _msg_pose_mm(p.position, p.orientation)
 
 
-def test_sim_mock_repo(tmp_path):
-    _check_repo(_repo(), tmp_path, replay=True)
+def test_sim_mock_repo(tmp_path, golden):
+    _check_repo(_repo(golden), tmp_path, replay=True)
 
 
 def test_sim_mock_synthetic_repo(tmp_path):
