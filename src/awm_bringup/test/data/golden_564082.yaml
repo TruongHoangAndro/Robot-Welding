@@ -16,6 +16,7 @@ users:                                   # throwaway accounts of the rebuild rep
 tolerances:
   radius_mm: 0.001                       # picked circle radius vs the value below
   tcp_mm: 0.01                           # taught TCP in tool0 vs expected
+  tcp_deg: 0.01                          # taught beam axis / tcp_laser Z in tool0 vs expected
   joint_length_mm: 0.05                  # closed joint ring length vs expected
 
 cell:
@@ -85,6 +86,7 @@ head:
     reverse: false
     stickout_mm: 0.0
   expected_tcp_tool0_mm: [43.829, 0.0, 279.606]   # Truong's mark of 2026-11-06 (Assumption until OI-2 / OI-13)
+  expected_beam_axis_tool0: [0.866025, 0.0, 0.5]  # beam out of the nozzle, 60 deg from the flange axis
 
 job:
   part_no: '564082'

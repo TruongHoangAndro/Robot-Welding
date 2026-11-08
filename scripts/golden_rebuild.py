@@ -68,9 +68,9 @@ class GoldenError(RuntimeError):
 
 _REQUIRED = {
     'users': ('admin', 'engineer'),
-    'tolerances': ('radius_mm', 'tcp_mm', 'joint_length_mm'),
+    'tolerances': ('radius_mm', 'tcp_mm', 'tcp_deg', 'joint_length_mm'),
     'cell': ('up_axis', 'roles', 'positioner_axis'),
-    'head': ('component', 'up_axis', 'map', 'tcp_teach', 'expected_tcp_tool0_mm'),
+    'head': ('component', 'up_axis', 'map', 'tcp_teach', 'expected_tcp_tool0_mm', 'expected_beam_axis_tool0'),
     'job': ('part_no', 'part_rev', 'up_axis', 'components', 'roles', 'positioner_axis', 'cross_check_red',
             'override_reason', 'seams', 'seam_defaults', 'travel_speed_mm_s'),
 }
@@ -112,15 +112,27 @@ def check_circle(pick: Dict[str, Any], edge_id: str, radius_mm: float, tol_mm: f
         raise GoldenError(f'{what}: edge {edge_id} has radius {got} mm, expected {radius_mm} ± {tol_mm} mm')
 
 
-def check_tcp(head: Dict[str, Any], teach: Dict[str, Any], expected_mm: Sequence[float], tol_mm: float,
-              radius_tol_mm: float) -> List[float]:
-    """Taught TCP in tool0 (``head.yaml`` ``tool0_T_tcp_mm.xyz``) within ``tol_mm`` (distance) of the expected point;
-    the teach record (``estimates.tcp``) must be the expected component / edge with the expected mouth radius.
-    Returns the TCP."""
+def angle_deg(a: Sequence[float], b: Sequence[float]) -> float:
+    """Angle between two direction vectors (normalised here), degrees; atan2 form, accurate near 0."""
+    import numpy as np
+    u, v = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    u, v = u / np.linalg.norm(u), v / np.linalg.norm(v)
+    return math.degrees(math.atan2(float(np.linalg.norm(np.cross(u, v))), float(u @ v)))
+
+
+def check_tcp(head: Dict[str, Any], teach: Dict[str, Any], expected_mm: Sequence[float],
+              expected_beam: Sequence[float], tol_mm: float, tol_deg: float, radius_tol_mm: float) -> List[float]:
+    """Taught TCP in tool0 (``head.yaml``): position ``tool0_T_tcp_mm.xyz`` within ``tol_mm`` (distance) of the
+    expected point; orientation: ``beam_axis_tool0`` and the Z axis of ``tool0_T_tcp_mm.quat_xyzw`` (tcp_laser Z =
+    beam, DES-001 §5.3) within ``tol_deg`` of the expected beam axis; the teach record (``estimates.tcp``) must be the
+    expected component / edge with the expected mouth radius. Returns the TCP position."""
+    from awm_core import frames
     try:
         xyz = [float(v) for v in head['tool0_T_tcp_mm']['xyz']]
+        z_axis = frames.quat_to_matrix([float(v) for v in head['tool0_T_tcp_mm']['quat_xyzw']])[:3, 2]
+        beam = [float(v) for v in head['beam_axis_tool0']]
     except (KeyError, TypeError, ValueError) as exc:
-        raise GoldenError(f'head.yaml has no tool0_T_tcp_mm.xyz: {exc}') from exc
+        raise GoldenError(f'head.yaml has no tool0_T_tcp_mm.xyz / quat_xyzw / beam_axis_tool0: {exc}') from exc
     rec = (head.get('estimates') or {}).get('tcp') or {}
     if rec.get('method') != 'teach_ui' or rec.get('edge_id') != teach['edge_id'] \
             or rec.get('component') != teach['component']:
@@ -134,6 +146,11 @@ def check_tcp(head: Dict[str, Any], teach: Dict[str, Any], expected_mm: Sequence
     if dist > tol_mm:
         raise GoldenError(f'taught TCP {[round(v, 4) for v in xyz]} mm in tool0 is {dist:.4f} mm from the expected '
                           f'{list(expected_mm)} (tolerance {tol_mm} mm)')
+    for what, axis in (('beam axis', beam), ('tcp_laser Z', z_axis)):
+        err = angle_deg(axis, expected_beam)
+        if err > tol_deg:
+            raise GoldenError(f'taught {what} {[round(float(v), 6) for v in axis]} in tool0 is {err:.4f} deg from '
+                              f'the expected {list(expected_beam)} (tolerance {tol_deg} deg)')
     return xyz
 
 
@@ -501,7 +518,8 @@ def rebuild(cell_step: Path, out: Path, data_path: Path, fp: Dict[str, str],
             'component': tt['component'], 'edge_id': tt['edge_id'], 'reverse': bool(tt.get('reverse')),
             'stickout_mm': float(tt.get('stickout_mm', 0.0))})
         head_doc = yaml.safe_load((out / 'cell' / 'model' / 'head' / 'head.yaml').read_text())
-        tcp = check_tcp(head_doc, tt, head['expected_tcp_tool0_mm'], tol['tcp_mm'], tol['radius_mm'])
+        tcp = check_tcp(head_doc, tt, head['expected_tcp_tool0_mm'], head['expected_beam_axis_tool0'], tol['tcp_mm'],
+                        tol['tcp_deg'], tol['radius_mm'])
         ch.run('POST', '/cell/model/save', adm, 'save cell model', json={})
         model = out / 'cell' / 'model'
         manifest = _read(model / 'scene_manifest.json')
@@ -582,6 +600,8 @@ def rebuild(cell_step: Path, out: Path, data_path: Path, fp: Dict[str, str],
                  'scene_object_ids': [o.get('object_id') for o in manifest.get('objects') or []]},
         'head': {'tcp_tool0_mm': tcp, 'expected_tcp_tool0_mm': head['expected_tcp_tool0_mm'],
                  'tcp_error_mm': math.dist(tcp, head['expected_tcp_tool0_mm']),
+                 'beam_axis_tool0': head_doc['beam_axis_tool0'],
+                 'beam_error_deg': angle_deg(head_doc['beam_axis_tool0'], head['expected_beam_axis_tool0']),
                  'teach': {k: tt.get(k) for k in ('component', 'edge_id', 'radius_mm', 'stickout_mm')},
                  'quat_xyzw': head_doc['tool0_T_tcp_mm'].get('quat_xyzw')},
         'cross_check': {'status': cc['check'].get('status'), 'phi_deg': cc['check'].get('phi_deg'),

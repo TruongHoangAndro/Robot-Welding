@@ -58,22 +58,41 @@ def test_check_circle():
         gr.check_circle({'edge_id': 'E3'}, 'E3', 15.0, 0.001, 'axis')
 
 
+BEAM = [0.866025, 0.0, 0.5]
+#: tool0_T_tcp rotation of the golden head: Z = beam (60 deg about tool0 Y)
+QUAT = [0.0, 0.5, 0.0, 0.8660254037844386]
+
+
+def _head(xyz=(43.8288, 0.0, 279.6056), quat=QUAT, beam=BEAM, **rec_change):
+    rec = {'method': 'teach_ui', 'component': 'C:1', 'edge_id': 'E7', 'mouth_radius_mm': 2.5}
+    rec.update(rec_change)
+    return {'tool0_T_tcp_mm': {'xyz': list(xyz), 'quat_xyzw': list(quat)}, 'beam_axis_tool0': list(beam),
+            'estimates': {'tcp': rec}}
+
+
 def test_check_tcp():
     teach = {'component': 'C:1', 'edge_id': 'E7', 'radius_mm': 2.5}
-    rec = {'method': 'teach_ui', 'component': 'C:1', 'edge_id': 'E7', 'mouth_radius_mm': 2.5}
-    head = {'tool0_T_tcp_mm': {'xyz': [43.8288, 0.0, 279.6056]}, 'estimates': {'tcp': dict(rec)}}
-    assert gr.check_tcp(head, teach, [43.829, 0.0, 279.606], 0.01, 0.001) == [43.8288, 0.0, 279.6056]
-    head['tool0_T_tcp_mm']['xyz'] = [43.829, 0.0, 279.62]
+    exp = [43.829, 0.0, 279.606]
+    assert gr.check_tcp(_head(), teach, exp, BEAM, 0.01, 0.01, 0.001) == [43.8288, 0.0, 279.6056]
     with pytest.raises(gr.GoldenError, match='from the expected'):
-        gr.check_tcp(head, teach, [43.829, 0.0, 279.606], 0.01, 0.001)
+        gr.check_tcp(_head(xyz=(43.829, 0.0, 279.62)), teach, exp, BEAM, 0.01, 0.01, 0.001)
     with pytest.raises(gr.GoldenError, match='tool0_T_tcp_mm'):
-        gr.check_tcp({}, teach, [0, 0, 0], 0.01, 0.001)
-    ok = {'tool0_T_tcp_mm': {'xyz': [43.829, 0.0, 279.606]}}
+        gr.check_tcp({}, teach, exp, BEAM, 0.01, 0.01, 0.001)
     for change, match in (({'mouth_radius_mm': 3.0}, 'radius'), ({'edge_id': 'E8'}, 'not the teach'),
                           ({'method': 'map'}, 'not the teach'), ({'mouth_radius_mm': None}, 'radius')):
         with pytest.raises(gr.GoldenError, match=match):
-            gr.check_tcp(dict(ok, estimates={'tcp': dict(rec, **change)}), teach, [43.829, 0.0, 279.606], 0.01,
-                         0.001)
+            gr.check_tcp(_head(**change), teach, exp, BEAM, 0.01, 0.01, 0.001)
+
+
+def test_check_tcp_orientation():
+    teach = {'component': 'C:1', 'edge_id': 'E7', 'radius_mm': 2.5}
+    exp = [43.829, 0.0, 279.606]
+    tilt = [math.sin(math.radians(60.05)), 0.0, math.cos(math.radians(60.05))]  # 0.05 deg off
+    with pytest.raises(gr.GoldenError, match='beam axis'):
+        gr.check_tcp(_head(beam=tilt), teach, exp, BEAM, 0.01, 0.01, 0.001)
+    q = [0.0, math.sin(math.radians(30.05)), 0.0, math.cos(math.radians(30.05))]  # frame Z 0.1 deg off
+    with pytest.raises(gr.GoldenError, match='tcp_laser Z'):
+        gr.check_tcp(_head(quat=q), teach, exp, BEAM, 0.01, 0.01, 0.001)
 
 
 def _topo():
