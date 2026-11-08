@@ -153,3 +153,26 @@ describe('replayView missing result (m1)', () => {
     expect(v.level).toBe('err');
   });
 });
+
+describe('replay request (review m4)', () => {
+  it('names the program revision S4 showed, so a newer revision is never replayed unseen', async () => {
+    const { startReplay } = await import('../src/lib/api');
+    const { replayRequestRev } = await import('../src/lib/simulation');
+    const calls: { url: string; body: string }[] = [];
+    const orig = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init: RequestInit) => {
+      calls.push({ url, body: String(init.body) });
+      return new Response(JSON.stringify({ run_id: 'R1' }), { status: 202 });
+    }) as typeof fetch;
+    try {
+      const rev = replayRequestRev(sim({ replay: { ...sim({}).replay, program_rev: 'P002' } }));
+      expect(rev).toBe('P002');
+      expect(await startReplay('t', 'J_A', rev)).toBe('R1');
+    } finally {
+      globalThis.fetch = orig;
+    }
+    expect(calls[0].url).toBe('/api/v1/jobs/J_A/replay');
+    expect(JSON.parse(calls[0].body)).toEqual({ program_rev: 'P002' });
+    expect(replayRequestRev(sim({ replay: { ...sim({}).replay, program_rev: null } }))).toBeUndefined();
+  });
+});

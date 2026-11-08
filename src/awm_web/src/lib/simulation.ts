@@ -105,6 +105,9 @@ export function actionBlocks(
   return { generate, replay };
 }
 
+/** Review m4: the replay request names the revision S4 shows (the API still checks it for staleness). */
+export const replayRequestRev = (sim: Pick<SimulationPayload, 'replay'>): string | undefined => sim.replay?.program_rev ?? undefined;
+
 export const STATUS_COLOURS: Record<string, string> = {
   ok: '#2ecc71',
   ik: '#ff3b30',

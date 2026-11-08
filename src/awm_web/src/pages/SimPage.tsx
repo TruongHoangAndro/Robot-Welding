@@ -25,7 +25,7 @@ import { loadCellScene, SCENE_COLOUR, type CellNode } from '../components/CellSc
 import { sampleTimeline, timelineFromPath, timelineFromProgram, type Timeline } from '../lib/playback';
 import { authMeshLoader, limitViolations, parseRobot, rootT, setJoints } from '../lib/robot';
 import { poseMmToMatrix, vecMmToScene } from '../lib/units';
-import { actionBlocks, KINEMATIC_BANNER, needsKinematicBanner, seamMarkers, speedRows, staleLines, STATUS_COLOURS, type SimulationPayload } from '../lib/simulation';
+import { actionBlocks, replayRequestRev, KINEMATIC_BANNER, needsKinematicBanner, seamMarkers, speedRows, staleLines, STATUS_COLOURS, type SimulationPayload } from '../lib/simulation';
 
 const fmt = (v: number | null | undefined, d = 2) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(d) : '—');
 const RATES = [0.25, 0.5, 1, 2, 4, 8];
@@ -196,7 +196,7 @@ export function SimPage({ session, jobId }: { session: Session; jobId: string })
   };
   const replay = () => {
     setError(null);
-    startReplay(token, jobId).then(follow).catch((e: Error) => setError(e.message));
+    startReplay(token, jobId, sim ? replayRequestRev(sim) : undefined).then(follow).catch((e: Error) => setError(e.message));
   };
   const blocks = sim ? actionBlocks(sim, run, session.role) : null;
   const programSegments = useMemo(
