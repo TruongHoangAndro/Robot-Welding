@@ -1,8 +1,8 @@
 """G1.2 end to end: ``joint_seam`` CLI -> conda sampler (awm_core.occ_bridge) -> seams.json + seam_axis.json.
 
-Synthetic part: ``tube_tube`` of awm_geometry (needs AWM_OCC_PYTHON). Golden part: the spike job named by
-``AWM_SPIKE_REPO`` (repository root with cell/model/frames.yaml and jobs/<job>/, job folder name in
-``AWM_SPIKE_JOB``, default 564082_A); its files are linked into a temporary repository, never written.
+Synthetic part: ``tube_tube`` of awm_geometry (needs AWM_OCC_PYTHON). Golden part: the session fixture ``golden``
+(``conftest.py``, G1.22: repository rebuilt from the cell STEP by ``scripts/golden_rebuild.py``, skipped with
+``AWM_CELL_STEP not set`` otherwise); its files are copied into a temporary repository, never written.
 """
 
 import json
@@ -95,34 +95,36 @@ def test_bad_picks_exit_nonzero(tmp_path, capsys):
     assert _run(['build', '--job', str(job.dir), '--picks', str(picks), '--no-axis'], capsys)[0] == 1
 
 
-def _spike_repo(tmp_path):
-    root = os.environ.get('AWM_SPIKE_REPO')
-    if not root:
-        pytest.skip('AWM_SPIKE_REPO not set (golden-part spike job)')
-    if not os.environ.get(occ_bridge.ENV_VAR):
-        pytest.skip(f'{occ_bridge.ENV_VAR} not set (OCC sampler)')
-    src_repo = Path(root)
-    name = os.environ.get('AWM_SPIKE_JOB', '564082_A')
+def _golden_repo(tmp_path, golden):
+    assert os.environ.get(occ_bridge.ENV_VAR), f'{occ_bridge.ENV_VAR} not set (OCC sampler)'
+    src_repo = Path(golden['repo'])
+    name = golden['job_id']
     src = src_repo / 'jobs' / name
     repo = tmp_path / 'repo'
     dst = repo / 'jobs' / name
     (dst / 'cache' / 'view').mkdir(parents=True)
     for rel in ('model.step', 'part.json', 'placement.json', 'cache/model.brep', 'cache/collision.stl',
                 'cache/collision_faces.json', 'cache/view/topology.json'):
-        os.symlink(src / rel, dst / rel)
+        shutil.copyfile(src / rel, dst / rel)  # copies: inputs outside the repository are refused (G1.17)
     (repo / 'cell' / 'model').mkdir(parents=True)
     shutil.copyfile(src_repo / 'cell' / 'model' / 'frames.yaml', repo / 'cell' / 'model' / 'frames.yaml')
+    # CP-60 placement.json also records the job / cell roles and axis picks as inputs: copy the missing ones
+    for item in json.loads((src / 'placement.json').read_text())['inputs']:
+        target = dst / item['name']
+        if not os.path.lexists(target):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src / item['name'], target)
     return dst
 
 
-def test_golden_part_j1_coaxial_j2_not(tmp_path, capsys):
-    """Spike data: J1 = the joint of the outer tube circle (r 13.33 mm), J2 = the solid-elbow joint.
+def test_golden_part_j1_coaxial_j2_not(tmp_path, capsys, golden):
+    """Golden data: J1 = the joint of the outer tube circle (r 13.33 mm), J2 = the solid-elbow joint.
 
-    Which JE ids they are is read from AWM_SPIKE_J1 / AWM_SPIKE_J2 (default JE2 / JE4, the spike record)."""
-    job_dir = _spike_repo(tmp_path)
+    Which JE ids they are is read from the golden summary (data file golden_564082.yaml)."""
+    job_dir = _golden_repo(tmp_path, golden)
     topo = json.loads((job_dir / 'cache' / 'view' / 'topology.json').read_text())
     joints = {j['joint_edge_id']: j for j in topo['joints']}
-    j1, j2 = os.environ.get('AWM_SPIKE_J1', 'JE2'), os.environ.get('AWM_SPIKE_J2', 'JE4')
+    j1, j2 = golden['joints']['J1'], golden['joints']['J2']
     picks = tmp_path / 'picks.json'
     picks.write_text(json.dumps({'seams': [
         {'seam_id': 'S01', 'edges': [joints[j1]['edge_b']], 'joint_type': 'butt', 'sequence': 1,

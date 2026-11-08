@@ -1,8 +1,9 @@
 """G1.5 golden run: plan J1 + J2 of the golden part (G1.3 CLI) and generate the synchronised 7-joint program.
 
-Golden data only through environment variables (skipped with the reason when unset): ``AWM_SPIKE_REPO``,
-``AWM_OCC_PYTHON`` (see ``awm_path/test/test_golden_g13.py``; the spike files are linked into a temporary
-repository, never written). ``AWM_G15_SPEED`` = requested travel speed (default 3.0 mm/s, lead brief).
+Golden data from the session fixture ``golden`` (``conftest.py``, G1.22: repository rebuilt from the cell STEP by
+``scripts/golden_rebuild.py``, skipped with ``AWM_CELL_STEP not set`` otherwise) and ``AWM_OCC_PYTHON`` (see
+``awm_path/test/test_golden_g13.py``; the golden files are linked into a temporary repository, never written).
+``AWM_G15_SPEED`` = requested travel speed (default 3.0 mm/s, lead brief).
 
 Flow: plan at the requested speed → generate. If the generator refuses because a weld would break a joint /
 positioner velocity or acceleration limit, the refusal must name the arc and the largest feasible travel speed; the
@@ -101,8 +102,8 @@ def _check(job: Path, doc, path):
 
 
 @pytest.mark.parametrize('modes', [('sync', 'sync'), ('C', 'sync')], ids=['sync', 'J1-C'])
-def test_golden_program(tmp_path, modes):
-    job = _repo(tmp_path, modes)
+def test_golden_program(tmp_path, golden, modes):
+    job = _repo(tmp_path, golden, modes)
     record = {'modes': modes, 'requested_speed_mm_s': float(SPEED)}
     rc, line = _plan(job, SPEED)
     assert rc == 0, line
