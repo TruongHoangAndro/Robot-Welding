@@ -249,3 +249,43 @@ def test_replay_refuses_void_cp62_override(client, repo, tmp_path, monkeypatch, 
     assert any('CP-62 override' in p for p in d['program_problems'])
     assert client.get('/api/v1/jobs/P1_A', headers=h).json()['program']['state'] == 'stale'
     assert len(log.read_text().splitlines()) == 1               # only the first replay started a process
+
+
+# -- review m7: named older revision, body fields, authentication ---------------------------------------------------
+
+def test_replay_named_revision_is_checked_too(client, repo, tmp_path, monkeypatch):
+    h = auth(client, 'eng')
+    job = programmed_job(client, repo, h)                                  # P001
+    (job / 'path.json').write_text((job / 'path.json').read_text() + ' ')   # P001 now stale
+    run = wait_run(client, h, client.post('/api/v1/jobs/P1_A/program', headers=h, json={}).json()['run_id'])
+    assert run['state'] == 'succeeded'                                      # P002 current
+    r = start(client, h, body={'program_rev': 'P001'})
+    assert r.status_code == 409 and r.json()['type'] == '/problems/program-stale'
+    assert r.json()['program_rev'] == 'P001' and r.json()['problems']
+    log = tmp_path / 'argv.log'
+    monkeypatch.setenv('FAKE_ARGV_LOG', str(log))
+    r = start(client, h, body={'program_rev': 'P002'})
+    assert r.status_code == 202, r.text
+    assert wait_run(client, h, r.json()['run_id'])['state'] == 'succeeded'
+    assert json.loads(log.read_text().splitlines()[-1])[-1].endswith('programs/P002/program.json')
+
+
+@pytest.mark.parametrize('body', [{'segments': 'G002-G004'}, {'config': '/x.yaml'}, {'program_rev': 'P001', 'x': 1}])
+def test_replay_body_accepts_program_rev_only(client, repo, body):
+    h = auth(client, 'eng')
+    programmed_job(client, repo, h)
+    r = start(client, h, body=body)
+    assert r.status_code == 422
+
+
+def test_replay_needs_a_token(client, repo):
+    h = auth(client, 'eng')
+    programmed_job(client, repo, h)
+    assert client.post('/api/v1/jobs/P1_A/replay', json={}).status_code == 401
+    assert client.post('/api/v1/jobs/P1_A/replay', json={}, headers={'Authorization': 'Bearer nope'}).status_code == 401
+
+
+def test_replay_bad_job_id_400_and_unknown_job_404(client):
+    h = auth(client, 'eng')
+    assert client.post('/api/v1/jobs/bad/replay', headers=h, json={}).status_code == 400
+    assert client.post('/api/v1/jobs/X9_Z/replay', headers=h, json={}).status_code == 404
