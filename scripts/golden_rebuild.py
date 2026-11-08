@@ -633,10 +633,22 @@ def ensure_golden(cell_step: Path, out: Optional[Path] = None, data: Optional[Pa
     data = Path(data or DEFAULT_DATA).resolve()
     with out_lock(out):
         fp = fingerprint(cell_step, data)
-        if not force and up_to_date(out, fp):
-            log(f'golden repository up to date: {out}')
-            return read_summary(out)
-        return rebuild(cell_step, out, data, fp, log)
+        if not force:
+            if up_to_date(out, fp):
+                log(f'golden repository up to date: {out}')
+                return read_summary(out)
+            doc = read_summary(out)
+            if doc and doc.get('status') == 'refused' and doc.get('fingerprint') == fp:
+                raise GoldenError(f'{doc.get("message")} (refused before with the same inputs, {out / SUMMARY}; '
+                                  '--force to try again)')
+        try:
+            return rebuild(cell_step, out, data, fp, log)
+        except GoldenError as exc:
+            if (out / MARKER).is_file():  # never write into a folder the script did not make
+                (out / SUMMARY).write_text(json.dumps({
+                    'schema': 'awm_golden_summary/0.1', 'status': 'refused', 'fingerprint': fp, 'message': str(exc),
+                    'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}, indent=1))
+            raise
 
 
 def pytest_golden() -> Dict[str, Any]:

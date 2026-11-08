@@ -270,3 +270,48 @@ def test_environment_digest(monkeypatch, tmp_path):
     a = gr.fingerprint(step, DATA)
     monkeypatch.setattr(gr, 'environment', lambda ws=WS: env)
     assert gr.fingerprint(step, DATA)['environment_sha256'] != a['environment_sha256']
+
+
+def _stub_rebuild(monkeypatch, tmp_path, outcome):
+    """ensure_golden with a fixed fingerprint and a counting stub instead of the real chain."""
+    step = tmp_path / 'cell.step'
+    step.write_text('x')
+    fp = {'cell_step_sha256': 'a'}
+    monkeypatch.setattr(gr, 'fingerprint', lambda cell_step, data, ws=gr.WS: dict(fp))
+    calls = []
+
+    def rebuild(cell_step, out, data, fpr, log=print):
+        calls.append(fpr)
+        gr.prepare_out(out)
+        if outcome == 'refuse':
+            raise gr.GoldenError('edge E3 has radius 14 mm')
+        doc = {'status': 'ok', 'fingerprint': fpr}
+        (out / gr.SUMMARY).write_text(json.dumps(doc))
+        return doc
+    monkeypatch.setattr(gr, 'rebuild', rebuild)
+    return step, fp, calls
+
+
+def test_refused_rebuild_is_recorded_and_repeated(monkeypatch, tmp_path):
+    step, fp, calls = _stub_rebuild(monkeypatch, tmp_path, 'refuse')
+    out = tmp_path / 'g'
+    with pytest.raises(gr.GoldenError, match='radius 14'):
+        gr.ensure_golden(step, out, DATA, log=lambda m: None)
+    doc = json.loads((out / gr.SUMMARY).read_text())
+    assert doc['status'] == 'refused' and doc['fingerprint'] == fp and 'radius 14' in doc['message']
+    with pytest.raises(gr.GoldenError, match='radius 14'):  # same inputs: the refusal again, no rebuild
+        gr.ensure_golden(step, out, DATA, log=lambda m: None)
+    assert len(calls) == 1
+    with pytest.raises(gr.GoldenError, match='radius 14'):  # --force rebuilds
+        gr.ensure_golden(step, out, DATA, force=True, log=lambda m: None)
+    assert len(calls) == 2
+
+
+def test_refusal_is_not_written_into_a_foreign_folder(monkeypatch, tmp_path):
+    step, _fp, _calls = _stub_rebuild(monkeypatch, tmp_path, 'ok')
+    out = tmp_path / 'repo'
+    (out / 'cell').mkdir(parents=True)
+    monkeypatch.setattr(gr, 'rebuild', lambda *a, **k: gr.prepare_out(out))
+    with pytest.raises(gr.GoldenError, match='refused'):
+        gr.ensure_golden(step, out, DATA, log=lambda m: None)
+    assert not (out / gr.SUMMARY).exists()
