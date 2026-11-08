@@ -46,6 +46,14 @@ def test_data_file_refusals(tmp_path):
         gr.load_data(bad)
     with pytest.raises(gr.GoldenError, match='not found'):
         gr.load_data(tmp_path / 'missing.yaml')
+    text = DATA.read_text()
+    for key in ('stickout_mm: 0.0', 'reverse: false\n    stickout_mm'):
+        bad.write_text(text.replace(key, 'unused_' + key, 1))
+        with pytest.raises(gr.GoldenError, match='tcp_teach'):
+            gr.load_data(bad)
+    bad.write_text(text.replace('engineer: golden-eng', 'engineer: golden-adm'))
+    with pytest.raises(gr.GoldenError, match='admin and engineer'):
+        gr.load_data(bad)
 
 
 def test_check_circle():
@@ -158,8 +166,10 @@ def test_check_coaxial(data):
 def _path(status='ok'):
     pts = [{'status': 'ok'}] * 3 + [{'status': status}]
     return {'rejected': [], 'seams': [
-        {'seam_id': 'S01', 'mode': 'sync', 'points': pts, 'planning': {'max_travel_speed_mm_s': 6.96}},
-        {'seam_id': 'S02', 'mode': 'sync', 'points': pts, 'planning': {'max_travel_speed_mm_s': 2.39}}]}
+        {'seam_id': 'S01', 'mode': 'sync', 'travel_speed_mm_s': 2.3, 'points': pts,
+         'planning': {'max_travel_speed_mm_s': 6.96}},
+        {'seam_id': 'S02', 'mode': 'sync', 'travel_speed_mm_s': 2.3, 'points': pts,
+         'planning': {'max_travel_speed_mm_s': 2.39}}]}
 
 
 def test_check_path(data):
@@ -168,6 +178,14 @@ def test_check_path(data):
         ('J1', 100.0, 6.96), ('J2', 100.0, 2.39)]
     with pytest.raises(gr.GoldenError, match='3 / 4 points ok'):
         gr.check_path(_path('reach'), data['job'])
+    other = _path()
+    other['seams'][1]['mode'] = 'C'
+    with pytest.raises(gr.GoldenError, match="mode 'C', requested 'sync'"):
+        gr.check_path(other, data['job'])
+    other = _path()
+    other['seams'][0]['travel_speed_mm_s'] = 2.0
+    with pytest.raises(gr.GoldenError, match='travel speed 2.0 mm/s, requested 2.3'):
+        gr.check_path(other, data['job'])
     rej = _path()
     rej['rejected'] = [{'seam_id': 'S02', 'reason': 'unreachable'}]
     with pytest.raises(gr.GoldenError, match='rejected'):

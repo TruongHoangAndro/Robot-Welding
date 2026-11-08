@@ -96,6 +96,12 @@ def load_data(path: Path) -> Dict[str, Any]:
         for key in ('seam_id', 'label', 'joint_edge_id', 'length_mm', 'coaxial'):
             if key not in s:
                 raise GoldenError(f'{path}: seam {s.get("seam_id")} misses {key}')
+    for key in ('component', 'edge_id', 'radius_mm', 'reverse', 'stickout_mm'):
+        if key not in (doc['head']['tcp_teach'] or {}):
+            raise GoldenError(f'{path}: head.tcp_teach misses {key} (no default for a teach input)')
+    if doc['users']['admin'] == doc['users']['engineer']:
+        raise GoldenError(f'{path}: users admin and engineer must be different accounts (CP-62: the override is an '
+                          'Admin act, seams and plan are Engineer acts)')
     if not float(doc['job']['travel_speed_mm_s']) > 0.0:
         raise GoldenError(f'{path}: job.travel_speed_mm_s must be > 0')
     return doc
@@ -225,6 +231,13 @@ def check_path(path: Dict[str, Any], job: Dict[str, Any]) -> List[Dict[str, Any]
         ok = sum(1 for p in pts if p.get('status') == 'ok')
         if not pts or ok != len(pts):
             raise GoldenError(f'{spec["label"]}: {ok} / {len(pts)} points ok (a seam is 100 % or rejected)')
+        mode = spec.get('positioner_mode', job['seam_defaults'].get('positioner_mode'))
+        if s.get('mode') != mode:
+            raise GoldenError(f'{spec["label"]}: planned in mode {s.get("mode")!r}, requested {mode!r}')
+        speed = float(job['travel_speed_mm_s'])
+        got = s.get('travel_speed_mm_s')
+        if not isinstance(got, (int, float)) or abs(float(got) - speed) > 1e-9:
+            raise GoldenError(f'{spec["label"]}: planned at travel speed {got} mm/s, requested {speed} mm/s')
         plan = s.get('planning') or {}
         out.append({'seam_id': spec['seam_id'], 'label': spec['label'], 'joint_edge_id': spec['joint_edge_id'],
                     'mode': s.get('mode'), 'coverage_pct': 100.0, 'points': len(pts),
@@ -515,8 +528,8 @@ def rebuild(cell_step: Path, out: Path, data_path: Path, fp: Dict[str, str],
 
         tt = head['tcp_teach']
         ch.run('PUT', '/cell/head/tcp', adm, 'TCP teach', json={
-            'component': tt['component'], 'edge_id': tt['edge_id'], 'reverse': bool(tt.get('reverse')),
-            'stickout_mm': float(tt.get('stickout_mm', 0.0))})
+            'component': tt['component'], 'edge_id': tt['edge_id'], 'reverse': bool(tt['reverse']),
+            'stickout_mm': float(tt['stickout_mm'])})
         head_doc = yaml.safe_load((out / 'cell' / 'model' / 'head' / 'head.yaml').read_text())
         tcp = check_tcp(head_doc, tt, head['expected_tcp_tool0_mm'], head['expected_beam_axis_tool0'], tol['tcp_mm'],
                         tol['tcp_deg'], tol['radius_mm'])
