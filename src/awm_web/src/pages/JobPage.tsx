@@ -8,13 +8,16 @@ import {
   authHeaders,
   cancelRun,
   ApiError,
+  deleteOverride,
   getCheck,
+  getOverride,
   getJob,
   getJobRoles,
   getJobTree,
   getSeams,
   putJobAxis,
   putJobRoles,
+  postOverride,
   startCheck,
   putPlacement,
   putSeams,
@@ -25,7 +28,7 @@ import {
   type Run,
   type Session,
 } from '../lib/api';
-import { cadBlocker, checkBanner, type CadCheck } from '../lib/cadcheck';
+import { cadGate, checkBanner, type CadCheck, type OverrideState } from '../lib/cadcheck';
 import { loadFromUrl, type Model } from '../lib/load';
 import { JOB_ROLES, ROLE_COLOUR, relPaths, solidRoles, type Assignable, type Assignment, type TreeNode } from '../lib/roles';
 import { emptyPlacementForm, placementRequest, type PlacementForm } from '../lib/placement';
@@ -82,13 +85,20 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
   const [roleProblems, setRoleProblems] = useState<string[]>([]);
   const [treeSel, setTreeSel] = useState<number | null>(null);
   const [check, setCheck] = useState<{ state: 'ok' | 'stale'; check: CadCheck } | null>(null);
+  // CP-62 Admin override of check 4 (kinematic planning only)
+  const [override, setOverride] = useState<OverrideState | null>(null);
+  const [ovReason, setOvReason] = useState('');
+  const [ovMsg, setOvMsg] = useState<string | null>(null);
   const [axisMode, setAxisMode] = useState(false);
   const [axisEdge, setAxisEdge] = useState<string | null>(null);
   const [axisReverse, setAxisReverse] = useState(false);
   const afterRun = useRef<(() => void) | null>(null);
 
   const reloadDetail = useCallback(() => getJob(token, jobId).then(setDetail), [token, jobId]);
-  const reloadCad = useCallback(() => getCheck(token, jobId).then(setCheck), [token, jobId]);
+  const reloadCad = useCallback(
+    () => Promise.all([getCheck(token, jobId), getOverride(token, jobId)]).then(([c, o]) => (setCheck(c), setOverride(o))),
+    [token, jobId],
+  );
 
   const follow = useCallback(
     (runId: string) => {
@@ -126,13 +136,14 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
         setModel(m);
         setFocus({ box: m.displayBox.clone(), key: Date.now() });
         if (m.topo.source.components) {
-          Promise.all([getJobTree(token, jobId), getJobRoles(token, jobId), getCheck(token, jobId)])
-            .then(([t, r, c]) => {
+          Promise.all([getJobTree(token, jobId), getJobRoles(token, jobId), getCheck(token, jobId), getOverride(token, jobId)])
+            .then(([t, r, c, o]) => {
               if (!live) return;
               setTree(t);
               setRoles(r.assignments);
               setSavedRoles(r.prefilled ? null : JSON.stringify(r.assignments));
               setCheck(c);
+              setOverride(o);
             })
             .catch((e: Error) => live && setError(`roles: ${e.message}`));
         }
@@ -153,7 +164,9 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
   const components = !!model?.topo.source.components;
   const roleOfSolid = useMemo(() => (model && components ? solidRoles(model.topo, roles) : new Map<string, Assignable>()), [model, components, roles]);
   const hasRoles = components && savedRoles !== null;
-  const cadBlock = components ? (hasRoles ? cadBlocker(true, check?.check ?? null, check?.state ?? null) : 'Save the roles of this job file first.') : null;
+  const gate = components && hasRoles ? cadGate(true, check?.check ?? null, check?.state ?? null, override) : null;
+  const cadBlock = components ? (hasRoles ? gate?.block ?? null : 'Save the roles of this job file first.') : null;
+  const isAdmin = session.role === 'Admin';
 
   // role colours on the faces of non-part components (part solids keep their own colours)
   useEffect(() => {
@@ -187,6 +200,21 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
         follow(id);
       })
       .catch((e: Error) => setError(e.message));
+  };
+  const recordOverride = () => {
+    setOvMsg(null);
+    postOverride(token, jobId, ovReason.trim())
+      .then(() => {
+        setOvReason('');
+        return reloadCad();
+      })
+      .catch((e: Error) => setOvMsg(e.message));
+  };
+  const removeOverride = () => {
+    setOvMsg(null);
+    deleteOverride(token, jobId)
+      .then(reloadCad)
+      .catch((e: Error) => setOvMsg(e.message));
   };
   const runCheck = () => {
     startCheck(token, jobId)
@@ -446,7 +474,40 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
               ) : (
                 <div className="muted">No cross-check yet.</div>
               )}
-              {cadBlock && <div className="warn">{cadBlock}</div>}
+              {gate?.overridden && (
+                <div className="cadbanner overridden" data-testid="override-banner">
+                  <b>check 4 red · CP-62</b> {gate.overridden}. Collision is not checked; not releasable.
+                </div>
+              )}
+              {cadBlock && (
+                <div className="warn" data-testid="cad-block">
+                  {cadBlock}
+                </div>
+              )}
+              {isAdmin && gate?.canOverride && (
+                <div className="override-form" data-testid="override-form">
+                  <b>Override for kinematic planning (CP-62)</b>
+                  <div className="muted">
+                    Check 4 only. Allows seam saving and Plan with collision off; the cross-check stays red, collision planning and every release
+                    still refuse. A new cross-check voids it.
+                  </div>
+                  <textarea
+                    value={ovReason}
+                    rows={3}
+                    placeholder="reason, e.g. OI-23: jig bearing seats / belts not separated in the cell CAD"
+                    onChange={(e) => setOvReason(e.target.value)}
+                  />
+                  <button className="btn small" disabled={!ovReason.trim()} onClick={recordOverride}>
+                    Record override
+                  </button>
+                </div>
+              )}
+              {isAdmin && override && (
+                <button className="btn small" onClick={removeOverride}>
+                  Remove CP-62 override
+                </button>
+              )}
+              {ovMsg && <div className="err">{ovMsg}</div>}
               <RoleTree tree={tree} assignments={roles} roles={JOB_ROLES} disabled={!canEdit} selected={treeSel} onSelect={setTreeSel} onChange={setRoles} />
               {treeSel !== null && <div className="muted">{relPaths(tree)[treeSel]}</div>}
               {roleProblems.length > 0 && <div className="err">{roleProblems.join('; ')}</div>}
@@ -503,6 +564,12 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
                     New seam on {selJoint.joint_edge_id}
                   </button>
                 )}
+                {canEdit && cadBlock && (
+                  <div className="warn" data-testid="new-seam-blocked">
+                    New seam unavailable: {cadBlock}
+                  </div>
+                )}
+                {!canEdit && <div className="muted">New seams are picked by an Engineer (CP-21).</div>}
               </>
             )}
             {note && <div className="warn">{note}</div>}
@@ -581,7 +648,7 @@ function planBlocker(d: JobDetail | null, saved: SeamDoc | null, dirty: boolean,
   if (run && (run.state === 'queued' || run.state === 'running')) return 'A run is active.';
   if (!saved || saved.seams.length === 0) return 'Save at least one seam first.';
   if (dirty) return 'Save the seam changes first.';
-  if (!d.placement) return 'No placement for this job: give it one in the Job panel (manual pose or copy).';
+  if (!d.placement) return d.placement_note ?? 'No placement for this job.';
   if (d.seam_axis !== 'ok') return `seam_axis.json is ${d.seam_axis}: save the seams again.`;
   return null;
 }

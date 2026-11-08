@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RunView, ProgressBar } from '../components/Common';
-import { cancelRun, listJobs, uploadStep, watchRun, type JobSummary, type Run, type Session } from '../lib/api';
+import { cancelRun, getCellStatus, listJobs, uploadStep, watchRun, type JobSummary, type Run, type Session } from '../lib/api';
+import { defaultUpAxis, upAxisNote } from '../lib/cellinfo';
 import { UP_AXES } from '../lib/topology';
 
 const TOKEN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -70,6 +71,22 @@ function CreateJob({ session, onDone }: { session: Session; onDone: () => void }
   const [component, setComponent] = useState('');
   const [assembly, setAssembly] = useState(false);
   const [upAxis, setUpAxis] = useState('+Z');
+  const [upTouched, setUpTouched] = useState(false);
+  const [cellUp, setCellUp] = useState<string | null>(null);
+  const [cellErr, setCellErr] = useState<string | null>(null);
+  // audit m6: default = the up axis of the imported cell STEP (same Fusion export convention), until the user picks one
+  useEffect(() => {
+    let live = true;
+    getCellStatus(session.token)
+      .then((c) => live && setCellUp(c.up_axis))
+      .catch((e: Error) => live && setCellErr(e.message));
+    return () => {
+      live = false;
+    };
+  }, [session.token]);
+  useEffect(() => {
+    if (!upTouched && cellUp) setUpAxis(defaultUpAxis(cellUp));
+  }, [cellUp, upTouched]);
   const [upload, setUpload] = useState<number | null>(null);
   const [run, setRun] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -126,19 +143,26 @@ function CreateJob({ session, onDone }: { session: Session; onDone: () => void }
         <label>Component</label>
         <input value={component} onChange={(e) => setComponent(e.target.value)} disabled={busy || assembly} placeholder="assembly component (empty = whole file)" />
         <label>Up axis of the file</label>
-        <select value={upAxis} onChange={(e) => setUpAxis(e.target.value)} disabled={busy}>
-          {UP_AXES.map((a) => (
-            <option key={a}>{a}</option>
-          ))}
-        </select>
+        <span>
+          <select value={upAxis} onChange={(e) => (setUpAxis(e.target.value), setUpTouched(true))} disabled={busy}>
+            {UP_AXES.map((a) => (
+              <option key={a}>{a}</option>
+            ))}
+          </select>{' '}
+          <span className={cellErr ? 'warn' : 'muted'} data-testid="up-axis-note">
+            {upAxisNote(cellUp, upAxis, upTouched, cellErr)}
+          </span>
+        </span>
         <span />
         <button className="btn" disabled={!valid || busy} onClick={submit}>
           Upload and import
         </button>
       </div>
       <p className="muted">
-        Import (A11–A14) and the 3D view model (D20) run in the CAD process on the server. A new upload has no placement;
-        Goal 1 plans only jobs with the golden-part placement from the cell CAD.
+        Import (A11–A14) and the 3D view model (D20) run in the CAD process on the server.{' '}
+        Tick "Job assembly" for a STEP with positioner + fixture + part (CP-60): in S2 you set the roles, pick the positioner axis and run the
+        cross-check, which computes the placement (source job_cad) against the cell model. A single part without the assembly cannot be
+        placed from the CAD (manual placement in S2 is a test helper only, Assumption).
       </p>
       {upload !== null && upload < 1 && <ProgressBar value={upload} label="uploading" />}
       {run && (

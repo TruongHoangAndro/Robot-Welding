@@ -22,7 +22,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
-from awm_core import occ_bridge
+from awm_core import jsonio, occ_bridge
 from awm_core.hashing import sha256_file
 
 from awm_api.problems import ProblemError
@@ -133,14 +133,89 @@ def plan_steps(settings: Settings, run_dir: Path, job: Path, seams: Optional[Lis
     return [Step('plan', argv, env=dict(os.environ))]
 
 
-def promote_plan(run_dir: Path, job: Path) -> Dict[str, str]:
+OVERRIDE_FIELD = 'cad_check_override'
+
+
+def _validate_field(value: Dict[str, Any], schema: str) -> None:
+    """Validate one top-level property against its sub-schema of ``schema`` (the rest of the document was already
+    validated by the CLI that wrote it)."""
+    import jsonschema  # dependency of awm_core.jsonio
+
+    sub = jsonio.load_schema(schema)['properties'][OVERRIDE_FIELD]
+    errors = list(jsonschema.Draft202012Validator(sub).iter_errors(value))
+    if errors:
+        raise RuntimeError(f'{OVERRIDE_FIELD} does not match {schema}: {errors[0].message}')
+
+
+def _write_doc(path: Path, doc: Dict[str, Any]) -> None:
+    tmp = path.with_name(f'.{path.name}.tmp')
+    tmp.write_text(json.dumps(doc, indent=2, allow_nan=False) + '\n')
+    tmp.replace(path)
+
+
+def record_override(doc_path: Path, job: Path, override: Dict[str, Any], schema: str) -> None:
+    """CP-62: write the cross-check-4 override reference into a D07 / D09 document written by a CLI that does not know
+    the field yet (least invasive; becomes a no-op check when the CLI writes it itself). Refuses when the override or
+    the cross-check changed while the run was going (the run slot normally prevents that)."""
+    files = (job / override['file'], job / 'cad_check.json')
+    if not all(f.is_file() for f in files) or sha256_file(files[0]) != override['sha256'] or \
+            sha256_file(files[1]) != override['cad_check_sha256']:
+        raise RuntimeError('the CP-62 override or the cross-check changed during the run; nothing promoted')
+    _validate_field(override, schema)
+    doc = json.loads(doc_path.read_text())
+    if doc.get('collision_checked') is not False:
+        raise RuntimeError('a CP-62 override is valid for kinematic-only documents (collision_checked false) only')
+    if doc.get(OVERRIDE_FIELD) not in (None, override):
+        raise RuntimeError(f'{doc_path.name} names another {OVERRIDE_FIELD} than the one this run relied on')
+    doc[OVERRIDE_FIELD] = override
+    _write_doc(doc_path, doc)
+
+
+def promote_plan(run_dir: Path, job: Path, override: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
     out = run_dir / 'path.json'
     if not out.is_file():
         raise RuntimeError('the planner finished without writing path.json')
+    if override is not None:
+        record_override(out, job, override, 'v2/path')
     tmp = job / '.path.json.tmp'
     shutil.copyfile(out, tmp)
     tmp.replace(job / 'path.json')
     return {'path.json': sha256_file(job / 'path.json')}
+
+
+def _recorded_path_sha(program: Dict[str, Any]) -> Optional[str]:
+    gen = (program.get('generator') or {}).get('path') or {}
+    if gen.get('sha256'):
+        return gen['sha256']
+    return next((i.get('sha256') for i in program.get('inputs', []) if i.get('name') == 'path.json'), None)
+
+
+def carry_override(job: Path, program_file: Path) -> None:
+    """CP-62: copy D07 ``cad_check_override`` into the new D09 when the program was generated from that exact
+    path.json (hash recorded by the program CLI)."""
+    path = jsonio_read(job / 'path.json')
+    ref = (path or {}).get(OVERRIDE_FIELD)
+    if not ref:
+        return
+    program = json.loads(program_file.read_text())
+    if _recorded_path_sha(program) != sha256_file(job / 'path.json'):
+        raise RuntimeError('the program does not record the current path.json; cannot carry the CP-62 override')
+    if program.get(OVERRIDE_FIELD) == ref:
+        return
+    if program.get(OVERRIDE_FIELD) is not None:
+        raise RuntimeError(f'program.json names another {OVERRIDE_FIELD} than path.json')
+    if program.get('collision_checked') is not False:
+        raise RuntimeError('a CP-62 override is valid for kinematic-only programs (collision_checked false) only')
+    _validate_field(ref, 'v2/program')
+    program[OVERRIDE_FIELD] = ref
+    _write_doc(program_file, program)
+
+
+def jsonio_read(path: Path) -> Optional[Dict[str, Any]]:
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
 
 
 _RESULT_OK_RE = re.compile(r'^result ok .*\bprogram_rev=(P[0-9]{3})\b')
@@ -159,7 +234,23 @@ def promote_program(run_dir: Path, job: Path) -> Dict[str, str]:
     rel = f'programs/{revs[-1]}/program.json'
     if not (job / rel).is_file():
         raise RuntimeError(f'the program CLI reported {revs[-1]} but {rel} does not exist')
+    try:
+        carry_override(job, job / rel)
+    except Exception as exc:
+        where = quarantine_program(job, revs[-1], run_dir.name, str(exc))
+        raise RuntimeError(f'{exc}; program {revs[-1]} quarantined to {where} (never left without the CP-62 '
+                           'override record)') from exc
     return {rel: sha256_file(job / rel)}
+
+
+def quarantine_program(job: Path, rev: str, run_id: str, reason: str) -> str:
+    """Move a program revision that failed its post-step out of ``programs/`` (review minor 4): it lands in
+    ``programs/.quarantine/<rev>-<run_id>/`` with ``QUARANTINE.txt``; job listings ignore hidden folders."""
+    target = job / 'programs' / '.quarantine' / f'{rev}-{run_id}'
+    target.parent.mkdir(parents=True, exist_ok=True)
+    (job / 'programs' / rev).rename(target)
+    (target / 'QUARANTINE.txt').write_text(f'{rev} from run {run_id} quarantined by awm_api: {reason}\n')
+    return target.relative_to(job).as_posix()
 
 
 # -- CP-60 / CP-61: cell model, positioner-axis pick, TCP teach, job placement + cross-check -----------------------

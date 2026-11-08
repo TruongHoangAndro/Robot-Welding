@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from awm_core import cad_roles
 from awm_core.hashing import sha256_file
 
 from awm_api.problems import ProblemError
@@ -20,10 +21,27 @@ SCOPES = ('simulation', 'trial', 'production')
 DOCUMENTS = ('part.json', 'seams.json', 'seam_axis.json', 'process.json', 'placement.json', 'path.json',
              'cache/view/view.glb', 'cache/view/topology.json')
 
-NO_PLACEMENT_NOTE = (
-    'No placement: this job has no placement.json. Goal 1 uses the golden-part placement exported from the cell '
-    'CAD (awm_geometry export-scene, source fixture_cad); a newly uploaded STEP has none, so seam_axis.json and '
-    'planning are not available until a placement exists. The API never invents one.')
+NO_PLACEMENT_ASSEMBLY = (
+    'No placement yet: this job was imported as an assembly (positioner + fixture + part, CP-60). Save its roles, '
+    'pick the positioner axis and run the CAD cross-check in S2: the cross-check computes placement.json '
+    '(source job_cad). The API never invents a placement.')
+NO_PLACEMENT_SINGLE = (
+    'No placement: this job was imported as a single part, without the positioner and fixture, so the CAD cannot '
+    'place it (CP-60). Re-import the job STEP as an assembly (positioner + fixture + part) to get a placement from '
+    'the CAD, or enter a manual / copied placement in S2 (source study, test helper only, Assumption). The API '
+    'never invents a placement.')
+#: Kept for callers that have no job folder.
+NO_PLACEMENT_NOTE = NO_PLACEMENT_SINGLE
+
+
+def no_placement_note(job: Path) -> str:
+    """Why a job has no placement and how to get one (CP-60)."""
+    return NO_PLACEMENT_ASSEMBLY if job.joinpath(*cad_roles.JOB_TREE).is_file() else NO_PLACEMENT_SINGLE
+
+
+def placement_hint(job: Path) -> str:
+    return ('run the CAD cross-check (CP-60) to compute it' if job.joinpath(*cad_roles.JOB_TREE).is_file()
+            else 'single-part job: enter a manual placement or re-import as an assembly (CP-60)')
 
 
 def job_dir(jobs_dir: Path, job_id: str) -> Path:
@@ -136,7 +154,7 @@ def detail(job: Path, repo_root: Path, active_run: Optional[str]) -> Dict[str, A
     out.update({
         'documents': documents(job), 'programs': program_revs(job), 'active': active_pointers(job),
         'active_run': active_run, 'placement': placement,
-        'placement_note': None if placement else NO_PLACEMENT_NOTE,
+        'placement_note': None if placement else no_placement_note(job),
         'seam_axis': seam_axis_state(job, repo_root),
         'path': document_state(job, 'path.json', repo_root),
         'collision_checked': False,  # Goal 1 (CP-58): nothing in this backend checks collision

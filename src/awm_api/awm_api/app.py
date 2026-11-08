@@ -84,6 +84,9 @@ class PlanRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     seams: Optional[List[SeamId]] = None
     travel_speed_mm_s: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
+    #: Goal 1 plans kinematic only (CP-58); ``on`` is refused (409) until collision planning exists (Goal 2), and is
+    #: refused separately while a CP-62 override of check 4 is what lets the job plan.
+    collision: Literal['off', 'on'] = 'off'
 
 
 Coord = Annotated[float, Field(ge=-placement_mod.MAX_OFFSET_MM, le=placement_mod.MAX_OFFSET_MM,
@@ -153,6 +156,7 @@ def _busy(exc: RunBusyError) -> ProblemError:
 
 def create_app(settings: Settings) -> FastAPI:
     users = load_users(settings.secrets_file)  # fails early with a clear message
+    admins = frozenset(name for name, u in users.items() if u.role == 'Admin')  # CP-62 override authors
     tokens = TokenStore(settings.token_ttl_s)
     runs = RunManager(settings.runs_dir, kill_grace_s=settings.kill_grace_s)
     robot = RobotModel(settings)
@@ -274,7 +278,7 @@ def create_app(settings: Settings) -> FastAPI:
         job = jobs.job_dir(settings.jobs_dir, job_id)
         doc = jobs.read_json(job / 'placement.json')
         if doc is None:
-            raise ProblemError(404, 'no-placement', 'No placement', detail=jobs.NO_PLACEMENT_NOTE)
+            raise ProblemError(404, 'no-placement', 'No placement', detail=jobs.no_placement_note(job))
         return doc
 
     @api.put('/jobs/{job_id}/placement')
@@ -339,30 +343,45 @@ def create_app(settings: Settings) -> FastAPI:
                   _u: User = Depends(require(*EDIT_SEAMS))) -> Dict[str, Any]:
         job = jobs.job_dir(settings.jobs_dir, job_id)
         _check_picks(body.seams)
-        cad_api.cad_gate(job, settings.repo_root)  # CP-60: no seam picking on a red / stale cross-check
+        cad_api.cad_gate(job, settings.repo_root, admins)  # CP-60: no seam picking on a red / stale cross-check
         has_placement = (job / 'placement.json').is_file()
         stamp = _dt.datetime.now(_dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
         work = settings.repo_root / 'logs' / 'seam_saves' / f'{job_id}-{stamp}-{secrets.token_hex(3)}'
         picks = [p.model_dump() for p in body.seams]
         try:
             with runs.slot('seams', job_id):
+                cad_api.cad_gate(job, settings.repo_root, admins)  # again inside the slot (review minor 3)
                 doc = adapters.build_seams(settings, job, picks, work, build_axis=has_placement)
         except RunBusyError as exc:
             raise _busy(exc) from exc
         response.headers['X-AWM-Seam-Axis'] = (
-            'built' if has_placement else 'not built: no placement.json (Goal 1 placement comes from the cell CAD)')
+            'built' if has_placement else 'not built: no placement.json (' + jobs.placement_hint(job) + ')')
         return doc
+
+    def promote_gated(run_dir: Path, job: Path, collision: str, override: Optional[Dict[str, Any]]) -> Dict[str, str]:
+        """Plan promotion with the CP-60 / CP-62 gate evaluated again while the run still holds the slot (review
+        minor 3): a cross-check or override that became stale, red or void during the run is never promoted."""
+        again = cad_api.cad_gate(job, settings.repo_root, admins, collision)
+        if again != override:
+            raise RuntimeError('the CP-62 override changed during the run; nothing promoted')
+        return adapters.promote_plan(run_dir, job, override)
 
     @api.post('/jobs/{job_id}/plan', status_code=202)
     def plan(job_id: str, response: Response, body: Optional[PlanRequest] = None,
              _u: User = Depends(require(*PLAN))) -> Dict[str, str]:
         job = jobs.job_dir(settings.jobs_dir, job_id)
-        cad_api.cad_gate(job, settings.repo_root)  # CP-60: Plan blocked by a red / stale cross-check
+        collision = body.collision if body else 'off'
+        # CP-60: Plan blocked by a red / stale cross-check; CP-62: a valid check-4 override lets a kinematic plan pass
+        override = cad_api.cad_gate(job, settings.repo_root, admins, collision)
+        if collision != 'off':
+            raise ProblemError(409, 'collision-unavailable', 'Collision planning not available',
+                               detail='Goal 1 plans kinematic only (CP-58, collision_checked false); collision-on '
+                                      'planning comes with Goal 2')
         seams_doc = jobs.read_json(job / 'seams.json')
         if seams_doc is None:
             raise ProblemError(409, 'no-seams', 'No seams', detail='save the seams (S2) before planning')
         if not (job / 'placement.json').is_file():
-            raise ProblemError(409, 'no-placement', 'No placement', detail=jobs.NO_PLACEMENT_NOTE)
+            raise ProblemError(409, 'no-placement', 'No placement', detail=jobs.no_placement_note(job))
         axis = jobs.seam_axis_state(job, settings.repo_root)
         if axis == 'missing':
             raise ProblemError(409, 'seam-axis-missing', 'seam_axis.json missing',
@@ -381,7 +400,7 @@ def create_app(settings: Settings) -> FastAPI:
         speed = body.travel_speed_mm_s if body else None
         try:
             run = runs.start(job_id, 'plan', lambda d: adapters.plan_steps(settings, d, job, subset, speed),
-                             on_success=lambda d: adapters.promote_plan(d, job))
+                             on_success=lambda d: promote_gated(d, job, collision, override))
         except RunBusyError as exc:
             raise _busy(exc) from exc
         response.headers['Location'] = f'/api/v1/runs/{run["run_id"]}'
@@ -497,7 +516,7 @@ def create_app(settings: Settings) -> FastAPI:
         except WebSocketDisconnect:
             pass
 
-    cad_api.register(api, settings, runs, require, _busy)
+    cad_api.register(api, settings, runs, require, _busy, admins)
     app.include_router(api)
     _mount_front_end(app, settings)
     return app

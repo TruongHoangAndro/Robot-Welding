@@ -3,7 +3,7 @@
  * browser talks to awm_api and nothing else (DES-001 §7.3: no ROS, robot or PLC from the browser).
  */
 
-import type { CadCheck } from './cadcheck';
+import type { CadCheck, CadOverride, OverrideState } from './cadcheck';
 import type { Assignment, TreeNode } from './roles';
 import type { SeamDoc, SeamPick } from './seams';
 import type { SimulationPayload } from './simulation';
@@ -144,9 +144,10 @@ export async function putSeams(token: string, id: string, seams: SeamPick[]): Pr
   return { doc: body, seamAxis: res.headers.get('X-AWM-Seam-Axis') ?? '' };
 }
 
-/** Plan request; ``travelSpeedMmS`` undefined = planner default (Assumption, recorded in D07). */
+/** Plan request; ``travelSpeedMmS`` undefined = planner default (Assumption, recorded in D07). Always kinematic only
+ * (collision off, CP-58); a CP-62 override of check 4 is valid for that only. */
 export async function startPlan(token: string, id: string, seams?: string[], travelSpeedMmS?: number): Promise<string> {
-  const req: Record<string, unknown> = {};
+  const req: Record<string, unknown> = { collision: 'off' };
   if (seams?.length) req.seams = seams;
   if (travelSpeedMmS !== undefined) req.travel_speed_mm_s = travelSpeedMmS;
   const { body } = await call<{ run_id: string }>(`/jobs/${encodeURIComponent(id)}/plan`, token, {
@@ -263,8 +264,22 @@ export interface CellStatus {
   roles: { state: 'missing' | 'ok' | 'stale' };
   axis: { component_path: string | null; edge_id: string; center_file_mm: number[]; axis_file: number[]; radius_mm: number; reversed: boolean; state: string } | null;
   model: { saved: boolean };
-  head: { step: boolean; map: boolean; head_yaml: boolean };
+  head: { step: boolean; map: boolean; head_yaml: boolean; tcp: HeadTcp | null };
   stale_jobs: string[];
+}
+/** Taught / mapped TCP of head.yaml (CP-61), tool0 frame, mm. */
+export interface HeadTcp {
+  method: string | null;
+  xyz_mm: number[] | null;
+  quat_xyzw: number[] | null;
+  beam_axis_tool0: number[] | null;
+  component?: string;
+  edge_id?: string;
+  reversed?: boolean;
+  stickout_mm?: number;
+  mouth_radius_mm?: number;
+  taught_by?: string;
+  taught_at?: string;
 }
 export interface RolesView {
   assignments: Assignment[];
@@ -307,3 +322,19 @@ export async function getCheck(t: string, id: string): Promise<{ state: 'ok' | '
     throw e;
   }
 }
+
+/** CP-62 override of cross-check 4, or null when none is recorded (404 no-override). */
+export async function getOverride(t: string, id: string): Promise<OverrideState | null> {
+  try {
+    return (await call<OverrideState>(`/jobs/${enc(id)}/check/override`, t)).body;
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
+}
+/** Admin: record the CP-62 override for kinematic planning (reason is stored verbatim). */
+export const postOverride = async (t: string, id: string, reason: string) =>
+  (await call<CadOverride>(`/jobs/${enc(id)}/check/override`, t, json('POST', { reason }))).body;
+export const deleteOverride = async (t: string, id: string) => {
+  await call<null>(`/jobs/${enc(id)}/check/override`, t, { method: 'DELETE' });
+};
