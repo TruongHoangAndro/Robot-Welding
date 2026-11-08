@@ -9,7 +9,10 @@ A61–A64; CP-58, CP-59; DES-001 Rev 0.5 §4.3 steps 5–6, §5.3, §6.2).
   style of ``awm_path.cli`` (parsed by the ``awm_api`` runner).
 * Output: ``<job>/programs/P###/program.json`` (next free revision; an existing revision is never changed).
 
-Refusals: D07 stale (input hashes), schema invalid, a rejected arc (no partial programs), an arc with
+Refusals: D07 stale by the shared rule ``awm_core.staleness`` (an input outside the repository, missing or with
+another hash, or ``planner.params.record_version`` missing / older: "planned with an older planner; re-plan" —
+G1.17, the same verdict as ``awm_path.cli check`` and ``awm_api``), a program input reached through a symbolic link
+or outside the repository, schema invalid, a rejected arc (no partial programs), an arc with
 ``speed_within_limits: false`` or a weld motion above a velocity / acceleration limit (arc and the largest feasible
 travel speed in the message; never slowed silently, no limit raised), the robot description differs from the one
 recorded in D07, the NOMINAL calibration differs from the D07 one, an active D08 exists (the 7-axis chain needs a
@@ -31,7 +34,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
-from awm_core import jsonio
+from awm_core import jsonio, staleness
 from awm_core.hashing import sha256_file, sha256_text
 from awm_core.repository import JobPaths
 
@@ -114,12 +117,13 @@ def generate(args: argparse.Namespace) -> int:
     path_file = Path(args.path).resolve() if args.path else job.path_json
     progress(0.0, f'reading D07 {path_file.name}')
     try:
-        path = jsonio.read_json(path_file, 'v2/path', base_dir=job.dir)
-    except jsonio.StaleInputError as exc:
-        raise Refused(f'D07 is stale (seams, placement, cell frames or head changed since planning): {exc}; '
-                      're-plan') from exc
+        path = jsonio.read_json(path_file, 'v2/path', check=False)
     except (FileNotFoundError, jsonio.SchemaValidationError) as exc:
         raise Refused(f'D07 refused: {exc}') from exc
+    verdict = staleness.document_verdict(job.dir, str(path_file), job.repo.root, path)
+    if not verdict.ok:
+        raise Refused('D07 is stale (seams, placement, cell frames or head changed since planning, an input outside '
+                      f'the repository, or an older planner): {"; ".join(verdict.problems)}; re-plan')
     if not str(path['schema_version']).startswith('2.') or 'sync' not in path['planner'].get('params', {}):
         raise Refused('D07 is not a G1.3 kinematic 7-axis path (planner.params.sync missing); re-plan')
     if job.repo.active_calibration.exists():
@@ -146,6 +150,11 @@ def generate(args: argparse.Namespace) -> int:
         head_yaml = Path(head_dir) / 'head.yaml'
         head_hash = sha256_file(head_yaml)
         inputs.append(head_yaml)
+    linked = staleness.linked_or_outside(inputs, job.repo.root)
+    if linked:
+        raise Refused('program input(s) reached through a symbolic link or outside the repository '
+                      + str(job.repo.root.resolve()) + ': ' + ', '.join(f'{q} -> {q.resolve()}' for q in linked)
+                      + f'; {staleness.LINK_FIX} and re-plan')
     components = {'kinematics': sha256_file(desc.kinematics_file), 'positioner_axis': sha256_file(frames_yaml),
                   'positioner_limits': sha256_file(desc.positioner_limits_file), f'tcp/{head_model}': head_hash}
     calibration = {'calibration_id': 'CAL-NOMINAL-FRAMES', 'status': 'NOMINAL',

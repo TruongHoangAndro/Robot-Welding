@@ -15,6 +15,7 @@ Needs the ROS overlay (xacro, ament index): not part of the pure core (B-06). No
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Dict, Mapping, Optional, Tuple
@@ -62,9 +63,18 @@ class PlanningDescription:
                 'ur_kinematics_sha256': sha256_file(self.kinematics_file)}
 
 
+_XML_COMMENT = re.compile(r'<!--.*?-->', re.S)
+
+
 def location_free_urdf_sha256(urdf: str, head_dir: Optional[str]) -> str:
-    """SHA-256 of the URDF text with the head folder path replaced by a placeholder."""
-    return sha256_text(urdf.replace(head_dir, HEAD_DIR_PLACEHOLDER) if head_dir else urdf)
+    """SHA-256 of the URDF text without XML comments and with the head folder path replaced by a placeholder.
+
+    Comments are dropped because xacro writes the absolute path of its source file (the install prefix of the
+    checkout) into one; the hash must be the same in every checkout and install (G1.17 follow-up). Comments carry
+    no description content.
+    """
+    text = _XML_COMMENT.sub('', urdf)
+    return sha256_text(text.replace(head_dir, HEAD_DIR_PLACEHOLDER) if head_dir else text)
 
 
 def _share(pkg: str) -> Path:
