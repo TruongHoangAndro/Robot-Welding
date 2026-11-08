@@ -18,7 +18,7 @@ One script rebuilds every golden data set from the cell STEP; the hand-made repo
   CP-62), run promotion and override carry-over are the browser's. Two user-placed files are made with
   `awm_geometry make-job-step` from the same STEP: the head STEP (the robot component, moved to the robot's own
   frame read from the cell component tree) and the job STEP (rotating set + part).
-- Data file `src/awm_bringup/test/data/golden_564082.yaml` (test data owned by cell-sim, next to the launch tests that
+- Data file `src/awm_bringup/test/data/golden_part.yaml` (test data owned by cell-sim, next to the launch tests that
   use the result; `docs/generated` is the lead's documentation scope and not test input): users, tolerances, cell
   roles (+ collision override, contact tolerance), cell axis pick, head map rules, TCP teach pick and expected TCP,
   job components, roles, axis pick, expected cross-check reds, CP-62 reason, J1 / J2 joint ids, seam defaults,
@@ -28,7 +28,7 @@ One script rebuilds every golden data set from the cell STEP; the hand-made repo
   rejected or partial seam, override not carried into D07 / D09, a non-empty output folder not made by the script.
 - Idempotent: `golden_summary.json` stores a fingerprint (cell STEP, data file, script, engineering package sources
   without tests); same fingerprint = nothing done. File lock per output folder (parallel colcon packages).
-- Output default `build/golden_564082` (git- and colcon-ignored), or `AWM_GOLDEN_OUT`. `s4_golden/` holds
+- Output default `build/golden_repo` (git- and colcon-ignored), or `AWM_GOLDEN_OUT`. `s4_golden/` holds
   `robot_description.json`, `path.json`, `placement.json` for the web FK test.
 
 ## Tests

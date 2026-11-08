@@ -11,7 +11,7 @@ every release refuses while check 4 is red.
 ## Set-up (everything from the cell STEP)
 
 Only input: the cell STEP `APLSMN601_Automated Weldment System.step` (SHA-256 `bc66c09e…7e824`). All picks come from
-`src/awm_bringup/test/data/golden_564082.yaml`; the chain runs through an in-process `awm_api` with the real CLIs.
+`src/awm_bringup/test/data/golden_part.yaml`; the chain runs through an in-process `awm_api` with the real CLIs.
 
 | Step | Result |
 |---|---|

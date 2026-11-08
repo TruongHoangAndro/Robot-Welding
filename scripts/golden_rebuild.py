@@ -7,7 +7,7 @@ Runs INSIDE ``awm_dev`` (ROS python with the workspace overlay, the FastAPI venv
 
 The only external input is the cell STEP (``--cell-step`` or ``AWM_CELL_STEP``). Every pick a user makes in the
 browser (roles, edge ids, component names, speeds, the CP-62 reason) comes from one data file, by default
-``src/awm_bringup/test/data/golden_564082.yaml`` (test data, CLAUDE.md design rule 2). The chain is driven through the
+``src/awm_bringup/test/data/golden_part.yaml`` (test data, CLAUDE.md design rule 2). The chain is driven through the
 real backend: an in-process ``awm_api`` app (FastAPI ``TestClient``) with its default CLI commands, so the cell / job
 imports, the CP-60 gate, the CP-62 override, the plan and program runs and their promotion rules are exactly the
 browser's. Two files a user places by hand are made with ``awm_geometry make-job-step`` from the same cell STEP: the
@@ -43,10 +43,10 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence
 
 WS = Path(__file__).resolve().parent.parent
-DEFAULT_DATA = WS / 'src' / 'awm_bringup' / 'test' / 'data' / 'golden_564082.yaml'
+DEFAULT_DATA = WS / 'src' / 'awm_bringup' / 'test' / 'data' / 'golden_part.yaml'
 OUT_ENV = 'AWM_GOLDEN_OUT'
 CELL_ENV = 'AWM_CELL_STEP'
-DEFAULT_OUT = WS / 'build' / 'golden_564082'
+DEFAULT_OUT = WS / 'build' / 'golden_repo'
 SCHEMA = 'awm_golden_rebuild/0.1'
 SUMMARY = 'golden_summary.json'
 MARKER = '.golden_rebuild'
@@ -676,9 +676,9 @@ def pytest_golden() -> Dict[str, Any]:
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('--cell-step', default=os.environ.get(CELL_ENV), help=f'cell STEP (else {CELL_ENV})')
-    ap.add_argument('--out', default=None, help=f'golden repository root (else {OUT_ENV}, else build/golden_564082)')
+    ap.add_argument('--out', default=None, help=f'golden repository root (else {OUT_ENV}, else build/golden_repo)')
     ap.add_argument('--data', default=None, help='golden data file (default src/awm_bringup/test/data/'
-                                                 'golden_564082.yaml)')
+                                                 'golden_part.yaml)')
     ap.add_argument('--force', action='store_true', help='rebuild even when the summary is up to date')
     args = ap.parse_args(argv)
     if not args.cell_step:

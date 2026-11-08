@@ -48,7 +48,7 @@ Other checks on the rebuilt repository (`AWM_CELL_STEP` set):
 - `test_sim_mock_7axis_launch.py::test_replay_golden` (sim_mock `repo:=<golden repo>`, 7-joint controller, mock
   hardware): P001 replayed, final deviation 0.0°, max tracking error 0.437°.
 - `test_sim_mock_repo_launch.py::test_sim_mock_repo`: 15 scene objects, head H-CAD, synthetic replay ok.
-- web FK check (`fk.test.ts` with `AWM_S4_GOLDEN_DIR=build/golden_564082/s4_golden`): 176 points, max 1.28e-7 mm /
+- web FK check (`fk.test.ts` with `AWM_S4_GOLDEN_DIR=build/golden_repo/s4_golden`): 176 points, max 1.28e-7 mm /
   2.41e-6°.
 
 ## Reproduce

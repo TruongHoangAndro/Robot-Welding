@@ -2,7 +2,7 @@
 
 Golden data from the session fixture ``golden`` (``conftest.py``, G1.22): the repository rebuilt from the cell STEP
 by ``scripts/golden_rebuild.py`` (skipped with ``AWM_CELL_STEP not set`` otherwise); job folder and the J1 / J2 joint
-edge ids come from its summary (data file ``awm_bringup/test/data/golden_564082.yaml``). ``AWM_OCC_PYTHON`` = OCC
+edge ids come from its summary (data file ``awm_bringup/test/data/golden_part.yaml``). ``AWM_OCC_PYTHON`` = OCC
 sampler for the seams. The golden files are copied into a temporary repository, never written: seam_axis.json /
 D07 / D09 record model.step, the CP-60 roles / axis picks, part.json, placement.json and the head folder as inputs,
 and inputs that resolve outside the repository are refused (G1.17, ``awm_core.staleness``).

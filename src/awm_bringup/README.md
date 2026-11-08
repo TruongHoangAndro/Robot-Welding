@@ -46,7 +46,7 @@ scripts/dx "python3 scripts/golden_rebuild.py --cell-step <cell STEP> [--out <re
 Rebuilds the golden repository of part 564082 (S10 cell import with roles, positioner axis, head STEP + TCP teach,
 cell save, job STEP via `make-job-step`, S1 import, job roles / axis, cross-check, CP-62 override, J1 / J2 seams,
 plan, program, S4 files) through an in-process `awm_api` with the real CLIs. Every pick comes from
-`test/data/golden_564082.yaml`; any mismatch stops the rebuild. Output (default `build/golden_564082`, or
+`test/data/golden_part.yaml`; any mismatch stops the rebuild. Output (default `build/golden_repo`, or
 `AWM_GOLDEN_OUT`) is reused while the cell STEP, the data file, the script and the engineering sources are unchanged;
 `golden_summary.json` holds the key numbers. The golden tests of awm_seam, awm_path, awm_program and awm_bringup get
 the repository from the session fixture `golden` (`test/conftest.py`), which runs the script once when `AWM_CELL_STEP`

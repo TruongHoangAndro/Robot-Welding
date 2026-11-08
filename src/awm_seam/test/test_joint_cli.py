@@ -120,7 +120,7 @@ def _golden_repo(tmp_path, golden):
 def test_golden_part_j1_coaxial_j2_not(tmp_path, capsys, golden):
     """Golden data: J1 = the joint of the outer tube circle (r 13.33 mm), J2 = the solid-elbow joint.
 
-    Which JE ids they are is read from the golden summary (data file golden_564082.yaml)."""
+    Which JE ids they are is read from the golden summary (data file golden_part.yaml)."""
     job_dir = _golden_repo(tmp_path, golden)
     topo = json.loads((job_dir / 'cache' / 'view' / 'topology.json').read_text())
     joints = {j['joint_edge_id']: j for j in topo['joints']}

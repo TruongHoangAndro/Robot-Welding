@@ -17,7 +17,7 @@ WS = Path(__file__).resolve().parents[3]
 SPEC = importlib.util.spec_from_file_location('golden_rebuild', WS / 'scripts' / 'golden_rebuild.py')
 gr = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(gr)
-DATA = Path(__file__).resolve().parent / 'data' / 'golden_564082.yaml'
+DATA = Path(__file__).resolve().parent / 'data' / 'golden_part.yaml'
 
 
 @pytest.fixture(scope='module')
@@ -206,8 +206,17 @@ def test_robot_frame_transform():
     tree = [{'index': 0, 'parent': None, 'instance_name': ''},
             {'index': 1, 'parent': 0, 'instance_name': 'UR5E/UR7E:1', 'placement_mm': pose.tolist()}]
     t = gr.robot_frame_transform(tree, 'UR5E/UR7E:1')
-    back = frames.xyz_rpy_to_matrix(t[:3], [units.deg_to_rad(v) for v in t[3:]])
-    assert np.allclose(back @ pose, np.eye(4), atol=1e-9)
+    # make-job-step convention (awm_geometry testparts.make_job_step): new placement = T @ placement_mm, T from
+    # xyz + URDF rpy in deg; the robot component must land at the file origin
+    move = frames.xyz_rpy_to_matrix(t[:3], [units.deg_to_rad(v) for v in t[3:]])
+    assert np.allclose(move @ pose, np.eye(4), atol=1e-9)
+    # a point given in the robot frame keeps its coordinates in the new file (the head map works in that frame)
+    p_robot = np.array([43.0, -7.0, 280.0, 1.0])
+    assert np.allclose(move @ (pose @ p_robot), p_robot, atol=1e-9)
+    # a child (the head under the robot, local L) ends at L with T applied on the left; the right-hand order fails
+    local = frames.xyz_rpy_to_matrix([-133.3, 317.4, 585.7], [units.deg_to_rad(v) for v in (27.6, 0.0, 0.0)])
+    assert np.allclose(move @ (pose @ local), local, atol=1e-9)
+    assert not np.allclose((pose @ local) @ move, local, atol=1e-3)
     with pytest.raises(gr.GoldenError, match='matches 0'):
         gr.robot_frame_transform(tree, 'Robot:1')
 
@@ -251,9 +260,8 @@ def test_source_digest_ignores_tests(tmp_path):
 def test_no_part_data_in_the_script():
     """Design rule 2: component names, edge / joint ids and speeds of the golden part live in the data file only."""
     text = (WS / 'scripts' / 'golden_rebuild.py').read_text()
-    for token in ('564082-Assembly', 'Part1:1', 'E3955', 'JE9', 'JE11', 'LightWELD:1', 'UR5E', '2.3'):
+    for token in ('564082', 'Part1:1', 'E3955', 'JE9', 'JE11', 'LightWELD:1', 'UR5E', '2.3'):
         assert token not in text, token
-    assert not math.isnan(0.0)
 
 
 def _pkg(root, name, deps):
@@ -333,3 +341,41 @@ def test_refusal_is_not_written_into_a_foreign_folder(monkeypatch, tmp_path):
     with pytest.raises(gr.GoldenError, match='refused'):
         gr.ensure_golden(step, out, DATA, log=lambda m: None)
     assert not (out / gr.SUMMARY).exists()
+
+
+def test_out_lock_serialises(tmp_path):
+    import threading
+    import time
+    out = tmp_path / 'g'
+    order = []
+
+    def holder():
+        with gr.out_lock(out):
+            order.append('a-in')
+            time.sleep(0.3)
+            order.append('a-out')
+    th = threading.Thread(target=holder)
+    th.start()
+    while not order:
+        time.sleep(0.01)
+    with gr.out_lock(out):
+        order.append('b-in')
+    th.join()
+    assert order == ['a-in', 'a-out', 'b-in']
+
+
+def test_ensure_golden_short_circuit(monkeypatch, tmp_path):
+    step, fp, calls = _stub_rebuild(monkeypatch, tmp_path, 'ok')
+    out = tmp_path / 'g'
+    assert gr.ensure_golden(step, out, DATA, log=lambda m: None)['status'] == 'ok'
+    assert gr.ensure_golden(step, out, DATA, log=lambda m: None)['fingerprint'] == fp
+    assert len(calls) == 1  # same fingerprint: no rebuild
+    gr.ensure_golden(step, out, DATA, force=True, log=lambda m: None)
+    assert len(calls) == 2
+    monkeypatch.setattr(gr, 'fingerprint', lambda cell_step, data, ws=gr.WS: {'cell_step_sha256': 'b'})
+    gr.ensure_golden(step, out, DATA, log=lambda m: None)
+    assert len(calls) == 3  # changed input: rebuild
+
+
+def test_default_names_are_neutral():
+    assert gr.DEFAULT_DATA.name == 'golden_part.yaml' and gr.DEFAULT_OUT.name == 'golden_repo'

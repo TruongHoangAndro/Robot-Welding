@@ -1,5 +1,5 @@
 """Session fixture ``golden`` (G1.22): the golden repository of part 564082, rebuilt from the cell STEP alone by
-``scripts/golden_rebuild.py`` (once per session, cached and locked under ``build/golden_564082`` or
+``scripts/golden_rebuild.py`` (once per session, cached and locked under ``build/golden_repo`` or
 ``AWM_GOLDEN_OUT``). Skipped with ``AWM_CELL_STEP not set`` when the cell STEP is not given (the only allowed skip).
 The fixture value is the rebuild summary (``golden_summary.json``): ``repo``, ``job_id``, ``joints`` (J1 / J2 joint
 edge ids), ``program`` …
