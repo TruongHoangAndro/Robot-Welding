@@ -280,6 +280,11 @@ def cell_import_steps(settings: Settings, step_file: Path, out_dir: Path, up_axi
     ]
 
 
+def geometry_info_step(settings: Settings) -> Step:
+    """``awm_geometry.cli info`` (OCC version + awm_geometry version; review I2 cache identity)."""
+    return Step('geometry-info', _occ_prefix(settings) + ['info'], env=_occ_env())
+
+
 def component_view_steps(settings: Settings, step_file: Path, component: str, up_axis: str,
                          out_dir: Path) -> List[Step]:
     """D20 edge view of one component (for a circle pick on it)."""

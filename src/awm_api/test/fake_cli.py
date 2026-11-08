@@ -60,12 +60,16 @@ def cmd_import(a) -> None:
         'part_no': a.part_no, 'part_rev': a.part_rev}))
 
 
+FAKE_INFO = {'occ_version': '0.0-fake', 'awm_geometry': '0.0-fake'}
+FAKE_CREATED_BY = 'awm_geometry 0.0-fake (pythonocc 0.0-fake)'
+
+
 def cmd_export_view(a) -> None:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / 'view.glb').write_bytes(b'glTF-fake')
     (out / 'topology.json').write_text(json.dumps({
-        'schema_version': '2.0', 'unit': 'mm', 'up_axis_arg': a.up_axis,
+        'schema_version': '2.0', 'unit': 'mm', 'up_axis_arg': a.up_axis, 'created_by': FAKE_CREATED_BY,
         'inputs': [{'name': Path(a.step).name, 'sha256': sha(Path(a.step))}],
         'source': {'file': Path(a.step).name, 'component': a.component, 'up_axis': a.up_axis}}))
 
@@ -301,10 +305,14 @@ def main() -> int:
     p = sub.add_parser('describe')
     p.add_argument('--frames', required=True)
     p.add_argument('--head-dir')
+    sub.add_parser('info')
     p = sub.add_parser('replay')
     p.add_argument('--program', required=True)
     p = sub.add_parser('sleep')
     a = ap.parse_args(argv)
+    if a.cmd == 'info':
+        print(json.dumps(FAKE_INFO))
+        return 0
     if a.cmd == 'replay':
         pause()
         return cmd_replay(a)

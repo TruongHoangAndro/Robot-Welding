@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
+import subprocess
+import threading
 from pathlib import Path
 from typing import Any, Callable, Collection, Dict, List, Literal, Optional
 
@@ -43,6 +46,7 @@ HEAD_MAP = 'cad_map_head.yaml'
 CELL_FILES = (cad_roles.CELL_TREE, CELL_VIEW, cad_roles.ROLES_FILE, cad_roles.AXIS_FILE, CELL_META)
 VIEW_KEY = re.compile(r'^[0-9a-f]{12}$')
 CREATED_BY = 'awm_api (CP-60)'
+LOG = logging.getLogger('awm_api.cad')
 
 EdgeId = Field(pattern=r'^E[0-9]+$')
 
@@ -101,6 +105,46 @@ class OverridePost(BaseModel):
 
     model_config = ConfigDict(extra='forbid')
     reason: str = Field(min_length=1, max_length=2000, pattern=r'\S')
+
+
+#: D20 topology.json schema version written by ``awm_geometry.view`` (contract D20_view_model.md). Used when the
+#: exporter's ``info`` does not report ``view_schema_version`` (request to cad-geometry).
+D20_SCHEMA_VERSION = '2.0'
+
+
+class GeometryIdentity:
+    """Identity of the current CAD exporter, asked once from the OCC process (``awm_geometry.cli info``):
+    ``created_by`` exactly as the exporter writes it and the D20 schema version. None when the CLI cannot answer
+    (no cache hits then). Thread-safe, one subprocess per API process."""
+
+    def __init__(self, settings: Settings, timeout_s: float = 120.0) -> None:
+        self.settings, self.timeout_s = settings, timeout_s
+        self._lock = threading.Lock()
+        self._done = False
+        self._value: Optional[Dict[str, str]] = None
+
+    def get(self) -> Optional[Dict[str, str]]:
+        with self._lock:
+            if not self._done:
+                self._done = True
+                self._value = self._ask()
+            return self._value
+
+    def _ask(self) -> Optional[Dict[str, str]]:
+        try:
+            step = adapters.geometry_info_step(self.settings)
+            proc = subprocess.run(step.argv, env=step.env, capture_output=True, text=True, timeout=self.timeout_s,
+                                  check=False)
+            lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
+            info = json.loads(lines[-1]) if proc.returncode == 0 and lines else None
+        except (StepsError, OSError, subprocess.TimeoutExpired, ValueError) as exc:
+            LOG.warning('awm_geometry info failed (%s): cached views are not reused', exc)
+            return None
+        if not isinstance(info, dict) or not info.get('awm_geometry') or not info.get('occ_version'):
+            LOG.warning('awm_geometry info gave no version: cached views are not reused')
+            return None
+        return {'created_by': f'awm_geometry {info["awm_geometry"]} (pythonocc {info["occ_version"]})',
+                'view_schema_version': str(info.get('view_schema_version') or D20_SCHEMA_VERSION)}
 
 
 def _instance(path: str) -> str:
@@ -400,17 +444,28 @@ def register(api: APIRouter, settings: Settings, runs: RunManager, require: Call
         save_template(t, data['assignments'])
         return doc
 
+    geometry = GeometryIdentity(settings)
+
     def cached_view(key: str, step: Path, component: str, up_axis: str) -> Optional[JSONResponse]:
-        """Close-out m5: reuse ``views/<key>/`` when it was exported from this STEP (hash), component and up axis."""
+        """Close-out m5 / review I2: reuse ``views/<key>/`` only when it was exported by the current exporter
+        (``created_by`` = the identity reported by ``awm_geometry.cli info``), with the current D20 schema version, from
+        this STEP (input named ``source.file`` with the current SHA-256), component and up axis. Anything malformed or
+        unknown is a miss (a new export), never an error."""
         topo = jobs.read_json(cad / 'views' / key / 'topology.json')
-        if topo is None or not (cad / 'views' / key / 'view.glb').is_file() or not step.is_file():
+        if not isinstance(topo, dict) or not (cad / 'views' / key / 'view.glb').is_file() or not step.is_file():
             return None
-        src = topo.get('source') or {}
-        digest = sha256_file(step)
-        if (src.get('component') == component and src.get('up_axis') == up_axis
-                and any(i.get('sha256') == digest for i in topo.get('inputs') or [])):
-            return JSONResponse({'key': key, 'cached': True}, status_code=200)
-        return None
+        ident = geometry.get()
+        src, inputs = topo.get('source'), topo.get('inputs')
+        if (ident is None or not isinstance(src, dict) or not isinstance(inputs, list)
+                or any(not isinstance(i, dict) for i in inputs)):
+            return None
+        if (topo.get('schema_version') != ident['view_schema_version'] or topo.get('created_by') != ident['created_by']
+                or src.get('file') != step.name or src.get('component') != component or src.get('up_axis') != up_axis):
+            return None
+        named = [i for i in inputs if i.get('name') == src.get('file')]
+        if len(named) != 1 or named[0].get('sha256') != sha256_file(step):
+            return None
+        return JSONResponse({'key': key, 'cached': True}, status_code=200)
 
     @api.post('/cell/model/component_view', status_code=202)
     def cell_component_view(body: ComponentView, response: Response,

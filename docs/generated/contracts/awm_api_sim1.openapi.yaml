@@ -490,7 +490,7 @@ paths:
         required: true
         content: {application/json: {schema: {type: object, required: [component_path], properties: {component_path: {type: string}}}}}
       responses:
-        '200': {description: 'cached view reused (same STEP SHA-256, component and up axis): {key, cached: true}; no run', content: {application/json: {}}}
+        '200': {description: 'cached view reused: {key, cached: true}, no run. Only when topology.json has the current D20 schema_version, created_by = the current exporter (awm_geometry.cli info), source.file / component / up_axis equal to the request and the input named source.file with the current STEP SHA-256; anything else (incl. malformed inputs) = new export', content: {application/json: {}}}
         '202': {description: 'run started: {run_id} (+ key for a view); Location /api/v1/runs/{run_id}', content: {application/json: {}}}
         '403': {$ref: '#/components/responses/Problem'}
   /cell/model/views/{key}/{file}:

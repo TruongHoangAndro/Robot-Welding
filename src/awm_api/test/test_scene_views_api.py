@@ -64,10 +64,95 @@ def test_component_view_reuses_cached_view(client, repo, tmp_path, monkeypatch):
     assert wait_run(client, h, r.json()['run_id'])['state'] == 'succeeded'
     again = client.post(f'{CELL}/component_view', headers=h, json=body)
     assert again.status_code == 200 and again.json() == {'key': key, 'cached': True}
-    assert len(argv_lines(log)) == 1                       # no second export
+    exports = lambda: [a for a in argv_lines(log) if a[0] == 'export-view']  # noqa: E731
+    assert len(exports()) == 1                             # no second export
     # a new cell STEP makes the cached view unusable -> exported again
     (repo / 'cell' / 'cad' / 'cell.step').write_text('ISO-10303-21; cell v2')
     third = client.post(f'{CELL}/component_view', headers=h, json=body)
     assert third.status_code == 202
     wait_run(client, h, third.json()['run_id'])
-    assert len(argv_lines(log)) == 2
+    assert len(exports()) == 2
+
+
+# -- review I2 / m7: the cache hit needs the D20 schema, the current exporter version and the STEP input by name ------
+
+def _view(client, h, body=None):
+    return client.post(f'{CELL}/component_view', headers=h, json=body or {'component_path': 'Pos:1 / Disc:1'})
+
+
+def _exported(client, h, repo):
+    r = _view(client, h)
+    assert r.status_code == 202, r.text
+    assert wait_run(client, h, r.json()['run_id'])['state'] == 'succeeded'
+    path = repo / 'cell' / 'cad' / 'views' / r.json()['key'] / 'topology.json'
+    return path, json.loads(path.read_text())
+
+
+def test_cache_miss_when_exporter_version_differs(client, repo):
+    h = auth(client, 'adm')
+    imported_cell(client, h)
+    path, topo = _exported(client, h, repo)
+    assert _view(client, h).status_code == 200
+    topo['created_by'] = 'awm_geometry 0.0-old (pythonocc 0.0-fake)'
+    path.write_text(json.dumps(topo))
+    assert _view(client, h).status_code == 202
+
+
+def test_cache_miss_when_schema_version_differs(client, repo):
+    h = auth(client, 'adm')
+    imported_cell(client, h)
+    path, topo = _exported(client, h, repo)
+    topo['schema_version'] = '1.0'
+    path.write_text(json.dumps(topo))
+    assert _view(client, h).status_code == 202
+
+
+def test_cache_matches_the_step_input_by_name(client, repo):
+    h = auth(client, 'adm')
+    imported_cell(client, h)
+    path, topo = _exported(client, h, repo)
+    sha = topo['inputs'][0]['sha256']
+    topo['inputs'] = [{'name': 'other.step', 'sha256': sha}]  # right hash under another name: no hit
+    path.write_text(json.dumps(topo))
+    assert _view(client, h).status_code == 202
+
+
+def test_cache_non_dict_inputs_no_500(client, repo):
+    h = auth(client, 'adm')
+    imported_cell(client, h)
+    path, topo = _exported(client, h, repo)
+    topo['inputs'] = ['cell.step', 7] + topo['inputs']
+    path.write_text(json.dumps(topo))
+    r = _view(client, h)
+    assert r.status_code == 202
+    wait_run(client, h, r.json()['run_id'])
+    topo['inputs'] = 'cell.step'
+    path.write_text(json.dumps(topo))
+    assert _view(client, h).status_code == 202
+
+
+def test_cache_miss_when_up_axis_differs(client, repo):
+    h = auth(client, 'adm')
+    imported_cell(client, h)
+    _exported(client, h, repo)
+    meta = repo / 'cell' / 'cad' / 'cell_meta.json'
+    doc = json.loads(meta.read_text())
+    doc['up_axis'] = '+Z'
+    meta.write_text(json.dumps(doc))
+    assert _view(client, h).status_code == 202
+
+
+def test_head_view_reuses_cached_view(client, repo, tmp_path, monkeypatch):
+    h = auth(client, 'adm')
+    cad = repo / 'cell' / 'cad'
+    cad.mkdir(parents=True, exist_ok=True)
+    (cad / 'head.step').write_text('ISO-10303-21; head')
+    (cad / 'cad_map_head.yaml').write_text('roles: {}\n')
+    log = tmp_path / 'argv.log'
+    monkeypatch.setenv('FAKE_ARGV_LOG', str(log))
+    r = client.post('/api/v1/cell/head/view', headers=h, json={'component': 'Nozzle:1'})
+    assert r.status_code == 202, r.text
+    assert wait_run(client, h, r.json()['run_id'])['state'] == 'succeeded'
+    again = client.post('/api/v1/cell/head/view', headers=h, json={'component': 'Nozzle:1'})
+    assert again.status_code == 200 and again.json() == {'key': r.json()['key'], 'cached': True}
+    assert [a[0] for a in argv_lines(log)].count('export-view') == 1
