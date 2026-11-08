@@ -199,6 +199,9 @@ REPLAY_CASES = {
 
 def cmd_replay(a) -> int:
     case = os.environ.get('FAKE_REPLAY', 'ok')
+    if case == 'noresult':
+        print('[INFO] [awm_program_replay]: something else', flush=True)
+        return 0
     summary = {'program': a.program, 'status': 'ok', 'segments': [], 'program_rev': 'P001',
                'controller_action': '/robot_positioner_trajectory_controller/follow_joint_trajectory'}
     print('[INFO] [awm_program_replay]: replay P001: 2 segment(s); weld events are not executed (motion only)',

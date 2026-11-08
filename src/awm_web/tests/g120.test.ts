@@ -145,3 +145,11 @@ describe('replayView cancel (review I1)', () => {
     expect(v.status).toBe('stopped');
   });
 });
+
+describe('replayView missing result (m1)', () => {
+  it('succeeded without a result line is an error', () => {
+    const v = replayView(run({ state: 'succeeded', result: null }))!;
+    expect(v.status).toBe('error');
+    expect(v.level).toBe('err');
+  });
+});

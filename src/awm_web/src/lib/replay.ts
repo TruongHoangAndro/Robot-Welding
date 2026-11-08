@@ -66,7 +66,10 @@ export function replayView(run: Run | null, segments: SegmentInfo[] = []): Repla
       return { status: 'stopped', finalDeviationDeg: null, maxTrackingDeg: null, segments: n, message: 'stopped: the replay CLI cancelled the active goal on the sim_mock controller.', level: 'warn' };
     return { status: 'cancelled', finalDeviationDeg: null, maxTrackingDeg: null, segments: n, message: cancelText(inFlightSegment(run, segments)), level: 'warn' };
   }
-  const status = (r?.status ?? (run.state === 'succeeded' ? 'ok' : 'error')) as ReplayView['status'];
+  // review m1: no result line = error, also when the run says succeeded (the CLI never confirmed the replay)
+  if (!r)
+    return { status: 'error', finalDeviationDeg: null, maxTrackingDeg: null, segments: 0, message: run.problem?.detail ?? 'the replay CLI ended without a result line', level: 'err' };
+  const status = r.status as ReplayView['status'];
   const segs = r?.segments ?? [];
   const tracking = num(r?.max_tracking_error_deg) ?? (segs.length ? Math.max(...segs.map((s) => num(s.max_tracking_error_deg) ?? 0)) : null);
   return {

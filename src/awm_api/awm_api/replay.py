@@ -79,6 +79,7 @@ def ros_domain() -> Optional[str]:
 def replay_steps(settings: Settings, program: Path) -> List[Step]:
     launch = settings.replay_launch_line()
     return [Step('replay', settings.replay_argv() + ['--program', str(program)], result_prefix=RESULT_PREFIX,
+                 require_result=True,
                  explain=functools.partial(_explain_hook, launch=launch, domain=ros_domain()))]
 
 

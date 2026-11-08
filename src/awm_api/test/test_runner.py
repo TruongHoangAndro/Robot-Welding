@@ -165,3 +165,13 @@ def test_explain_builds_the_problem_of_a_failed_step(tmp_path):
     assert done['problem'] == {'type': '/problems/replay-refused', 'title': 'Replay refused', 'status': 409,
                                'detail': 'explained refused'}
     assert done['result']['status'] == 'refused'
+
+
+def test_require_result_fails_a_step_that_exits_0_without_result_line(tmp_path):
+    mgr = RunManager(tmp_path / 'runs')
+    st = Step(label='replay', argv=[sys.executable, FAKE, 'sleep'], result_prefix='replay', require_result=True,
+              explain=lambda rc, result, tail: {'type': '/problems/replay-no-result', 'title': 'Replay failed',
+                                                'status': 422, 'detail': f'no result (exit {rc})'})
+    done = wait(mgr, mgr.start('P1_A', 'replay', [st], on_success=lambda d: {'x': '0' * 64})['run_id'])
+    assert done['state'] == 'failed' and done['outputs'] == {}
+    assert done['problem']['type'] == '/problems/replay-no-result' and 'exit 0' in done['problem']['detail']

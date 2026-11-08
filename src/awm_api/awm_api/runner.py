@@ -9,7 +9,8 @@
 * Progress: a step may print lines ``progress <0..1> <text>`` (also ``progress: …``) on stdout or stderr; the run
   progress is the weighted sum over the steps and never decreases.
 * Result (G1.20): a step with ``result_prefix`` may print ``<prefix> {json}``; the last such object becomes the run
-  ``result`` (also when the step fails, e.g. a refused replay). ``explain`` turns a failed step (exit code, result,
+  ``result`` (also when the step fails, e.g. a refused replay); with ``require_result`` an exit 0 without such a
+  line fails the step. ``explain`` turns a failed step (exit code, result,
   log tail) into the run problem instead of the generic "failed (exit N)" text.
 
 No rclpy, no OCC here: the runner only starts processes.
@@ -72,6 +73,8 @@ class Step:
     weight: float = 1.0
     #: ``<prefix> {json}`` lines of this step set the run ``result`` (last one wins)
     result_prefix: Optional[str] = None
+    #: exit 0 without a result line fails the step (review m1)
+    require_result: bool = False
     #: (exit code, result or None, log tail) -> problem dict for a failed step
     explain: Optional[Callable[[int, Optional[Dict[str, Any]], List[str]], Dict[str, Any]]] = None
 
@@ -285,8 +288,12 @@ class RunManager:
                 rc, error = self._run_step(run, step, log, done_w, total)
                 if run.cancel_requested:
                     break
-                if error is not None or rc != 0:
+                missing = error is None and rc == 0 and step.require_result and run.doc.get('result') is None
+                if error is not None or rc != 0 or missing:
                     problem = self._explain(run, step, rc) if error is None else None
+                    if problem is None and missing:
+                        problem = {'type': '/problems/run-no-result', 'title': 'Run failed', 'status': 422,
+                                   'detail': f'{step.label} ended without a result line (exit 0)'}
                     if problem is None:
                         detail = error or self._failure_detail(run, step, rc)
                         problem = {'type': '/problems/run-failed', 'title': 'Run failed', 'status': 422,

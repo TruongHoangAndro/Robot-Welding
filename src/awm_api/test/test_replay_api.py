@@ -193,3 +193,13 @@ def test_job_detail_uses_core_staleness_rule(client, repo, tmp_path):
     assert d['program']['state'] == 'stale'
     r = client.post('/api/v1/jobs/P1_A/program', headers=h, json={})
     assert r.status_code == 409 and any('outside the repository' in p for p in r.json()['problems'])
+
+
+def test_replay_exit_0_without_result_line_fails(client, repo, monkeypatch):
+    """Review m1: exit 0 but no ``replay {json}`` line is not a success."""
+    h = auth(client, 'eng')
+    programmed_job(client, repo, h)
+    monkeypatch.setenv('FAKE_REPLAY', 'noresult')
+    run = wait_run(client, h, start(client, h).json()['run_id'])
+    assert run['state'] == 'failed' and run['result'] is None
+    assert run['problem']['type'] == '/problems/replay-no-result' and 'exit 0' in run['problem']['detail']
