@@ -387,5 +387,5 @@ def test_overridden_program_is_refused_by_release_gate(client, repo, monkeypatch
     assert program['cad_check_override']['by'] == 'adm'
     assert GATE_SCOPES
     for scope in GATE_SCOPES:
-        with pytest.raises(ReleaseError, match='collision'):
+        with pytest.raises(ReleaseError, match='CP-62 override, never releasable'):
             release_gate(program, scope)
