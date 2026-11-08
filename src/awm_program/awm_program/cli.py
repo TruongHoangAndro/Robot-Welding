@@ -9,6 +9,9 @@ A61–A64; CP-58, CP-59; DES-001 Rev 0.5 §4.3 steps 5–6, §5.3, §6.2).
   style of ``awm_path.cli`` (parsed by the ``awm_api`` runner).
 * Output: ``<job>/programs/P###/program.json`` (next free revision; an existing revision is never changed).
 
+CP-62: a D07 ``cad_check_override`` reference is copied unchanged into D09 (the D09 records the hash of that exact
+D07); a void override (record or ``cad_check.json`` changed) is refused.
+
 Refusals: D07 stale by the shared rule ``awm_core.staleness`` (an input outside the repository, missing or with
 another hash, or ``planner.params.record_version`` missing / older: "planned with an older planner; re-plan" —
 G1.17, the same verdict as ``awm_path.cli check`` and ``awm_api``), a program input reached through a symbolic link
@@ -35,7 +38,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
 from awm_core import jsonio, staleness
-from awm_core.hashing import sha256_file, sha256_text
+from awm_core.hashing import sha256_bytes, sha256_file, sha256_text
 from awm_core.repository import JobPaths
 
 CREATED_BY = 'awm_program.cli generate (G1.5 synchronised 7-joint program)'
@@ -43,6 +46,10 @@ CELL_ID = 'APLSMN601-CELL'
 EXIT_OK, EXIT_REFUSED = 0, 1
 #: D07 planner.head_model (contract T0.5) → description head model
 HEAD_MODEL = {'cad': 'hcad', 'box': 'hbox'}
+#: CP-62: D07 / D09 field naming the cross-check-4 override a kinematic-only run relied on
+OVERRIDE_FIELD = 'cad_check_override'
+#: CP-60 cross-check of the job (``awm_core.cad_roles.CHECK_FILE``)
+CAD_CHECK_FILE = 'cad_check.json'
 
 
 class Refused(Exception):
@@ -91,6 +98,27 @@ def _norm(v):
     return float(round(float(v), 9))
 
 
+def _override_ref(path: Dict, job_dir: Path) -> Optional[Dict]:
+    """CP-62: the ``cad_check_override`` reference of D07, to be copied unchanged into D09 (``None`` without one).
+
+    The program CLI is the source of the D09 field; the ``awm_api`` runner's carry step finds the same reference in
+    the program and does nothing (idempotent). Refused when the override is void: the override record or the job's
+    ``cad_check.json`` is missing or no longer has the SHA-256 recorded in D07 (CP-62 item 2: a new or changed
+    cross-check voids it), or D07 is not kinematic only (the D07 schema already requires ``collision_checked``
+    false with the field). The D09 is still never releasable (``awm_verify.release.release_gate``)."""
+    ref = path.get(OVERRIDE_FIELD)
+    if ref is None:
+        return None
+    if path.get('collision_checked') is not False:
+        raise Refused(f'D07 carries {OVERRIDE_FIELD} but is not kinematic only (collision_checked false); re-plan')
+    for name, sha in ((ref['file'], ref['sha256']), (CAD_CHECK_FILE, ref['cad_check_sha256'])):
+        f = job_dir / name
+        if not f.is_file() or sha256_file(f) != sha:
+            raise Refused(f'the CP-62 override recorded in D07 is void ({name} missing or changed since planning); '
+                          're-check, record a new override and re-plan')
+    return dict(ref)
+
+
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog='awm_program.cli', description=__doc__.split('\n')[0])
     sub = p.add_subparsers(dest='cmd', required=True)
@@ -116,16 +144,24 @@ def generate(args: argparse.Namespace) -> int:
         raise Refused(f'job folder not found: {job.dir}')
     path_file = Path(args.path).resolve() if args.path else job.path_json
     progress(0.0, f'reading D07 {path_file.name}')
+    # D07 is read once: the bytes that are parsed are the bytes that are hashed and recorded (review g1-19 M-1)
     try:
-        path = jsonio.read_json(path_file, 'v2/path', check=False)
-    except (FileNotFoundError, jsonio.SchemaValidationError) as exc:
-        raise Refused(f'D07 refused: {exc}') from exc
+        path_bytes = path_file.read_bytes()
+    except OSError as exc:
+        raise Refused(f'D07 refused: cannot read {path_file}: {exc}') from exc
+    path_sha = sha256_bytes(path_bytes)
+    try:
+        path = json.loads(path_bytes.decode('utf-8'))
+        jsonio.validate(path, 'v2/path')
+    except (ValueError, jsonio.SchemaValidationError) as exc:
+        raise Refused(f'D07 refused: {path_file}: {exc}') from exc
     verdict = staleness.document_verdict(job.dir, str(path_file), job.repo.root, path)
     if not verdict.ok:
         raise Refused('D07 is stale (seams, placement, cell frames or head changed since planning, an input outside '
                       f'the repository, or an older planner): {"; ".join(verdict.problems)}; re-plan')
     if not str(path['schema_version']).startswith('2.') or 'sync' not in path['planner'].get('params', {}):
         raise Refused('D07 is not a G1.3 kinematic 7-axis path (planner.params.sync missing); re-plan')
+    override = _override_ref(path, job.dir)
     if job.repo.active_calibration.exists():
         raise Refused(f'an active calibration D08 exists ({job.repo.active_calibration.name}): the 7-axis program needs '
                       'a D08 with the positioner axis and a path planned with it, which Goal 1 does not provide; '
@@ -183,7 +219,12 @@ def generate(args: argparse.Namespace) -> int:
         raise Refused(str(exc)) from exc
 
     rev = job.next_program_rev()
-    header = jsonio.make_header(CREATED_BY, inputs, job.dir)
+    try:
+        header = jsonio.make_header(CREATED_BY, inputs[1:], job.dir)
+    except OSError as exc:
+        raise Refused(f'an input disappeared while the program was generated: {exc}; nothing written') from exc
+    d07_name = Path(os.path.relpath(path_file, job.dir)).as_posix()
+    header['inputs'].insert(0, {'name': d07_name, 'sha256': path_sha})  # hash of the bytes used, not a re-read
     gen_params = {'program': params.record(), 'limits': body['limits'],
                   'limit_sources': {'velocity': 'robot description (URDF <limit>, positioner_limits.yaml)',
                                     'acceleration': 'awm_description joint_limits_v2.yaml, positioner_limits.yaml',
@@ -208,7 +249,7 @@ def generate(args: argparse.Namespace) -> int:
         'segments': body['segments'], 'events': body['events'], 'cycle_time_s': body['cycle_time_s'],
         'collision_checked': False,
         'generator': {'params': gen_params, 'params_sha256': params_sha256(gen_params),
-                      'path': {'file': os.path.relpath(path_file, job.dir), 'sha256': sha256_file(path_file),
+                      'path': {'file': os.path.relpath(path_file, job.dir), 'sha256': path_sha,
                                'run_id': path['run_id']},
                       'planner_params_sha256': path['planner']['params_sha256'],
                       'head_model': path['planner']['head_model'],
@@ -218,6 +259,14 @@ def generate(args: argparse.Namespace) -> int:
                       'weld_segments': body['weld_segments'], 'limits': body['limits'],
                       'process': 'not assigned (no D06 in Goal 1): events carry wps_id / preset null'},
     }
+    if override is not None:
+        doc[OVERRIDE_FIELD] = override   # CP-62: the D09 records the override of the exact D07 it was built from
+    try:  # guard, not a data read: D07 must still be the file the program records
+        unchanged = sha256_file(path_file) == path_sha
+    except OSError:
+        unchanged = False
+    if not unchanged:
+        raise Refused(f'D07 {path_file.name} was changed or deleted while the program was generated; nothing written')
     out = job.program_json(rev)
     if out.exists():
         raise Refused(f'{out} exists; a program revision is never overwritten')

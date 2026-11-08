@@ -63,3 +63,176 @@ def test_release_calls_the_gate_first(job):
         with pytest.raises(ReleaseError, match='collision_checked'):
             release(job, 'P001', 'A. Approver', scope)
     assert not job.release_json.exists() and not is_locked(job, 'P001')
+
+
+# ---------------------------------------------------------------------------------------- CP-62 (review g1-18 I2)
+
+def _override_ref():
+    return {'file': 'cad_check_override.json', 'sha256': '1' * 64, 'cad_check_sha256': '2' * 64, 'check_id': 4,
+            'by': 'adm', 'created_at': '2026-11-07T18:00:00+07:00', 'reason': 'OI-23: kinematic planning only'}
+
+
+def _write_cad_check(job_dir, check4='green', status=None):
+    """A schema-valid cad_check.json in ``job_dir`` whose inputs (one stub STEP) are current."""
+    step = job_dir / 'model.step'
+    step.write_text('stub step')
+    doc = json.loads((jsonio.SCHEMA_DIR / 'v2' / 'examples' / 'cad_check.example.json').read_text())
+    doc.update({k: v for k, v in jsonio.make_header('test', [step], job_dir).items()})
+    doc['schema_version'] = '2.0'
+    for c in doc['checks']:
+        if c['id'] == 4:
+            c['status'] = check4
+    doc['status'] = status or ('red' if check4 == 'red' else 'yellow')
+    jsonio.write_json(job_dir / 'cad_check.json', doc, 'v2/cad_check')
+    return step
+
+
+@pytest.mark.parametrize('scope', SCOPES)
+def test_program_with_cp62_override_never_releasable(scope):
+    doc = _example()
+    doc['cad_check_override'] = _override_ref()
+    with pytest.raises(ReleaseError, match='CP-62.*never releasable'):
+        release_gate(doc, scope)
+    forged = _checked(doc)                                 # schema-invalid forgery: override + collision_checked true
+    with pytest.raises(ReleaseError, match='CP-62.*never releasable'):
+        release_gate(forged, scope)
+
+
+@pytest.mark.parametrize('scope', SCOPES)
+def test_job_with_red_check_4_refused_with_or_without_override(tmp_path, scope):
+    _write_cad_check(tmp_path, check4='red')
+    ok = _checked(_example())
+    with pytest.raises(ReleaseError, match='check 4'):
+        release_gate(ok, scope, job_dir=tmp_path)
+    (tmp_path / 'cad_check_override.json').write_text('{}')  # an override in the job changes nothing
+    with pytest.raises(ReleaseError, match='check 4'):
+        release_gate(ok, scope, job_dir=tmp_path)
+
+
+@pytest.mark.parametrize('scope', SCOPES)
+def test_job_with_stale_cad_check_refused(tmp_path, scope):
+    step = _write_cad_check(tmp_path, check4='green')
+    ok = _checked(_example())
+    release_gate(ok, scope, job_dir=tmp_path)              # current and not red: passes
+    step.write_text('changed step')
+    with pytest.raises(ReleaseError, match='cad_check.json is stale'):
+        release_gate(ok, scope, job_dir=tmp_path)
+    step.unlink()
+    with pytest.raises(ReleaseError, match='cad_check.json is stale'):
+        release_gate(ok, scope, job_dir=tmp_path)
+
+
+def test_job_with_unreadable_cad_check_refused(tmp_path):
+    (tmp_path / 'cad_check.json').write_text('{not json')
+    with pytest.raises(ReleaseError, match='cad_check.json'):
+        release_gate(_checked(_example()), 'simulation', job_dir=tmp_path)
+    (tmp_path / 'cad_check.json').write_text('{"status": "green"}')
+    with pytest.raises(ReleaseError, match='cad_check.json'):
+        release_gate(_checked(_example()), 'simulation', job_dir=tmp_path)
+
+
+def test_job_without_cad_check_keeps_old_behaviour(tmp_path):
+    release_gate(_checked(_example()), 'simulation', job_dir=tmp_path)
+    with pytest.raises(ReleaseError, match='collision_checked'):
+        release_gate(_example(), 'simulation', job_dir=tmp_path)
+
+
+def test_release_reads_cad_check_of_the_program_job(job):
+    """release(): the v1 program of the conftest job is releasable today; a red check 4 in its job folder stops it
+    before anything is written, for both CLI scopes."""
+    from awm_verify.release import is_locked
+    _write_cad_check(job.dir, check4='red')
+    for scope in ('simulation', 'production'):
+        with pytest.raises(ReleaseError, match='check 4'):
+            release(job, 'P001', 'A. Approver', scope)
+    assert not job.release_json.exists() and not is_locked(job, 'P001')
+
+
+# ---------------------------------------------------------------------------------- review g1-19 I-1
+
+@pytest.mark.parametrize('scope', SCOPES)
+def test_cp60_job_without_cad_check_refused(tmp_path, scope):
+    """A CP-60 job (placement source job_cad, or an override record) must have its cross-check (rule 4)."""
+    ok = _checked(_example())
+    (tmp_path / 'placement.json').write_text(json.dumps({'source': 'job_cad'}))
+    with pytest.raises(ReleaseError, match='CP-60 job.*no cad_check.json'):
+        release_gate(ok, scope, job_dir=tmp_path)
+    (tmp_path / 'placement.json').unlink()
+    (tmp_path / 'cad_check_override.json').write_text('{}')
+    with pytest.raises(ReleaseError, match='CP-60 job.*no cad_check.json'):
+        release_gate(ok, scope, job_dir=tmp_path)
+
+
+@pytest.mark.parametrize('source', ['study', 'fixture_cad'])
+def test_manual_or_copied_placement_without_cad_check_keeps_old_behaviour(tmp_path, source):
+    (tmp_path / 'placement.json').write_text(json.dumps({'source': source}))
+    release_gate(_checked(_example()), 'simulation', job_dir=tmp_path)
+
+
+def test_unreadable_placement_without_cad_check_refused(tmp_path):
+    (tmp_path / 'placement.json').write_text('{not json')
+    with pytest.raises(ReleaseError, match='placement.json'):
+        release_gate(_checked(_example()), 'simulation', job_dir=tmp_path)
+
+
+@pytest.mark.parametrize('scope', SCOPES)
+def test_program_with_null_override_field_refused(scope):
+    """review g1-19 M-3: the key itself is the marker; a null value is refused too."""
+    doc = _checked(_example())
+    doc['cad_check_override'] = None
+    with pytest.raises(ReleaseError, match='CP-62.*never releasable'):
+        release_gate(doc, scope)
+
+
+def test_release_json_records_cad_check_when_present(job):
+    """review g1-19 M-2: the release names the cross-check it relied on (inputs), only when the job has one."""
+    from awm_core.hashing import sha256_file
+    from conftest import write_report
+    _write_cad_check(job.dir, check4='green')
+    write_report(job)
+    doc = release(job, 'P001', 'A. Approver', 'simulation')
+    names = {i['name']: i['sha256'] for i in doc['inputs']}
+    assert names['cad_check.json'] == sha256_file(job.dir / 'cad_check.json')
+    jsonio.read_json(job.release_json, 'release', base_dir=job.dir)
+
+
+def test_release_json_without_cad_check_unchanged(job):
+    from conftest import write_report
+    write_report(job)
+    doc = release(job, 'P001', 'A. Approver', 'simulation')
+    assert 'cad_check.json' not in {i['name'] for i in doc['inputs']}
+
+
+# ---------------------------------------------------------------------------------- review g1-19 M-4
+
+@pytest.mark.parametrize('scope', SCOPES)
+def test_other_red_check_refused(tmp_path, scope):
+    _write_cad_check(tmp_path, check4='green', status='red')
+    doc = json.loads((tmp_path / 'cad_check.json').read_text())
+    next(c for c in doc['checks'] if c['id'] == 1)['status'] = 'red'
+    jsonio.write_json(tmp_path / 'cad_check.json', doc, 'v2/cad_check')
+    with pytest.raises(ReleaseError, match=r'is red \(checks \[1\]\)'):
+        release_gate(_checked(_example()), scope, job_dir=tmp_path)
+
+
+@pytest.mark.parametrize('scope', SCOPES)
+def test_status_red_without_red_check_refused(tmp_path, scope):
+    _write_cad_check(tmp_path, check4='green', status='red')
+    with pytest.raises(ReleaseError, match=r'is red \(checks \[\]\)'):
+        release_gate(_checked(_example()), scope, job_dir=tmp_path)
+
+
+def test_override_program_refused_by_release_end_to_end(job):
+    """A D09 carrying a CP-62 override, in the job with a report: release() refuses it for both CLI scopes before
+    anything is written; the program stays writable (not locked)."""
+    from awm_verify.release import is_locked
+    from conftest import write_report
+    doc = _example()
+    doc['cad_check_override'] = _override_ref()
+    jsonio.validate(doc, 'v2/program')
+    job.program_json('P001').write_text(json.dumps(doc))
+    write_report(job)
+    for scope in ('simulation', 'production'):
+        with pytest.raises(ReleaseError, match='CP-62.*never releasable'):
+            release(job, 'P001', 'A. Approver', scope)
+    assert not job.release_json.exists() and not is_locked(job, 'P001')
