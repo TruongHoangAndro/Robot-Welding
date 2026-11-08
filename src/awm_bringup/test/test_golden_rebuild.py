@@ -191,7 +191,7 @@ def test_prepare_out_and_fingerprint(tmp_path):
     step = tmp_path / 'cell.step'
     step.write_text('ISO-10303-21;')
     fp = gr.fingerprint(step, DATA)
-    assert set(fp) == {'cell_step_sha256', 'data_sha256', 'script_sha256', 'sources_sha256'}
+    assert set(fp) == {'cell_step_sha256', 'data_sha256', 'script_sha256', 'sources_sha256', 'environment_sha256'}
     assert not gr.up_to_date(out, fp)
     (out / gr.SUMMARY).write_text(json.dumps({'status': 'ok', 'fingerprint': fp}))
     assert gr.up_to_date(out, fp)
@@ -217,3 +217,37 @@ def test_no_part_data_in_the_script():
     for token in ('564082-Assembly', 'Part1:1', 'E3955', 'JE9', 'JE11', 'LightWELD:1', 'UR5E', '2.3'):
         assert token not in text, token
     assert not math.isnan(0.0)
+
+
+def _pkg(root, name, deps):
+    d = root / 'src' / name
+    d.mkdir(parents=True)
+    (d / 'package.xml').write_text('<package format="3"><name>%s</name>%s</package>' % (
+        name, ''.join(f'<{kind}>{dep}</{kind}>' for kind, dep in deps)))
+
+
+def test_fingerprint_packages_are_the_dependency_closure(tmp_path):
+    _pkg(tmp_path, 'awm_api', [('depend', 'awm_core'), ('exec_depend', 'awm_verify'), ('depend', 'rclpy')])
+    _pkg(tmp_path, 'awm_path', [('depend', 'awm_bringup'), ('test_depend', 'awm_testonly')])
+    _pkg(tmp_path, 'awm_program', [('build_depend', 'awm_path')])
+    _pkg(tmp_path, 'awm_verify', [('depend', 'awm_cad')])
+    for name in ('awm_core', 'awm_bringup', 'awm_cad', 'awm_testonly', 'awm_web_unused'):
+        _pkg(tmp_path, name, [])
+    assert gr.fingerprint_packages(tmp_path) == ['awm_api', 'awm_bringup', 'awm_cad', 'awm_core', 'awm_path',
+                                                 'awm_program', 'awm_verify']
+    real = gr.fingerprint_packages(WS)
+    assert {'awm_bringup', 'awm_geometry', 'awm_seam', 'awm_description', 'awm_core'} <= set(real)
+
+
+def test_environment_digest(monkeypatch, tmp_path):
+    env = gr.environment(WS)
+    assert set(env) == {'dockerfile_sha256', 'occ_python', 'occ_version', 'ur_analytic_ik', 'ur_description'}
+    assert env['dockerfile_sha256'] == gr.sha256_file(WS / 'docker' / 'Dockerfile')
+    assert all(isinstance(v, str) and v for v in env.values()), env
+    monkeypatch.setattr(gr, 'environment', lambda ws=WS: dict(env, occ_version='0.0'))
+    step = tmp_path / 'cell.step'
+    step.write_text('x')
+    monkeypatch.setattr(gr, 'source_digest', lambda ws, packages=None: 'src')
+    a = gr.fingerprint(step, DATA)
+    monkeypatch.setattr(gr, 'environment', lambda ws=WS: env)
+    assert gr.fingerprint(step, DATA)['environment_sha256'] != a['environment_sha256']

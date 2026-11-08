@@ -52,9 +52,10 @@ SUMMARY = 'golden_summary.json'
 MARKER = '.golden_rebuild'
 HEAD_STEP, HEAD_MAP = 'head.step', 'cad_map_head.yaml'
 S4_DIR = 's4_golden'
-#: Source trees whose change invalidates a cached rebuild (tests excluded).
-FINGERPRINT_PACKAGES = ('awm_core', 'awm_geometry', 'awm_seam', 'awm_path', 'awm_program', 'awm_api',
-                        'awm_description')
+#: Packages whose sources invalidate a cached rebuild: these roots plus their workspace dependency closure
+#: (package.xml depend / build / exec tags, tests excluded).
+FINGERPRINT_ROOTS = ('awm_api', 'awm_path', 'awm_program')
+_DEP_TAGS = ('depend', 'build_depend', 'build_export_depend', 'exec_depend')
 _SKIP_DIRS = {'test', 'tests', '__pycache__', 'node_modules', '.pytest_cache'}
 SKIP_REASON = f'{CELL_ENV} not set'
 
@@ -257,10 +258,55 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def source_digest(ws: Path, packages: Sequence[str] = FINGERPRINT_PACKAGES) -> str:
+def fingerprint_packages(ws: Path, roots: Sequence[str] = FINGERPRINT_ROOTS) -> List[str]:
+    """Workspace packages in the dependency closure of ``roots`` (sorted), read from ``src/*/package.xml``."""
+    import xml.etree.ElementTree as ET
+    deps: Dict[str, List[str]] = {}
+    for xml in sorted((Path(ws) / 'src').glob('*/package.xml')):
+        root = ET.parse(xml).getroot()
+        name = (root.findtext('name') or xml.parent.name).strip()
+        deps[name] = [(e.text or '').strip() for tag in _DEP_TAGS for e in root.findall(tag)]
+    seen: set = set()
+    todo = [r for r in roots]
+    while todo:
+        name = todo.pop()
+        if name in seen or name not in deps:
+            continue
+        seen.add(name)
+        todo.extend(deps[name])
+    missing = [r for r in roots if r not in deps]
+    if missing:
+        raise GoldenError(f'fingerprint roots {missing} have no package.xml under {ws}/src')
+    return sorted(seen)
+
+
+def environment(ws: Path = WS) -> Dict[str, str]:
+    """Tool versions that change the rebuild result: Dockerfile, OCC interpreter + version, ur_analytic_ik,
+    ur_description. A missing piece is a refusal (no fallback)."""
+    import importlib.metadata
+    import xml.etree.ElementTree as ET
+
+    from awm_core import occ_bridge
+    try:
+        occ = occ_bridge.interpreter_command(None)
+        proc = subprocess.run(occ + ['-c', 'import OCC; print(OCC.VERSION)'], capture_output=True, text=True,
+                              env=occ_bridge.geometry_env(), timeout=120)
+        if proc.returncode != 0:
+            raise GoldenError(f'OCC version: {proc.stderr[-500:]}')
+        from ament_index_python.packages import get_package_share_directory
+        ur = ET.parse(Path(get_package_share_directory('ur_description')) / 'package.xml').getroot()
+        return {'dockerfile_sha256': sha256_file(Path(ws) / 'docker' / 'Dockerfile'),
+                'occ_python': ' '.join(occ), 'occ_version': proc.stdout.strip(),
+                'ur_analytic_ik': importlib.metadata.version('ur_analytic_ik'),
+                'ur_description': (ur.findtext('version') or '').strip()}
+    except (occ_bridge.GeometryCliError, importlib.metadata.PackageNotFoundError, LookupError, OSError) as exc:
+        raise GoldenError(f'environment digest: {exc}') from exc
+
+
+def source_digest(ws: Path, packages: Optional[Sequence[str]] = None) -> str:
     """SHA-256 over the relative path and content of every file of the engineering package sources (no tests)."""
     h = hashlib.sha256()
-    for pkg in packages:
+    for pkg in (fingerprint_packages(ws) if packages is None else packages):
         root = ws / 'src' / pkg
         for dirpath, dirnames, filenames in os.walk(root):
             dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS and not d.startswith('.'))
@@ -274,8 +320,10 @@ def source_digest(ws: Path, packages: Sequence[str] = FINGERPRINT_PACKAGES) -> s
 
 
 def fingerprint(cell_step: Path, data: Path, ws: Path = WS) -> Dict[str, str]:
+    env = json.dumps(environment(ws), sort_keys=True).encode()
     return {'cell_step_sha256': sha256_file(cell_step), 'data_sha256': sha256_file(data),
-            'script_sha256': sha256_file(Path(__file__)), 'sources_sha256': source_digest(ws)}
+            'script_sha256': sha256_file(Path(__file__)), 'sources_sha256': source_digest(ws),
+            'environment_sha256': hashlib.sha256(env).hexdigest()}
 
 
 def read_summary(out: Path) -> Optional[Dict[str, Any]]:
