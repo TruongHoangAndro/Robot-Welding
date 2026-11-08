@@ -20,6 +20,7 @@ from typing import Any, Callable, Collection, Dict, List, Literal, Optional
 
 import yaml
 from fastapi import APIRouter, Depends, File, Form, Response, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from awm_core import cad_roles, jsonio
@@ -399,11 +400,26 @@ def register(api: APIRouter, settings: Settings, runs: RunManager, require: Call
         save_template(t, data['assignments'])
         return doc
 
+    def cached_view(key: str, step: Path, component: str, up_axis: str) -> Optional[JSONResponse]:
+        """Close-out m5: reuse ``views/<key>/`` when it was exported from this STEP (hash), component and up axis."""
+        topo = jobs.read_json(cad / 'views' / key / 'topology.json')
+        if topo is None or not (cad / 'views' / key / 'view.glb').is_file() or not step.is_file():
+            return None
+        src = topo.get('source') or {}
+        digest = sha256_file(step)
+        if (src.get('component') == component and src.get('up_axis') == up_axis
+                and any(i.get('sha256') == digest for i in topo.get('inputs') or [])):
+            return JSONResponse({'key': key, 'cached': True}, status_code=200)
+        return None
+
     @api.post('/cell/model/component_view', status_code=202)
     def cell_component_view(body: ComponentView, response: Response,
-                            _u: User = Depends(require(*CELL_WRITE))) -> Dict[str, str]:
+                            _u: User = Depends(require(*CELL_WRITE))):
         m = meta()
         key = _key(body.component_path)
+        hit = cached_view(key, cad / cad_roles.CELL_STEP, _instance(body.component_path), m['up_axis'])
+        if hit is not None:
+            return hit
         steps = adapters.component_view_steps(settings, cad / cad_roles.CELL_STEP, _instance(body.component_path),
                                               m['up_axis'], cad / 'views' / key)
         return accepted(response, start('cell', 'cell-view', steps), key=key)
@@ -445,9 +461,12 @@ def register(api: APIRouter, settings: Settings, runs: RunManager, require: Call
                                detail=f'put the head STEP and its map into cell/cad ({HEAD_STEP}, {HEAD_MAP})')
 
     @api.post('/cell/head/view', status_code=202)
-    def head_view(body: HeadView, response: Response, _u: User = Depends(require(*CELL_WRITE))) -> Dict[str, str]:
+    def head_view(body: HeadView, response: Response, _u: User = Depends(require(*CELL_WRITE))):
         head_files()
         key = _key(f'head:{body.component}')
+        hit = cached_view(key, cad / HEAD_STEP, body.component, '+Z')
+        if hit is not None:
+            return hit
         steps = adapters.component_view_steps(settings, cad / HEAD_STEP, body.component, '+Z', cad / 'views' / key)
         return accepted(response, start('cell', 'head-view', steps), key=key)
 

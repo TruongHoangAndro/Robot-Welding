@@ -6,7 +6,10 @@ Stands in for three commands, chosen by the first non-``-m`` arguments:
 * ``joint_seam build --job J --picks P [--no-axis]`` (G1.2 seam CLI, not merged yet),
 * ``plan --job J --collision off --out O [--seams S01 ...] [--head-dir D] [--travel-speed-mm-s V]`` (G1.3 planner),
 * ``generate --job J`` (G1.5 program CLI: writes ``programs/P###/program.json``, prints ``result ok|refused``),
-* ``describe --frames F [--head-dir D]`` (robot description render, prints a small URDF).
+* ``describe --frames F [--head-dir D]`` (robot description render, prints a small URDF),
+* ``replay --program F`` (G1.7 ``replay_program``): scenario from ``FAKE_REPLAY`` = ok (default) | nosim | noctl |
+  nomock | start | partial | error; prints log lines and the result line ``replay {json}``, exit 0 / 2 / 1 like the
+  real CLI.
 
 Environment knobs: ``FAKE_SLEEP_S`` (sleep before finishing), ``FAKE_FAIL`` (exit 1 with a message),
 ``FAKE_ARGV_LOG`` (append the argv as one JSON line).
@@ -61,8 +64,10 @@ def cmd_export_view(a) -> None:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / 'view.glb').write_bytes(b'glTF-fake')
-    (out / 'topology.json').write_text(json.dumps({'schema_version': '2.0', 'unit': 'mm',
-                                                   'up_axis_arg': a.up_axis}))
+    (out / 'topology.json').write_text(json.dumps({
+        'schema_version': '2.0', 'unit': 'mm', 'up_axis_arg': a.up_axis,
+        'inputs': [{'name': Path(a.step).name, 'sha256': sha(Path(a.step))}],
+        'source': {'file': Path(a.step).name, 'component': a.component, 'up_axis': a.up_axis}}))
 
 
 def _write(path, doc) -> None:
@@ -172,6 +177,42 @@ def cmd_generate(a) -> None:
     print(f'result ok program_rev={rev} out={out} cycle_time_s=12.5 collision_checked=false')
 
 
+REPLAY_SEG = {'segment_id': 'G001', 'kind': 'air', 'seam_id': None, 'duration_s': 2.0, 'elapsed_s': 2.05,
+              'start_deviation_deg': 0.0, 'end_deviation_deg': 0.0, 'max_tracking_error_deg': 0.058,
+              'feedback_samples': 100}
+REPLAY_CASES = {
+    'nosim': (2, 'refused', '/controller_manager/list_hardware_components not available: cannot prove mock hardware'),
+    'noctl': (1, 'error', '/robot_positioner_trajectory_controller/follow_joint_trajectory not available (launch '
+                          'sim_mock with trajectory_controllers:=robot_positioner)'),
+    'nomock': (2, 'refused', 'replay runs on mock hardware only (ADR-13); not mock: ur (ur_robot_driver/URPositionHardwareInterface)'),
+    'start': (2, 'refused', 'G001: current state is not the segment start (tolerance 0.05 deg): shoulder_pan_joint '
+                            '10.0000 deg (segment start 0.0000, off 10.0000)'),
+    'partial': (2, 'partial', 'G002: current state is not the segment start (tolerance 0.05 deg): positioner_joint '
+                              '3.0000 deg (segment start 0.0000, off 3.0000)'),
+    'error': (1, 'error', 'G001: controller error -4 \'path tolerance violated\''),
+}
+
+
+def cmd_replay(a) -> int:
+    case = os.environ.get('FAKE_REPLAY', 'ok')
+    summary = {'program': a.program, 'status': 'ok', 'segments': [], 'program_rev': 'P001',
+               'controller_action': '/robot_positioner_trajectory_controller/follow_joint_trajectory'}
+    print('[INFO] [awm_program_replay]: replay P001: 2 segment(s); weld events are not executed (motion only)',
+          flush=True)
+    if case == 'ok':
+        summary['segments'] = [REPLAY_SEG, dict(REPLAY_SEG, segment_id='G002', kind='weld', seam_id='S01')]
+        summary.update(final_deviation_deg=0.0, max_tracking_error_deg=0.058, final_state_deg={'positioner_joint': 0.0})
+        code = 0
+    else:
+        code, status, reason = REPLAY_CASES[case]
+        if case == 'partial':
+            summary['segments'] = [REPLAY_SEG]
+        summary.update(status=status, reason=reason)
+        print(f'[ERROR] [awm_program_replay]: refused: {reason}', flush=True)
+    print('replay ' + json.dumps(summary, sort_keys=True), flush=True)
+    return code
+
+
 def cmd_describe(a) -> None:
     head = a.head_dir
     sys.stdout.write(
@@ -260,8 +301,13 @@ def main() -> int:
     p = sub.add_parser('describe')
     p.add_argument('--frames', required=True)
     p.add_argument('--head-dir')
+    p = sub.add_parser('replay')
+    p.add_argument('--program', required=True)
     p = sub.add_parser('sleep')
     a = ap.parse_args(argv)
+    if a.cmd == 'replay':
+        pause()
+        return cmd_replay(a)
     if a.cmd == 'describe':
         fail_if_asked()
         cmd_describe(a)

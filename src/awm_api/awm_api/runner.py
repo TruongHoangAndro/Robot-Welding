@@ -8,6 +8,9 @@
   ``kill_grace_s``. Outputs of a cancelled or failed run are never promoted (``on_success`` is not called).
 * Progress: a step may print lines ``progress <0..1> <text>`` (also ``progress: …``) on stdout or stderr; the run
   progress is the weighted sum over the steps and never decreases.
+* Result (G1.20): a step with ``result_prefix`` may print ``<prefix> {json}``; the last such object becomes the run
+  ``result`` (also when the step fails, e.g. a refused replay). ``explain`` turns a failed step (exit code, result,
+  log tail) into the run problem instead of the generic "failed (exit N)" text.
 
 No rclpy, no OCC here: the runner only starts processes.
 """
@@ -67,6 +70,10 @@ class Step:
     env: Optional[Dict[str, str]] = None
     cwd: Optional[Path] = None
     weight: float = 1.0
+    #: ``<prefix> {json}`` lines of this step set the run ``result`` (last one wins)
+    result_prefix: Optional[str] = None
+    #: (exit code, result or None, log tail) -> problem dict for a failed step
+    explain: Optional[Callable[[int, Optional[Dict[str, Any]], List[str]], Dict[str, Any]]] = None
 
 
 class RunBusyError(RuntimeError):
@@ -97,7 +104,7 @@ class _Run:
         self.doc: Dict[str, Any] = {
             'run_id': run_id, 'job_id': job_id, 'kind': kind, 'state': 'queued', 'progress': 0.0,
             'step': 'queued', 'started_at': utc_now(), 'finished_at': None, 'log_tail': [], 'outputs': {},
-            'problem': None}
+            'problem': None, 'result': None}
         self.tail: collections.deque = collections.deque(maxlen=50)
         self.cancel_requested = False
         self.proc: Optional[subprocess.Popen] = None
@@ -279,9 +286,12 @@ class RunManager:
                 if run.cancel_requested:
                     break
                 if error is not None or rc != 0:
-                    detail = error or self._failure_detail(run, step, rc)
-                    self._finish(run, 'failed', on_failure, problem={
-                        'type': '/problems/run-failed', 'title': 'Run failed', 'status': 422, 'detail': detail})
+                    problem = self._explain(run, step, rc) if error is None else None
+                    if problem is None:
+                        detail = error or self._failure_detail(run, step, rc)
+                        problem = {'type': '/problems/run-failed', 'title': 'Run failed', 'status': 422,
+                                   'detail': detail}
+                    self._finish(run, 'failed', on_failure, problem=problem)
                     return
                 done_w += max(step.weight, 0.0)
                 run.update(progress=max(run.doc['progress'], done_w / total))
@@ -329,6 +339,10 @@ class RunManager:
             log.write(line + '\n')
             with run.lock:
                 run.tail.append(line[:500])
+            result = self._result_of(step, line)
+            if result is not None:
+                run.update(result=result)
+                continue
             p = parse_progress(line)
             if p is not None:
                 frac, text = p
@@ -342,6 +356,28 @@ class RunManager:
             run.proc = None
         log.write(f'=== {step.label} exit {rc}\n')
         return rc, None
+
+    @staticmethod
+    def _result_of(step: Step, line: str) -> Optional[Dict[str, Any]]:
+        if not step.result_prefix or not line.startswith(step.result_prefix + ' '):
+            return None
+        try:
+            doc = json.loads(line[len(step.result_prefix) + 1:])
+        except ValueError:
+            return None
+        return doc if isinstance(doc, dict) else None
+
+    @staticmethod
+    def _explain(run: _Run, step: Step, rc: int) -> Optional[Dict[str, Any]]:
+        if step.explain is None:
+            return None
+        with run.lock:
+            result, lines = run.doc.get('result'), list(run.tail)
+        try:
+            return step.explain(rc, result, lines)
+        except Exception:  # noqa: BLE001 - fall back to the generic failure text
+            LOG.exception('explain hook of %s failed', step.label)
+            return None
 
     @staticmethod
     def _failure_detail(run: _Run, step: Step, rc: int) -> str:

@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from awm_core import cad_roles
 from awm_core.hashing import sha256_file
+from awm_core.staleness import document_state, document_verdict  # noqa: F401 - one staleness rule (G1.17)
 
 from awm_api.problems import ProblemError
 
@@ -96,23 +97,18 @@ def seam_axis_state(job: Path, repo_root: Path) -> str:
     return document_state(job, 'seam_axis.json', repo_root)
 
 
-def document_state(job: Path, name: str, repo_root: Path, doc: Optional[Dict[str, Any]] = None) -> str:
-    """``missing`` | ``ok`` | ``stale`` for a derived job document by its recorded input hashes. Inputs that resolve
-    outside the repository (e.g. a linked head folder) are not ours to check and are skipped."""
-    if doc is None:
-        doc = read_json(job / name)
-    if doc is None:
-        return 'missing'
-    bases = [job, (job / name).parent]  # names are job-relative (jsonio.make_header(..., job)); doc folder fallback
-    root = repo_root.resolve()
-    for item in doc.get('inputs', []):
-        cands = [(b / item.get('name', '')).resolve() for b in bases]
-        path = next((c for c in cands if c.is_file()), cands[0])
-        if root not in path.parents:
-            continue  # outside the repository: not ours to check
-        if not path.is_file() or sha256_file(path) != item.get('sha256'):
-            return 'stale'
-    return 'ok'
+def problems(job: Path, name: str, repo_root: Path, doc: Optional[Dict[str, Any]] = None) -> List[str]:
+    """Reasons why a derived job document is stale (``document_verdict(...).problems``); empty when ok / missing."""
+    return list(document_verdict(job, name, repo_root, doc).problems)
+
+
+def program_info(job: Path, repo_root: Path) -> Optional[Dict[str, Any]]:
+    """Newest program revision with its staleness state and reasons, or None (S2 / S4, close-out M3)."""
+    rev, doc, _state = latest_program(job, repo_root)
+    if rev is None:
+        return None
+    v = document_verdict(job, f'programs/{rev}/program.json', repo_root, doc)
+    return {'rev': rev, 'state': v.state, 'problems': list(v.problems)}
 
 
 def latest_program(job: Path, repo_root: Path) -> Tuple[Optional[str], Optional[Dict[str, Any]], Optional[str]]:
@@ -157,6 +153,8 @@ def detail(job: Path, repo_root: Path, active_run: Optional[str]) -> Dict[str, A
         'placement_note': None if placement else no_placement_note(job),
         'seam_axis': seam_axis_state(job, repo_root),
         'path': document_state(job, 'path.json', repo_root),
+        'path_problems': problems(job, 'path.json', repo_root),
+        'program': program_info(job, repo_root),
         'collision_checked': False,  # Goal 1 (CP-58): nothing in this backend checks collision
     })
     return out

@@ -9,7 +9,8 @@
 | planner CLI prefix (G1.3) | — | ``AWM_PLAN_CMD`` | ``<python> -m awm_path.cli`` |
 | program CLI prefix (G1.5) | — | ``AWM_PROGRAM_CMD`` | ``<python> -m awm_program.cli`` |
 | description render prefix (G1.6) | — | ``AWM_DESCRIBE_CMD`` | ``<python> -m awm_api.describe`` |
-| H-CAD head folder (G1.1) | — | ``AWM_HEAD_DIR`` | ``<repo>/cell/model/head`` |
+| replay CLI prefix (G1.20) | — | ``AWM_REPLAY_CMD`` | ``ros2 run awm_bringup replay_program`` |
+| H-CAD head folder (G1.1) | — | ``AWM_HEAD_DIR`` | ``<repo>/cell/model/head`` (must be inside the repository) |
 | built front-end | ``--web-dist`` | ``AWM_WEB_DIST`` | none (API only) |
 | bind address / port | ``--host`` / ``--port`` | ``AWM_API_HOST`` / ``AWM_API_PORT`` | ``127.0.0.1`` / ``8000`` |
 """
@@ -24,6 +25,9 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 DEFAULT_HOST = '127.0.0.1'
+DEFAULT_REPLAY_CMD = 'ros2 run awm_bringup replay_program'
+#: sim_mock launch the replay runs against (G1.16 repo:=, G1.7 7-joint controller); the user starts it, never awm_api
+SIM_MOCK_LAUNCH = 'ros2 launch awm_bringup sim_mock.launch.py repo:={repo} trajectory_controllers:=robot_positioner'
 DEFAULT_PORT = 8000
 
 
@@ -54,6 +58,7 @@ class Settings:
     plan_cmd: str = field(default_factory=_default_plan_cmd)
     program_cmd: str = field(default_factory=_default_program_cmd)
     describe_cmd: str = field(default_factory=_default_describe_cmd)
+    replay_cmd: str = DEFAULT_REPLAY_CMD
     head_dir: Optional[Path] = None
     #: package name -> share folder; None = ament index lookup (tests inject folders)
     package_shares: Optional[Dict[str, Path]] = None
@@ -103,6 +108,13 @@ class Settings:
     def describe_argv(self) -> List[str]:
         return shlex.split(self.describe_cmd)
 
+    def replay_argv(self) -> List[str]:
+        return shlex.split(self.replay_cmd)
+
+    def replay_launch_line(self) -> str:
+        """The sim_mock launch line for this repository (shown in S4 next to "Replay in RViz")."""
+        return SIM_MOCK_LAUNCH.format(repo=shlex.quote(str(self.repo_root.resolve())))
+
     @classmethod
     def from_env(cls, repo: Optional[str] = None, secrets: Optional[str] = None,
                  web_dist: Optional[str] = None) -> 'Settings':
@@ -113,7 +125,7 @@ class Settings:
         if os.environ.get('AWM_SEAM_CMD', '').strip():
             kw['seam_cmd'] = os.environ['AWM_SEAM_CMD']
         for key, env in (('plan_cmd', 'AWM_PLAN_CMD'), ('program_cmd', 'AWM_PROGRAM_CMD'),
-                         ('describe_cmd', 'AWM_DESCRIBE_CMD')):
+                         ('describe_cmd', 'AWM_DESCRIBE_CMD'), ('replay_cmd', 'AWM_REPLAY_CMD')):
             if os.environ.get(env, '').strip():
                 kw[key] = os.environ[env]
         if os.environ.get('AWM_HEAD_DIR', '').strip():

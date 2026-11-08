@@ -41,9 +41,17 @@ repository with the golden part. Options of `web.sh`: `--port 8000`, `--host 127
 | planner CLI prefix (G1.3) | — | `AWM_PLAN_CMD` | `python3 -m awm_path.cli` |
 | program CLI prefix (G1.5) | — | `AWM_PROGRAM_CMD` | `python3 -m awm_program.cli` |
 | description render (G1.6) | — | `AWM_DESCRIBE_CMD` | `python3 -m awm_api.describe` |
-| H-CAD head folder | — | `AWM_HEAD_DIR` | `<repo>/cell/model/head` |
+| replay CLI prefix (G1.20) | — | `AWM_REPLAY_CMD` | `ros2 run awm_bringup replay_program` |
+| H-CAD head folder | — | `AWM_HEAD_DIR` | `<repo>/cell/model/head` — **must be inside the repository root** |
 | built front-end | `--web-dist` | `AWM_WEB_DIST` | `src/awm_web/dist` via `web.sh` |
 | bind / port | `--host` / `--port` | `AWM_API_HOST` / `AWM_API_PORT` | `127.0.0.1` / `8000` |
+
+**Inputs inside the repository, no links (G1.17 staleness rule, `awm_core.staleness`).** The API uses the same rule as
+the planner and program CLIs: a job document (path.json, programs/*/program.json, seam_axis.json, placement.json,
+cad_check.json) is stale when any recorded input resolves outside `repo_root`, is reached through a symbolic link,
+is missing or changed, or (D07) was planned with another planner record version. So `AWM_HEAD_DIR` and every other
+input must be a plain folder / file inside `repo_root`; a linked head folder (`ln -s`) or one outside the repository
+makes every plan stale and the planner refuses it — copy it instead (`cp -rL`). S2 / S4 show the reasons.
 
 Users file format (never commit a real one; `config/users.example.json` shows the shape):
 `{"users": [{"username": "…", "role": "Operator|Engineer|Admin", "password": "pbkdf2_sha256$…"}]}`.
@@ -54,7 +62,7 @@ Users file format (never commit a real one; `config/users.example.json` shows th
 | Endpoint | Roles | Notes |
 |---|---|---|
 | `POST /auth/login` | — | `{token, role, expires_at, username}` |
-| `GET /jobs`, `GET /jobs/{id}` | all | detail adds `placement`, `placement_note`, `seam_axis` (`missing` / `ok` / `stale`), `collision_checked` |
+| `GET /jobs`, `GET /jobs/{id}` | all | detail adds `placement`, `placement_note`, `seam_axis` (`missing` / `ok` / `stale`), `path` + `path_problems`, `program` (`{rev, state, problems}` of the newest revision), `collision_checked` |
 | `POST /jobs` (multipart `step`, `part_no`, `part_rev`, `component`, `up_axis`) | Engineer, Admin (S1) | 202 + import run: `awm_geometry.cli import` then `export-view` in the OCC process, into a hidden staging folder, promoted to `jobs/<PartNo>_<PartRev>` only on success. 409 if the job exists or the cell is busy |
 | `GET /jobs/{id}/view/{view.glb\|topology.json}` | all | D20 |
 | `GET /jobs/{id}/placement` | all | 404 `/problems/no-placement` for a job without `placement.json`: an assembly job (CP-60) gets it from the cross-check (`source: job_cad`); a single-part job needs a manual / copied placement (test helper, Assumption); the API never invents one |
@@ -67,17 +75,19 @@ Users file format (never commit a real one; `config/users.example.json` shows th
 | `POST /jobs/{id}/program` | Engineer | 202 + program run (G1.5 CLI `generate --job`); outputs = `programs/P###/program.json` from the `result ok` line; a `result refused …` reason (e.g. speed above the feasible maximum) is the run problem. 409 `no-path` / `path-stale` / `run-busy` |
 | `GET /cell/robot_description` | all | `{urdf, head_model: hcad, unit}`: rendered by `awm_path.description.load_planning_description` in a subprocess (`awm_api.describe`), comments stripped, mesh URIs → `/api/v1/cell/meshes/…`; cached by the frames.yaml / head.yaml hashes. 409 `no-cell-model`, 500 `description-failed` |
 | `GET /cell/meshes/head/{path}`, `GET /cell/meshes/package/{pkg}/{path}` | all | read-only mesh files below the head folder / a package share named by the URDF; mesh extensions only; `..`, absolute paths, symlinks leaving the folder → 403 |
-| `GET /runs/{run_id}` | all | run document of the contract |
+| `POST /jobs/{id}/replay` (`{program_rev?}`) | Engineer | S4 "Replay in RViz" (G1.20): 202 + run `replay` of `<AWM_REPLAY_CMD> --program <job>/programs/<rev>/program.json` (newest revision by default) against the sim_mock the user launched with the line in `simulation.replay.launch_command` (`ros2 launch awm_bringup sim_mock.launch.py repo:=<repo root> trajectory_controllers:=robot_positioner`, same container and ROS domain as the API). Only `--program` is passed; the CLI refuses non-mock hardware and sends nothing. `run.result` = the CLI line `replay {json}` (status, `final_deviation_deg`, `max_tracking_error_deg`, segments); a failed run has `problem.cause` `sim-not-running` / `controller-absent` / `not-mock` / `start-state` / `error` / `no-result` with a detail that says what to do. 409 `no-program`, `program-stale` (with `problems`, before any process), `run-busy`; 404 `program-not-found` |
+| `GET /cell/scene`, `GET /cell/meshes/scene/{file}` | all | S4 cell view: objects of `cell/model/scene_manifest.json` (parent `world` = static, `positioner_flange` = turns with θ; pose mm at θ = 0) and their STL (manifest-listed files only, else 403). 404 `no-scene` |
+| `GET /runs/{run_id}` | all | run document of the contract (+ `result` for runs whose CLI prints a result line) |
 | `DELETE /runs/{run_id}` | Engineer, Admin | SIGTERM to the process group (SIGKILL after 10 s); 409 when finished |
 | `WS /runs/{run_id}/ws?token=…` | all | pushes the run document on every change (≤ 10 Hz) until it ends |
-| `GET /jobs/{id}/simulation` | all | S4 payload: `source` (`program` = newest current D09, else `path`), `program`, `program_rev`, `program_state`, `path`, `path_state`, `placement`, `seams`, `collision_checked`, URLs, `notes`. A program whose inputs changed (re-planned path) is not played. 404 `/problems/no-simulation` without placement or path / program |
+| `GET /jobs/{id}/simulation` | all | S4 payload: `source` (`program` = newest current D09, else `path`), `program`, `program_rev`, `program_state`, `program_problems`, `path`, `path_state`, `path_problems`, `replay` (launch line, ROS domain, readiness), `placement`, `seams`, `collision_checked`, URLs, `notes`. A program whose inputs changed (re-planned path) is not played. 404 `/problems/no-simulation` without placement or path / program |
 
 ## Runs (T2.7)
 
 - Run folder `<repo>/logs/runs/<run_id>/`: `run.json` (served by `GET /runs`), `log.txt` (merged stdout / stderr),
   inputs (`upload/<file>.step`); the planner writes `path.json` there and it is copied to `<job>/path.json` only
   when the run succeeds. Seam saves log to `<repo>/logs/seam_saves/<job>-<time>/` (`picks.json`, `log.txt`).
-- One slot per cell for imports, plans and seam saves (409 `/problems/run-busy` with `active_run`).
+- One slot per cell for imports, plans, programs, replays and seam saves (409 `/problems/run-busy` with `active_run`).
 - Outputs of a failed or cancelled run are never promoted. Runs that were active when the API stopped are marked
   failed at the next start.
 - Progress: a CLI may print `progress <0..1> <text>` lines (stdout or stderr); otherwise only step boundaries move it.
