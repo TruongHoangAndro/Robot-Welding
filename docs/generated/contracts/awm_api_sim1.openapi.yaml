@@ -295,9 +295,11 @@ paths:
                 program_rev: {type: string, pattern: '^P[0-9]{3}$', description: default = newest program revision}
       responses:
         '202': {$ref: '#/components/responses/RunStarted'}
-        '403': {$ref: '#/components/responses/Problem'}
-        '404': {$ref: '#/components/responses/Problem', description: program-not-found}
-        '409': {$ref: '#/components/responses/Problem', description: 'no-program, program-stale (problems = reasons from awm_core.staleness, plus a void CP-62 cad_check_override — override record or cad_check.json changed since planning; program_rev; refused before any process starts), run-busy'}
+        '400': {$ref: '#/components/responses/Problem', description: bad-job-id}
+        '401': {$ref: '#/components/responses/Problem', description: bearer token missing / unknown}
+        '403': {$ref: '#/components/responses/Problem', description: not an Engineer}
+        '404': {$ref: '#/components/responses/Problem', description: 'job-not-found, program-not-found'}
+        '409': {$ref: '#/components/responses/Problem', description: 'no-program; program-stale with extension members problems (reasons from awm_core.staleness, plus a void CP-62 cad_check_override — override record or cad_check.json changed since planning) and program_rev; both refused before any process starts; run-busy'}
         '422': {$ref: '#/components/responses/Problem'}
   /runs/{run_id}:
     parameters:
@@ -530,7 +532,7 @@ paths:
         required: true
         content: {application/json: {schema: {type: object, required: [component], properties: {component: {type: string}}}}}
       responses:
-        '200': {description: 'cached view reused (same head STEP SHA-256 and component): {key, cached: true}; no run', content: {application/json: {}}}
+        '200': {description: 'cached view reused: {key, cached: true}, no run. Same conditions as /cell/model/component_view, with source.file head.step, the requested component and up_axis +Z (the head view is always exported +Z)', content: {application/json: {}}}
         '202': {description: 'run started: {run_id} (+ key for a view); Location /api/v1/runs/{run_id}', content: {application/json: {}}}
         '403': {$ref: '#/components/responses/Problem'}
         '409': {$ref: '#/components/responses/Problem'}
