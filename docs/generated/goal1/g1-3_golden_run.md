@@ -1,53 +1,48 @@
 # G1.3 golden run — kinematic 7-axis planner (collision OFF), golden part 564082
 
-Date 2026-11-06 · planner agent · branch `g1-3-sync-planner`, planner code at commit `2e3537e` (clean checkout) ·
-machine data: [`g1-3_golden_run.json`](g1-3_golden_run.json).
+Date 2026-11-08 · cell-sim agent (close-out C1 / G1.22) · branch `g1-22-golden-rebuild` · regenerated from
+`golden_summary.json` of `scripts/golden_rebuild.py` (replaces the pre-TCP-fix run of 2026-11-06) · machine data:
+[`g1-3_golden_run.json`](g1-3_golden_run.json).
 
-**Kinematic only.** Collision is not evaluated (Goal 1, CP-58): every D07 carries `collision_checked: false`,
-`min_clearance_mm: null`, `scene_backend: none …`. No release gate may accept these paths (DES-001 rule 4).
+**Kinematic only.** Collision is not evaluated (Goal 1, CP-58): D07 carries `collision_checked: false`,
+`min_clearance_mm: null`. Cross-check 4 is red and is overridden for kinematic planning only (CP-62, record below);
+every release refuses while check 4 is red.
 
-## Set-up
+## Set-up (everything from the cell STEP)
 
-- Job: copy of the spike job `564082_A` with `cell/model/frames.yaml` and the H-CAD head folder `cell/model/head`
-  (the spike repo itself was not written). Seams built with `python3 -m awm_seam.joint_cli build` (G1.2):
-  S01 = J1 = joint edge JE2, S02 = J2 = joint edge JE4; butt, closed, 1 arc, 2 mm closing overlap, pitch ≤ 1 mm.
-  The coaxial test of G1.2 marks J1 coaxial (r 13.333–13.337 mm), J2 not (r 76.96–78.11 mm, axis ⟂).
-- Planner: `python3 -m awm_path.cli plan --job … --collision off --out …` with the defaults head model `hcad`
-  (description rendered from `awm_cell_v2.urdf.xacro` with the `frames.yaml` pose arguments), ψ grid 10°,
-  θ lattice 5°, 8 IK labels, |Δq| ≤ 5° on 7 joints, F6 margins, F11 wrist 3, CP-59 cost weights (Assumption
-  defaults, recorded in `planner.params`), travel speed 10 mm/s (**Assumption**, D06 v2 has no per-seam speed yet).
-- Mode C: second copy with S01 = J1 in `C` (J2 not coaxial, so Mode C does not apply to it).
+Only input: the cell STEP `APLSMN601_Automated Weldment System.step` (SHA-256 `bc66c09e…7e824`). All picks come from
+`src/awm_bringup/test/data/golden_564082.yaml`; the chain runs through an in-process `awm_api` with the real CLIs.
+
+| Step | Result |
+|---|---|
+| S10 cell import, up axis +Y | 152 s; roles from the data file; `564082-Assembly-3 parts:2` and the top-level duplicate `ASSY, Welding tool:1` excluded (OI-23, decision 2026-11-08); collision scene 15 objects, no welding-tool object |
+| Positioner axis | `Part1:1` edge E3, circle r 15.000 mm, axis file (1, 0, 0) |
+| Head STEP | robot component cut from the cell STEP with `make-job-step`, placed in the robot's own frame (transform read from the cell component tree) |
+| TCP teach (CP-61) | `LightWELD:1` edge E3955, mouth circle r 2.5 mm, stick-out 0 → `tool0_T_tcp` = (43.8288, 0.0000, 279.6056) mm, beam 60° from the flange axis; expected (43.829, 0, 279.606): off by 0.0004 mm (tolerance 0.01 mm) |
+| Job STEP | `make-job-step`: Part1–3, pulleys :1 / :4, `564082-Assembly-3 parts:2`; S1 assembly import 64 s |
+| Job roles / axis | rotating set `rotary_fixture`, the assembly `part`; axis E3 r 15.000 mm |
+| Cross-check | 1 positioner match green (5 components, φ 0.000°), 2 / 3 skipped (no robot / tool in the job), **4 red**: Jig:1, Timing Belts:1, Timing Belts:2 in the swept volume, 5 / 6 green |
+| CP-62 override | by `golden-adm` (Admin), 2026-11-08T09:29:02Z, scope `kinematic_planning`, check 4, findings Jig:1, Timing Belts:1, Timing Belts:2; reason: "G1.22 golden rebuild: check 4 is red because the bearing seats of Jig:1 and the timing belts are not separate components in the cell CAD (OI-23); kinematic-only planning, collision is Goal 2 (CP-62, decision 2026-11-08)." Carried into D07 and D09 (`cad_check_override`) |
+| Seams | S01 = J1 = joint JE9 (pipe nipple ↔ solid), S02 = J2 = joint JE11 (solid ↔ elbow); butt, closed, 1 arc, 2 mm overlap, `sync`. J1 coaxial with the positioner axis (r spread 1e-9 mm), J2 not (axis 90°) |
+| Plan | travel speed 2.3 mm/s (Engineer input from the data file), collision off, head `hcad` from the repository |
 
 ## Results
 
-| Seam / mode | Result | Points / pitch | θ range (deg) | ψ | Label | max \|Δq\| 7 joints (deg) | FK vs D07 pose | Run time |
-|---|---|---|---|---|---|---|---|---|
-| J1 `sync` | **100 %**, accepted | 88 / 0.997 mm (1 interpolated end point) | −249.0 … +119.6 (travel 368.6) | 20° fixed | S+E+W+ | robot ≤ 0.0007, θ 4.29 | 8e-9 mm / 9e-8° | 8.4 s alone |
-| J2 `sync` | **100 %**, accepted after one CP-53 refinement (pitch 1.0 mm: 1 `step` point → 0.5 mm) | 174 / 0.499 mm | −156.6 … −89.8 (travel 129.2) | 110°–320° | S+E+W+ | 4.66 (θ), 4.22 (wrist 3) | 8e-9 mm / 9e-8° | 18.2 s alone |
-| J1 `C` | **100 %**, accepted | 88 / 0.997 mm | −249.0 … +119.6 | 0° | S+E+W+ | robot 0 (one state), θ 4.29 | 0.0039 mm / 0.0145° (F8 tolerance 0.05 mm / 0.1°) | 0.3 s |
+| Seam | Coverage | Points | θ travel (deg) | Wrist-3 travel (deg) | Label | Max travel speed (D07) | FK vs D07 |
+|---|---|---|---|---|---|---|---|
+| J1 `sync` | **100 %** | 88 | 368.6 | 0.0 | S+E+W+ | 6.96 mm/s | 0.0 mm |
+| J2 `sync` | **100 %** | 88 | 117.8 | 159.8 | S-E+W+ | 2.39 mm/s | 0.0 mm |
 
-Both seams in one `sync` run: 25.5 s and 25.8 s (whole CLI incl. xacro rendering; analytic IK only).
-Two runs per case gave identical payloads (everything except `created_at` and `run_id`): **reproducible**.
-No arc rejected, so no failing s ranges exist for this part.
+No arc rejected. J1 is welded by the positioner alone (robot joints constant, θ 360° + overlap); J2 moves robot and
+positioner together, wrist-3 travel 159.8° (F11 limit 180°). The planned 2.3 mm/s is below both maxima (the golden
+values J2 2.39, J1 6.96 mm/s); the program step accepts it without a re-plan (see G1.5).
 
-Observations (reported, not acceptance rules in G1.3):
-
-1. **J1 sync ≈ Mode C.** The optimum keeps the robot still (robot joints vary < 0.001°) and turns the positioner
-   368.6° (360° + 2 mm overlap); the weld point stays at the top (seam Z vs world +Z ≤ 0.01°).
-2. **J2 sync** moves robot and positioner together; the positioner only covers 67° of the range, the robot does the
-   rest. Weld position is not held: seam Z up to 129.8° from world +Z (weight `w_up` = 0.05, Assumption). Wrist-3
-   travel 122° (F11 limit 180°). Closure: the state at s = L differs from s = 0 by up to 116° (wrist 3) and θ 35°;
-   the overlap is planned as explicit layers, F3 closure is reported, not enforced (branch plan).
-3. **Joint speed at 10 mm/s.** J1 (sync and C) needs a positioner speed of 43.0 deg/s > its limit; largest travel
-   speed within the limits 6.98 mm/s. J2 sync exceeds several joint limits at 10 mm/s; largest travel speed within
-   the limits 3.21 mm/s. Limits are never raised; the travel speed is a D06 value — G1.5 / D06 must handle it.
-4. **Mode C FK residual 0.0145°** (> 0.01°, < F8 0.1°): with the robot at rest the pose can only follow a rigid
-   rotation; the B-Rep circle is not exactly coaxial (r spread 0.004 mm). The 0.01 mm / 0.01° FK check holds for
-   `sync`; Mode C is held to the F8 tolerance.
+Golden tests on the rebuilt repository (`AWM_CELL_STEP` set): `test_golden_g13.py` 2 passed (sync J1 + J2: 2 arcs
+accepted, payload reproducible; Mode C J1: 1 arc accepted, robot at rest).
 
 ## Reproduce
 
 ```
-AWM_SPIKE_REPO=<spike repo root> AWM_OCC_PYTHON=<conda OCC python> \
-  scripts/dx "python3 -m pytest -s src/awm_path/test/test_golden_g13.py"
+scripts/dx "python3 scripts/golden_rebuild.py --cell-step <cell STEP>"        # 14 min from scratch, then cached
+AWM_CELL_STEP=<cell STEP> scripts/dx "python3 -m pytest -s src/awm_path/test/test_golden_g13.py"
 ```

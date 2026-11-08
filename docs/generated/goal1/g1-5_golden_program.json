@@ -1,373 +1,243 @@
 {
- "date": "2026-11-06",
- "agent": "program-verify",
- "branch": "g1-5-program-7axis",
- "runs": [
+ "schema": "awm_golden_summary/0.1",
+ "created_at": "2026-11-08T09:29:41Z",
+ "fingerprint": {
+  "cell_step_sha256": "bc66c09ef1878d0e7389cf852b695d8b59917994a98d5739e67ba627bab7e824",
+  "data_sha256": "27bc1f42c5aa78aa784aa31f788950d87db32f3a6b43f30f2e30125cf0584c29",
+  "script_sha256": "f5107af8a4ad576312450beaaacce6977016842ae68d9e3a6db1bb9cad872548",
+  "sources_sha256": "aef08874c565e8945b743b9ecd06a40cf1d14ca58d24c5b0bdfd7209450661a7"
+ },
+ "data_file": "src/awm_bringup/test/data/golden_564082.yaml",
+ "job_id": "564082_A",
+ "joints": {
+  "J1": "JE9",
+  "J2": "JE11"
+ },
+ "seam_edges": {
+  "S01": "E1390",
+  "S02": "E1415"
+ },
+ "repo": "build/golden_564082 (scripts/golden_rebuild.py default --out)",
+ "override": {
+  "by": "golden-adm",
+  "role": "admin",
+  "created_at": "2026-11-08T09:29:02Z",
+  "reason": "G1.22 golden rebuild: check 4 is red because the bearing seats of Jig:1 and the timing belts are not separate components in the cell CAD (OI-23); kinematic-only planning, collision is Goal 2 (CP-62, decision 2026-11-08).",
+  "scope": "kinematic_planning",
+  "check_id": 4,
+  "cad_check_sha256": "6067a2fcd25539d038e30d7c95bc3d61b319baed8a3dec538886059012bccbd6",
+  "findings": [
+   "Jig:1",
+   "Timing Belts:1",
+   "Timing Belts:2"
+  ]
+ },
+ "program": {
+  "program_rev": "P001",
+  "file": "jobs/564082_A/programs/P001/program.json",
+  "cycle_time_s": 130.825168575,
+  "segments": 9,
+  "segment_kinds": [
+   "air",
+   "approach",
+   "weld",
+   "retract",
+   "air",
+   "approach",
+   "weld",
+   "retract",
+   "air"
+  ],
+  "events": 4,
+  "collision_checked": false,
+  "cad_check_override": {
+   "file": "cad_check_override.json",
+   "sha256": "c33fa83a0d526c46f0b7add27b317a1621a10e750d9842128602bff2ed80c42f",
+   "cad_check_sha256": "6067a2fcd25539d038e30d7c95bc3d61b319baed8a3dec538886059012bccbd6",
+   "check_id": 4,
+   "by": "golden-adm",
+   "created_at": "2026-11-08T09:29:02Z",
+   "reason": "G1.22 golden rebuild: check 4 is red because the bearing seats of Jig:1 and the timing belts are not separate components in the cell CAD (OI-23); kinematic-only planning, collision is Goal 2 (CP-62, decision 2026-11-08)."
+  },
+  "simulation_cycle_time_s": 130.825168575
+ },
+ "segments": [
   {
-   "modes": [
-    "sync",
-    "sync"
-   ],
-   "requested_speed_mm_s": 3.0,
-   "refusal": "result refused S02 arc 1/1: at travel speed 3.0 mm/s the weld motion breaks wrist_3_joint acceleration 412.8 > 286.5 deg/s², positioner_joint velocity 33.5 > 30.0 deg/s, positioner_joint acceleration 313.4 > 50.0 deg/s²; max feasible travel speed 1.19 mm/s with velocity and acceleration limits (D07 max_travel_speed_mm_s 3.21, velocity only) — the travel speed is an Engineer input: re-plan with a lower travel speed (the software never slows a weld down and never raises a limit)",
-   "replanned_speed_mm_s": 1.19,
-   "cycle_time_s": 194.416896737,
-   "segments": [
-    [
-     "G001",
-     "air",
-     null,
-     228,
-     16.779512016
-    ],
-    [
-     "G002",
-     "approach",
-     "S01",
-     41,
-     0.603755944
-    ],
-    [
-     "G003",
-     "weld",
-     "S01",
-     88,
-     72.327307623
-    ],
-    [
-     "G004",
-     "retract",
-     "S01",
-     41,
-     0.603759004
-    ],
-    [
-     "G005",
-     "air",
-     null,
-     105,
-     16.676324761
-    ],
-    [
-     "G006",
-     "approach",
-     "S02",
-     41,
-     0.954282865
-    ],
-    [
-     "G007",
-     "weld",
-     "S02",
-     174,
-     72.327307623
-    ],
-    [
-     "G008",
-     "retract",
-     "S02",
-     41,
-     0.605608139
-    ],
-    [
-     "G009",
-     "air",
-     null,
-     223,
-     13.539038762
-    ]
-   ],
-   "welds": [
-    {
-     "seam_id": "S01",
-     "mode": "sync",
-     "points": 88,
-     "duration_s": 72.33,
-     "tcp_speed_mm_s": 1.19,
-     "speed_dev_max_pct": 0.023,
-     "fk_mm": 8.071852832136184e-09,
-     "fk_deg": 9.066506177758823e-08,
-     "theta_travel_deg": 368.6,
-     "vmax_ratio": 0.207,
-     "amax_ratio": 0.505
-    },
-    {
-     "seam_id": "S02",
-     "mode": "sync",
-     "points": 174,
-     "duration_s": 72.33,
-     "tcp_speed_mm_s": 1.19,
-     "speed_dev_max_pct": 0.006,
-     "fk_mm": 7.802483504078018e-09,
-     "fk_deg": 9.301579439247257e-08,
-     "theta_travel_deg": 66.8,
-     "vmax_ratio": 0.443,
-     "amax_ratio": 0.986
-    }
-   ],
-   "generator_weld_segments": [
-    {
-     "segment_id": "G003",
-     "seam_id": "S01",
-     "arc_index": 1,
-     "mode": "sync",
-     "travel_speed_mm_s": 1.19,
-     "ramp_mm": 0.14161,
-     "constant_speed_s_mm": [
-      0.14161,
-      85.644666071
-     ],
-     "duration_s": 72.327307623,
-     "max_velocity_deg_s": [
-      7e-08,
-      8.3084e-05,
-      0.000820615,
-      0.000118973,
-      1.23e-07,
-      7e-08,
-      6.197161787
-     ],
-     "max_acceleration_deg_s2": [
-      1.84e-07,
-      0.000345466,
-      0.0034769,
-      0.000502257,
-      1.363e-06,
-      1.84e-07,
-      25.238381425
-     ],
-     "fk_max_error_mm": 8e-09,
-     "fk_max_error_deg": 9.1e-08,
-     "fk_tolerance": [
-      0.01,
-      0.01
-     ],
-     "approach_points": 41,
-     "retract_points": 41
-    },
-    {
-     "segment_id": "G007",
-     "seam_id": "S02",
-     "arc_index": 1,
-     "mode": "sync",
-     "travel_speed_mm_s": 1.19,
-     "ramp_mm": 0.14161,
-     "constant_speed_s_mm": [
-      0.14161,
-      85.644666071
-     ],
-     "duration_s": 72.327307623,
-     "max_velocity_deg_s": [
-      4.939447223,
-      7.739507085,
-      4.158636603,
-      10.156417785,
-      5.437264084,
-      12.032561124,
-      13.295081933
-     ],
-     "max_acceleration_deg_s2": [
-      22.417579739,
-      18.994088555,
-      14.207170445,
-      17.689193183,
-      24.575128054,
-      64.951048841,
-      49.316873745
-     ],
-     "fk_max_error_mm": 8e-09,
-     "fk_max_error_deg": 9.3e-08,
-     "fk_tolerance": [
-      0.01,
-      0.01
-     ],
-     "approach_points": 41,
-     "retract_points": 41
-    }
-   ]
+   "segment_id": "G001",
+   "kind": "air",
+   "seam_id": null,
+   "points": 241,
+   "duration_s": 17.495291429
   },
   {
-   "modes": [
-    "C",
-    "sync"
+   "segment_id": "G002",
+   "kind": "approach",
+   "seam_id": "S01",
+   "points": 41,
+   "duration_s": 0.677835388
+  },
+  {
+   "segment_id": "G003",
+   "kind": "weld",
+   "seam_id": "S01",
+   "points": 88,
+   "duration_s": 37.7583809
+  },
+  {
+   "segment_id": "G004",
+   "kind": "retract",
+   "seam_id": "S01",
+   "points": 41,
+   "duration_s": 0.677835388
+  },
+  {
+   "segment_id": "G005",
+   "kind": "air",
+   "seam_id": null,
+   "points": 203,
+   "duration_s": 28.091769347
+  },
+  {
+   "segment_id": "G006",
+   "kind": "approach",
+   "seam_id": "S02",
+   "points": 41,
+   "duration_s": 0.819171882
+  },
+  {
+   "segment_id": "G007",
+   "kind": "weld",
+   "seam_id": "S02",
+   "points": 88,
+   "duration_s": 37.7583809
+  },
+  {
+   "segment_id": "G008",
+   "kind": "retract",
+   "seam_id": "S02",
+   "points": 41,
+   "duration_s": 0.826867539
+  },
+  {
+   "segment_id": "G009",
+   "kind": "air",
+   "seam_id": null,
+   "points": 203,
+   "duration_s": 6.719635802
+  }
+ ],
+ "weld_segments": [
+  {
+   "segment_id": "G003",
+   "seam_id": "S01",
+   "arc_index": 1,
+   "mode": "sync",
+   "travel_speed_mm_s": 2.3,
+   "ramp_mm": 0.529,
+   "constant_speed_s_mm": [
+    0.529,
+    85.257276071
    ],
-   "requested_speed_mm_s": 3.0,
-   "refusal": "result refused S02 arc 1/1: at travel speed 3.0 mm/s the weld motion breaks wrist_3_joint acceleration 412.8 > 286.5 deg/s², positioner_joint velocity 33.5 > 30.0 deg/s, positioner_joint acceleration 313.4 > 50.0 deg/s²; max feasible travel speed 1.19 mm/s with velocity and acceleration limits (D07 max_travel_speed_mm_s 3.21, velocity only) — the travel speed is an Engineer input: re-plan with a lower travel speed (the software never slows a weld down and never raises a limit)",
-   "replanned_speed_mm_s": 1.19,
-   "cycle_time_s": 194.416976471,
-   "segments": [
-    [
-     "G001",
-     "air",
-     null,
-     228,
-     16.779512016
-    ],
-    [
-     "G002",
-     "approach",
-     "S01",
-     41,
-     0.603797341
-    ],
-    [
-     "G003",
-     "positioner_weld",
-     "S01",
-     88,
-     72.327307623
-    ],
-    [
-     "G004",
-     "retract",
-     "S01",
-     41,
-     0.603797341
-    ],
-    [
-     "G005",
-     "air",
-     null,
-     105,
-     16.676324761
-    ],
-    [
-     "G006",
-     "approach",
-     "S02",
-     41,
-     0.954282865
-    ],
-    [
-     "G007",
-     "weld",
-     "S02",
-     174,
-     72.327307623
-    ],
-    [
-     "G008",
-     "retract",
-     "S02",
-     41,
-     0.605608139
-    ],
-    [
-     "G009",
-     "air",
-     null,
-     223,
-     13.539038762
-    ]
+   "duration_s": 37.7583809,
+   "max_velocity_deg_s": [
+    0.0,
+    3e-09,
+    3e-09,
+    0.0,
+    0.0,
+    0.0,
+    9.913135961
    ],
-   "welds": [
-    {
-     "seam_id": "S01",
-     "mode": "C",
-     "points": 88,
-     "duration_s": 72.33,
-     "tcp_speed_mm_s": 1.19,
-     "speed_dev_max_pct": 0.026,
-     "fk_mm": 0.0038886724127031075,
-     "fk_deg": 0.01445104370901754,
-     "theta_travel_deg": 368.6,
-     "vmax_ratio": 0.207,
-     "amax_ratio": 0.505
-    },
-    {
-     "seam_id": "S02",
-     "mode": "sync",
-     "points": 174,
-     "duration_s": 72.33,
-     "tcp_speed_mm_s": 1.19,
-     "speed_dev_max_pct": 0.006,
-     "fk_mm": 7.802483504078018e-09,
-     "fk_deg": 9.301579439247257e-08,
-     "theta_travel_deg": 66.8,
-     "vmax_ratio": 0.443,
-     "amax_ratio": 0.986
-    }
+   "max_acceleration_deg_s2": [
+    0.0,
+    1.2e-08,
+    1.2e-08,
+    0.0,
+    0.0,
+    0.0,
+    28.853231112
    ],
-   "generator_weld_segments": [
-    {
-     "segment_id": "G003",
-     "seam_id": "S01",
-     "arc_index": 1,
-     "mode": "C",
-     "travel_speed_mm_s": 1.19,
-     "ramp_mm": 0.14161,
-     "constant_speed_s_mm": [
-      0.14161,
-      85.644666071
-     ],
-     "duration_s": 72.327307623,
-     "max_velocity_deg_s": [
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      6.197161787
-     ],
-     "max_acceleration_deg_s2": [
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      25.238381425
-     ],
-     "fk_max_error_mm": 0.003888672,
-     "fk_max_error_deg": 0.014451044,
-     "fk_tolerance": [
-      0.05,
-      0.1
-     ],
-     "approach_points": 41,
-     "retract_points": 41
-    },
-    {
-     "segment_id": "G007",
-     "seam_id": "S02",
-     "arc_index": 1,
-     "mode": "sync",
-     "travel_speed_mm_s": 1.19,
-     "ramp_mm": 0.14161,
-     "constant_speed_s_mm": [
-      0.14161,
-      85.644666071
-     ],
-     "duration_s": 72.327307623,
-     "max_velocity_deg_s": [
-      4.939447223,
-      7.739507085,
-      4.158636603,
-      10.156417785,
-      5.437264084,
-      12.032561124,
-      13.295081933
-     ],
-     "max_acceleration_deg_s2": [
-      22.417579739,
-      18.994088555,
-      14.207170445,
-      17.689193183,
-      24.575128054,
-      64.951048841,
-      49.316873745
-     ],
-     "fk_max_error_mm": 8e-09,
-     "fk_max_error_deg": 9.3e-08,
-     "fk_tolerance": [
-      0.01,
-      0.01
-     ],
-     "approach_points": 41,
-     "retract_points": 41
-    }
-   ]
+   "fk_max_error_mm": 5e-09,
+   "fk_max_error_deg": 1.03e-07,
+   "fk_tolerance": [
+    0.01,
+    0.01
+   ],
+   "approach_points": 41,
+   "retract_points": 41
+  },
+  {
+   "segment_id": "G007",
+   "seam_id": "S02",
+   "arc_index": 1,
+   "mode": "sync",
+   "travel_speed_mm_s": 2.3,
+   "ramp_mm": 0.529,
+   "constant_speed_s_mm": [
+    0.529,
+    85.257276071
+   ],
+   "duration_s": 37.7583809,
+   "max_velocity_deg_s": [
+    12.726770436,
+    11.783239622,
+    7.20647865,
+    11.926476846,
+    11.876907406,
+    11.781023663,
+    12.117817901
+   ],
+   "max_acceleration_deg_s2": [
+    45.267415567,
+    29.809855757,
+    36.827560278,
+    37.629366835,
+    46.77047024,
+    40.383049083,
+    45.955151538
+   ],
+   "fk_max_error_mm": 8e-09,
+   "fk_max_error_deg": 9.4e-08,
+   "fk_tolerance": [
+    0.01,
+    0.01
+   ],
+   "approach_points": 41,
+   "retract_points": 41
+  }
+ ],
+ "limits": {
+  "velocity_deg_s": [
+   180.0,
+   180.0,
+   180.0,
+   180.0,
+   180.0,
+   180.0,
+   30.0
+  ],
+  "acceleration_deg_s2": [
+   286.478897565,
+   286.478897565,
+   286.478897565,
+   286.478897565,
+   286.478897565,
+   286.478897565,
+   50.0
+  ]
+ },
+ "travel_speeds": [
+  {
+   "seam_id": "S01",
+   "arc_index": 1,
+   "travel_speed_mm_s": 2.3,
+   "source": "cli argument"
+  },
+  {
+   "seam_id": "S02",
+   "arc_index": 1,
+   "travel_speed_mm_s": 2.3,
+   "source": "cli argument"
   }
  ]
 }
