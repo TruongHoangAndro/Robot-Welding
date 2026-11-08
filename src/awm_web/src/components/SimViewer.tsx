@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { BufferGeometry, Color, Float32BufferAttribute, Group, Points, PointsMaterial, Vector3, type Object3D, type PerspectiveCamera } from 'three';
 import type { URDFRobot } from 'urdf-loader';
 import { setJoints } from '../lib/robot';
+import { attachCellScene, type CellNode } from './CellScene';
 import { STATUS_COLOURS, type Marker } from '../lib/simulation';
 import { poseMmToMatrix, SCENE_UNITS_PER_MM, type PoseMm } from '../lib/units';
 
@@ -24,6 +25,8 @@ interface Props {
   q7: number[];
   /** camera target and offset of the camera from it, scene units; a new object re-aims the camera */
   focus: { target: Vector3; offset: Vector3 };
+  /** cell scene manifest objects (static under world, rotating under positioner_flange); empty = none shown */
+  cell?: CellNode[];
 }
 
 function CameraRig({ focus }: { focus: { target: Vector3; offset: Vector3 } }) {
@@ -75,8 +78,9 @@ function usePartOnFlange(robot: URDFRobot, partScene: Object3D | null, flangeTPa
   }, [robot, partScene, flangeTPart, markers]);
 }
 
-export function SimViewer({ robot, partScene, flangeTPart, markers, trail, jointNames, q7, focus }: Props) {
+export function SimViewer({ robot, partScene, flangeTPart, markers, trail, jointNames, q7, focus, cell }: Props) {
   usePartOnFlange(robot, partScene, flangeTPart, markers);
+  useEffect(() => (cell?.length ? attachCellScene(robot, cell) : undefined), [robot, cell]);
   useEffect(() => setJoints(robot, jointNames, q7), [robot, jointNames, q7]);
   const trailLine = useMemo(() => {
     if (trail.length < 2) return null;

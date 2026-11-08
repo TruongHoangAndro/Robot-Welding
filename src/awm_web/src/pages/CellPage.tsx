@@ -23,6 +23,7 @@ import {
   type CellStatus,
   type Run,
   type Session,
+  type ViewStart,
 } from '../lib/api';
 import { tcpRows } from '../lib/cellinfo';
 import { CELL_ROLES, effectiveRoles, relPaths, type Assignment, type TreeNode } from '../lib/roles';
@@ -117,10 +118,11 @@ export function CellPage({ session }: { session: Session }) {
         setError(list.length ? null : e.message);
       });
   };
-  const showEdges = (start: () => Promise<{ run_id: string; key: string }>) => {
+  /** Close-out m5: awm_api answers ``cached`` (no run) when the view exists for the same STEP, component and axis. */
+  const showEdges = (start: () => Promise<ViewStart>) => {
     setViewKey(null);
     setEdge(null);
-    act(start().then(({ run_id, key }) => follow(run_id, () => setViewKey(key))));
+    act(start().then(({ run_id, key, cached }) => (cached || !run_id ? setViewKey(key) : follow(run_id, () => setViewKey(key)))));
   };
 
   return (

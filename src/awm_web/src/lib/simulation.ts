@@ -17,6 +17,21 @@ export interface SimulationPayload {
   view_url: string;
   robot_description_url: string;
   notes: string[];
+  /** why path.json / the newest program is stale (awm_core.staleness, G1.20) */
+  path_problems: string[];
+  program_problems: string[];
+  replay: ReplayInfo;
+}
+
+/** S4 replay block of the simulation payload (G1.20). */
+export interface ReplayInfo {
+  launch_command: string;
+  ros_domain_id: string | null;
+  program_rev: string | null;
+  program_state: 'ok' | 'stale' | 'missing' | null;
+  problems: string[];
+  ready: boolean;
+  note: string;
 }
 
 export const KINEMATIC_BANNER = 'Kinematic only — collision not checked';
@@ -51,6 +66,43 @@ export function speedRows(path: Doc | null): SpeedRow[] {
           : 'not reported';
     return { seam: s.seam_id, arc: `${s.arc.index}/${s.arc.of}`, mode: s.mode, speed: s.travel_speed_mm_s, max, ok, message };
   });
+}
+
+/** Arcs whose requested travel speed is above the largest feasible one (the program step refuses them, CP-59). */
+export const speedAboveMax = (rows: SpeedRow[]): SpeedRow[] => rows.filter((r) => r.ok === false);
+
+/** Banner lines for a stale derived document: a headline and the reasons (empty when ok / missing). */
+export function staleLines(what: string, state: string | null | undefined, problems: string[] | undefined): string[] {
+  if (state !== 'stale') return [];
+  return [`${what} is stale: re-plan / generate again.`, ...(problems ?? [])];
+}
+
+/** Why Generate (D07 → D09) and Replay in RViz are not available now; null = allowed (close-out M3, m1, B1). */
+export function actionBlocks(
+  sim: Pick<SimulationPayload, 'path' | 'path_state' | 'path_problems' | 'replay'>,
+  run: { state: string } | null,
+  role: string,
+): { generate: string | null; replay: string | null } {
+  if (role !== 'Engineer') return { generate: 'Generate and Replay are requested by an Engineer.', replay: 'Generate and Replay are requested by an Engineer.' };
+  if (run && (run.state === 'queued' || run.state === 'running')) return { generate: 'A run is active.', replay: 'A run is active.' };
+  const stalePath = sim.path_state === 'stale' ? `path.json is stale: ${(sim.path_problems ?? []).join('; ') || 'inputs changed'} — re-plan.` : null;
+  let generate: string | null = null;
+  if (!sim.path || sim.path_state === 'missing') generate = 'Plan first (no path.json).';
+  else if (stalePath) generate = stalePath;
+  else {
+    const over = speedAboveMax(speedRows(sim.path));
+    if (over.length)
+      generate = over
+        .map((r) => `${r.seam} arc ${r.arc}: ${r.speed} mm/s is above the feasible maximum ${r.max?.toFixed(2)} mm/s`)
+        .concat('re-plan with a lower travel speed.')
+        .join('; ');
+  }
+  const rp = sim.replay;
+  let replay: string | null = null;
+  if (stalePath) replay = `${stalePath} Then generate the program again.`;
+  else if (!rp?.program_rev) replay = 'No program yet: Generate the program first.';
+  else if (rp.program_state !== 'ok') replay = `program ${rp.program_rev} is stale: ${rp.problems.join('; ') || 'inputs changed'} — generate again.`;
+  return { generate, replay };
 }
 
 export const STATUS_COLOURS: Record<string, string> = {

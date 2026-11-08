@@ -6,6 +6,8 @@
 import type { CadCheck, CadOverride, OverrideState } from './cadcheck';
 import type { Assignment, TreeNode } from './roles';
 import type { SeamDoc, SeamPick } from './seams';
+import type { ReplayResult } from './replay';
+import type { ScenePayload } from './scene';
 import type { SimulationPayload } from './simulation';
 
 export const API = '/api/v1';
@@ -44,6 +46,10 @@ export interface JobDetail extends JobSummary {
   placement_note: string | null;
   seam_axis: 'missing' | 'ok' | 'stale';
   path: 'missing' | 'ok' | 'stale';
+  /** why path.json is stale (awm_core.staleness) */
+  path_problems?: string[];
+  /** newest program revision and its staleness */
+  program?: { rev: string; state: 'missing' | 'ok' | 'stale'; problems: string[] } | null;
   collision_checked: boolean;
 }
 
@@ -59,6 +65,8 @@ export interface Run {
   log_tail: string[];
   outputs: Record<string, string>;
   problem: Problem | null;
+  /** last result line of the run's CLI (replay: ``replay {json}``) */
+  result?: ReplayResult | null;
 }
 
 export const TERMINAL = new Set(['succeeded', 'failed', 'cancelled']);
@@ -161,6 +169,25 @@ export async function startPlan(token: string, id: string, seams?: string[], tra
 export async function startProgram(token: string, id: string): Promise<string> {
   const { body } = await call<{ run_id: string }>(`/jobs/${encodeURIComponent(id)}/program`, token, { method: 'POST', body: '{}' });
   return body.run_id;
+}
+
+/** S4 "Replay in RViz" (G1.20): request a replay run of the newest program on the user-launched sim_mock. */
+export async function startReplay(token: string, id: string, programRev?: string): Promise<string> {
+  const { body } = await call<{ run_id: string }>(`/jobs/${encodeURIComponent(id)}/replay`, token, {
+    method: 'POST',
+    body: JSON.stringify(programRev ? { program_rev: programRev } : {}),
+  });
+  return body.run_id;
+}
+
+/** Cell scene manifest for the S4 cell view, or null when the cell model was not saved (404 no-scene). */
+export async function getScene(token: string): Promise<ScenePayload | null> {
+  try {
+    return (await call<ScenePayload>('/cell/scene', token)).body;
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404 && e.problem?.type === '/problems/no-scene') return null;
+    throw e;
+  }
 }
 
 /** S4 payload, or null when nothing is planned yet (404 no-simulation). */
@@ -294,13 +321,15 @@ export const cellFileUrl = (name: string) => `${API}/cell/model/files/${name}`;
 export const cellViewBase = (key: string) => `${API}/cell/model/views/${key}/`;
 export const getCellRoles = async (t: string) => (await call<RolesView>('/cell/model/roles', t)).body;
 export const putCellRoles = async (t: string, assignments: Assignment[]) => (await call<unknown>('/cell/model/roles', t, json('PUT', { assignments }))).body;
+/** A run id, or ``cached: true`` (no run) when awm_api reuses an existing view for the same STEP (close-out m5). */
+export type ViewStart = { run_id?: string; key: string; cached?: boolean };
 export const startComponentView = async (t: string, componentPath: string) =>
-  (await call<{ run_id: string; key: string }>('/cell/model/component_view', t, json('POST', { component_path: componentPath }))).body;
+  (await call<ViewStart>('/cell/model/component_view', t, json('POST', { component_path: componentPath }))).body;
 export const putCellAxis = async (t: string, componentPath: string, edgeId: string, reverse: boolean) =>
   (await call<{ run_id: string }>('/cell/model/axis', t, json('PUT', { component_path: componentPath, edge_id: edgeId, reverse }))).body.run_id;
 export const saveCell = async (t: string) => (await call<{ run_id: string }>('/cell/model/save', t, json('POST', {}))).body.run_id;
 export const startHeadView = async (t: string, component: string) =>
-  (await call<{ run_id: string; key: string }>('/cell/head/view', t, json('POST', { component }))).body;
+  (await call<ViewStart>('/cell/head/view', t, json('POST', { component }))).body;
 export const putTcp = async (t: string, component: string, edgeId: string, reverse: boolean, stickoutMm: number) =>
   (await call<{ run_id: string }>('/cell/head/tcp', t, json('PUT', { component, edge_id: edgeId, reverse, stickout_mm: stickoutMm }))).body.run_id;
 

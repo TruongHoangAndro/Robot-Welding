@@ -15,6 +15,7 @@ import {
   getJobRoles,
   getJobTree,
   getSeams,
+  getSimulation,
   putJobAxis,
   putJobRoles,
   postOverride,
@@ -47,7 +48,8 @@ import {
   type SeamDoc,
   type SeamPick,
 } from '../lib/seams';
-import { jointForEdge, type JointInfo } from '../lib/topology';
+import { jointForEdge, jointRows, solidLabel, type JointInfo } from '../lib/topology';
+import { speedAboveMax, speedRows, staleLines, type SimulationPayload } from '../lib/simulation';
 
 const fmt = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : String(v));
 
@@ -93,8 +95,18 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
   const [axisEdge, setAxisEdge] = useState<string | null>(null);
   const [axisReverse, setAxisReverse] = useState(false);
   const afterRun = useRef<(() => void) | null>(null);
+  // close-out m1 / M3: the planned path (speed rows) and the staleness of D07 / the program after a plan
+  const [planSim, setPlanSim] = useState<SimulationPayload | null>(null);
 
-  const reloadDetail = useCallback(() => getJob(token, jobId).then(setDetail), [token, jobId]);
+  const reloadDetail = useCallback(
+    () =>
+      getJob(token, jobId).then((d) => {
+        setDetail(d);
+        if (d.path !== 'missing') getSimulation(token, jobId).then(setPlanSim).catch(() => setPlanSim(null));
+        else setPlanSim(null);
+      }),
+    [token, jobId],
+  );
   const reloadCad = useCallback(
     () => Promise.all([getCheck(token, jobId), getOverride(token, jobId)]).then(([c, o]) => (setCheck(c), setOverride(o))),
     [token, jobId],
@@ -128,6 +140,7 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
         if (!live) return;
         setDetail(d);
         if (d.active_run?.startsWith('R')) follow(d.active_run);
+        if (d.path !== 'missing') getSimulation(token, jobId).then((x) => live && setPlanSim(x)).catch(() => undefined);
       })
       .catch((e: Error) => live && setError(e.message));
     loadFromUrl(viewBase(jobId), authHeaders(token))
@@ -314,6 +327,12 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
   };
 
   const planBlock = cadBlock ?? planBlocker(detail, saved, dirty, canEdit, run);
+  const rows = speedRows(planSim?.path ?? null);
+  const overMax = speedAboveMax(rows);
+  const joints = model ? jointRows(model.topo, components && hasRoles ? (roleOfSolid as Map<string, string>) : null) : null;
+  const staleMsgs = detail
+    ? [...staleLines('path.json', detail.path, detail.path_problems), ...staleLines(`program ${detail.program?.rev}`, detail.program?.state, detail.program?.problems)]
+    : [];
   const banner = check ? checkBanner(check.check, check.state) : null;
   const size = model ? Math.max(model.displayBox.getSize(new Vector3()).length() * 0.05, 2) : 5;
   const errFor = (i: number, f: string) => fieldErrors.filter((e) => e.pointer.startsWith(`/seams/${i}/${f}`)).map((e) => e.message).join('; ');
@@ -551,7 +570,8 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
             {selJoint && (
               <>
                 <Row k="joint">
-                  <b>{selJoint.joint_edge_id}</b> · {selJoint.solid_a} ↔ {selJoint.solid_b}
+                  <b>{selJoint.joint_edge_id}</b> · {model ? solidLabel(model.topo, selJoint.solid_a) : selJoint.solid_a} ↔{' '}
+                  {model ? solidLabel(model.topo, selJoint.solid_b) : selJoint.solid_b}
                 </Row>
                 <Row k="edges">
                   {selJoint.edge_a}, {selJoint.edge_b}
@@ -573,16 +593,16 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
               </>
             )}
             {note && <div className="warn">{note}</div>}
-            {model && model.topo.joints.length > 0 && (
-              <table>
+            {joints && joints.rows.length > 0 && (
+              <table data-testid="joint-list">
                 <tbody>
-                  {model.topo.joints.map((j) => (
+                  {joints.rows.map(({ joint: j, names }) => (
                     <tr key={j.joint_edge_id} className={selJoint?.joint_edge_id === j.joint_edge_id ? 'active' : ''} onClick={() => setSel({ kind: 'joint', id: j.joint_edge_id })}>
                       <td>
                         <b>{j.joint_edge_id}</b>
                       </td>
-                      <td>
-                        {j.solid_a} ↔ {j.solid_b}
+                      <td title={`${j.solid_a} ↔ ${j.solid_b}`}>
+                        {names[0]} ↔ {names[1]}
                       </td>
                       <td>{fmt(j.length_mm)} mm</td>
                       <td>{j.closed ? 'closed' : 'open'}</td>
@@ -590,6 +610,11 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
                   ))}
                 </tbody>
               </table>
+            )}
+            {joints && joints.hidden > 0 && (
+              <div className="muted" data-testid="joints-hidden">
+                {joints.hidden} joint(s) with a solid that is not role part are hidden (only part solids are welded, CP-60).
+              </div>
             )}
           </Panel>
 
@@ -632,7 +657,36 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
                 S4 simulation →
               </a>
             )}
-            {detail?.path === 'stale' && <div className="warn">path.json is stale: re-plan.</div>}
+            {staleMsgs.length > 0 && (
+              <div className="warn" data-testid="stale-msgs">
+                {staleMsgs.map((m) => (
+                  <div key={m}>{m}</div>
+                ))}
+                <div>Generate and Replay (S4) stay disabled until then.</div>
+              </div>
+            )}
+            {rows.length > 0 && (
+              <table data-testid="speed-rows">
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={`${r.seam}-${r.arc}`}>
+                      <td>
+                        <b>{r.seam}</b> {r.arc} {r.mode}
+                      </td>
+                      <td>{fmt(r.speed)} mm/s</td>
+                      <td>max {r.max !== null ? `${fmt(r.max)} mm/s` : '—'}</td>
+                      <td className={r.ok === false ? 'warn' : r.ok ? 'ok' : 'muted'}>{r.ok === false ? 'above max' : r.ok ? 'ok' : 'not reported'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {overMax.length > 0 && (
+              <div className="warn" data-testid="speed-over-max">
+                {overMax.map((r) => `${r.seam} arc ${r.arc}: ${fmt(r.speed)} mm/s is above the feasible maximum ${r.max !== null ? fmt(r.max) : '?'} mm/s`).join('; ')}. Re-plan with a
+                lower travel speed; Generate (S4) is disabled until then (the software never slows down silently).
+              </div>
+            )}
             {planBlock && <div className="muted">{planBlock}</div>}
             {run && <RunView run={run} onCancel={canEdit ? () => cancelRun(token, run.run_id).catch((e: Error) => setError(e.message)) : undefined} />}
           </Panel>
