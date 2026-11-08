@@ -8,9 +8,11 @@ import {
   cancelRun,
   getJob,
   getRobotDescription,
+  getScene,
   getSimulation,
   startPlan,
   startProgram,
+  startReplay,
   viewBase,
   watchRun,
   type JobDetail,
@@ -18,10 +20,12 @@ import {
   type Session,
 } from '../lib/api';
 import { loadFromUrl } from '../lib/load';
+import { cancelText, replayView } from '../lib/replay';
+import { loadCellScene, SCENE_COLOUR, type CellNode } from '../components/CellScene';
 import { sampleTimeline, timelineFromPath, timelineFromProgram, type Timeline } from '../lib/playback';
 import { authMeshLoader, limitViolations, parseRobot, rootT, setJoints } from '../lib/robot';
 import { poseMmToMatrix, vecMmToScene } from '../lib/units';
-import { KINEMATIC_BANNER, needsKinematicBanner, seamMarkers, speedRows, STATUS_COLOURS, type SimulationPayload } from '../lib/simulation';
+import { actionBlocks, replayRequestRev, KINEMATIC_BANNER, needsKinematicBanner, seamMarkers, speedRows, staleLines, STATUS_COLOURS, type SimulationPayload } from '../lib/simulation';
 
 const fmt = (v: number | null | undefined, d = 2) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(d) : '—');
 const RATES = [0.25, 0.5, 1, 2, 4, 8];
@@ -43,8 +47,10 @@ function buildTrail(kin: URDFRobot, tl: Timeline): TrailPoint[] {
 
 /**
  * S4-lite (DES-001 §4.5 S4, G1.6): playback of the stored program (D09) — or of the planned path (D07) before a
- * program exists — with the robot (URDF with the H-CAD head), the rotary positioner (θ) and the part on its flange.
- * Display only: nothing here commands the robot, the positioner, the PLC or the laser (§7.3).
+ * program exists — with the robot (URDF with the H-CAD head), the rotary positioner (θ), the part on its flange and
+ * the cell objects of the scene manifest (G1.20). The playback is display only. "Replay in RViz" (G1.20) is a request
+ * to awm_api, which runs the replay CLI against the sim_mock the user launched (mock hardware only, checked by the
+ * CLI); the browser never talks to ROS, the robot, the PLC or the laser (§7.3).
  */
 export function SimPage({ session, jobId }: { session: Session; jobId: string }) {
   const token = session.token;
@@ -61,6 +67,11 @@ export function SimPage({ session, jobId }: { session: Session; jobId: string })
   const [rate, setRate] = useState(1);
   const [speed, setSpeed] = useState('');
   const [run, setRun] = useState<Run | null>(null);
+  const [replayRun, setReplayRun] = useState<Run | null>(null);
+  const [cell, setCell] = useState<CellNode[]>([]);
+  const [cellNote, setCellNote] = useState<string | null>(null);
+  const [showCell, setShowCell] = useState(true);
+  const [copied, setCopied] = useState(false);
   const stopWatch = useRef<(() => void) | null>(null);
   useEffect(() => () => stopWatch.current?.(), []);
 
@@ -85,6 +96,17 @@ export function SimPage({ session, jobId }: { session: Session; jobId: string })
         setKin(parseRobot(d.urdf));
       })
       .catch((e: Error) => live && setError(`robot description: ${e.message}`));
+    getScene(token)
+      .then((sc) => {
+        if (!live) return;
+        if (!sc) return setCellNote('No cell scene (cell/model/scene_manifest.json): save the cell model in S10.');
+        return loadCellScene(sc, authHeaders(token)).then(({ nodes, errors }) => {
+          if (!live) return;
+          setCell(nodes);
+          setCellNote(errors.length ? `cell objects not drawn: ${errors.join('; ')}` : null);
+        });
+      })
+      .catch((e: Error) => live && setCellNote(`cell scene: ${e.message}`));
     loadFromUrl(viewBase(jobId), authHeaders(token))
       .then((m) => {
         if (!live) return;
@@ -152,7 +174,8 @@ export function SimPage({ session, jobId }: { session: Session; jobId: string })
       runId,
       (r) => {
         setRun(r);
-        if (r.state === 'succeeded') {
+        if (r.kind === 'replay') setReplayRun(r);
+        if (r.state === 'succeeded' && r.kind !== 'replay') {
           setT(0);
           reload();
         }
@@ -171,6 +194,26 @@ export function SimPage({ session, jobId }: { session: Session; jobId: string })
     setError(null);
     startProgram(token, jobId).then(follow).catch((e: Error) => setError(e.message));
   };
+  const replay = () => {
+    setError(null);
+    startReplay(token, jobId, sim ? replayRequestRev(sim) : undefined).then(follow).catch((e: Error) => setError(e.message));
+  };
+  const blocks = sim ? actionBlocks(sim, run, session.role) : null;
+  const programSegments = useMemo(
+    () => (timeline?.source === 'program' ? timeline.segments.map((g) => ({ id: g.id, durationS: g.t1 - g.t0 })) : []),
+    [timeline],
+  );
+  const rv = replayView(replayRun, programSegments);
+  const staleMsgs = sim
+    ? [...staleLines('path.json', sim.path_state, sim.path_problems), ...staleLines(`program ${sim.program_rev}`, sim.program_state, sim.program_problems)]
+    : [];
+  const copyLaunch = () => {
+    if (!sim) return;
+    navigator.clipboard
+      ?.writeText(sim.replay.launch_command)
+      .then(() => setCopied(true))
+      .catch(() => setCopied(false));
+  };
 
   const rows = speedRows(sim?.path ?? null);
   const showBanner = sim ? needsKinematicBanner(sim) : true;
@@ -188,6 +231,9 @@ export function SimPage({ session, jobId }: { session: Session; jobId: string })
           </div>
         )}
         <span className="spacer" />
+        <label className="check" title="cell objects of cell/model/scene_manifest.json">
+          <input type="checkbox" data-testid="show-cell" checked={showCell} onChange={(e) => setShowCell(e.target.checked)} /> cell ({cell.length})
+        </label>
         <label className="check">
           focus
           <select value={focusOn} data-testid="focus" onChange={(e) => setFocusOn(e.target.value as 'part' | 'cell')}>
@@ -213,10 +259,12 @@ export function SimPage({ session, jobId }: { session: Session; jobId: string })
               jointNames={timeline.jointNames}
               q7={sample.q7}
               focus={focus}
+              cell={showCell ? cell : []}
             />
           ) : (
             <div className="empty">{sim === null ? 'Nothing planned yet: save the seams in S2 and plan.' : error ? '' : 'Loading robot, part and playback data …'}</div>
           )}
+          {cellNote && <div className="warn overlay-top" data-testid="cell-note">{cellNote}</div>}
           {(error || timelineError) && <div className="error">{[error, timelineError].filter(Boolean).join('\n')}</div>}
           {sample && (
             <div className="overlay" data-testid="sim-overlay">
@@ -317,18 +365,64 @@ export function SimPage({ session, jobId }: { session: Session; jobId: string })
               <button className="btn small" disabled={!canRun || !!busy || !!speedError || detail?.seam_axis !== 'ok'} onClick={plan} data-testid="replan">
                 Re-plan
               </button>
-              <button className="btn small" disabled={!canRun || !!busy || !sim?.path || sim.path_state !== 'ok'} onClick={program} data-testid="generate">
+              <button className="btn small" disabled={!sim || !!blocks?.generate} onClick={program} data-testid="generate" title={blocks?.generate ?? ''}>
                 Generate program
               </button>
             </div>
+            {canRun && blocks?.generate && <div className="warn" data-testid="generate-block">Generate unavailable: {blocks.generate}</div>}
+            {staleMsgs.length > 0 && (
+              <div className="warn" data-testid="stale-msgs">
+                {staleMsgs.map((m) => (
+                  <div key={m}>{m}</div>
+                ))}
+              </div>
+            )}
             {!canRun && <div className="muted">Role {session.role}: read only (runs are started by an Engineer).</div>}
             {detail && detail.seam_axis !== 'ok' && <div className="warn">seam_axis.json is {detail.seam_axis}: save the seams again in S2, then re-plan.</div>}
-            {sim?.notes.map((n) => (
+            {sim?.notes.filter((n) => !staleMsgs.length || !/stale/.test(n)).map((n) => (
               <div key={n} className="warn">
                 {n}
               </div>
             ))}
             {run && <RunView run={run} onCancel={canRun ? () => cancelRun(token, run.run_id).catch((e: Error) => setError(e.message)) : undefined} />}
+          </Panel>
+          <Panel title="Replay in RViz (sim_mock, Engineer)">
+            <div className="muted">
+              1. Start sim_mock yourself in an awm_dev terminal{sim?.replay.ros_domain_id ? ` with ROS_DOMAIN_ID=${sim.replay.ros_domain_id} (the domain of awm_api)` : ' in the ROS domain of awm_api'}:
+            </div>
+            <pre className="log" data-testid="launch-line">{sim?.replay.launch_command ?? '…'}</pre>
+            <button className="btn small" onClick={copyLaunch} disabled={!sim}>
+              {copied ? 'Copied' : 'Copy launch line'}
+            </button>
+            <div className="muted">2. Request the replay of program {sim?.replay.program_rev ?? '—'} (joint motion on the mock controllers only; weld events are not executed; the replay CLI refuses anything but mock hardware).</div>
+            <button className="btn small" disabled={!sim || !!blocks?.replay} onClick={replay} data-testid="replay" title={blocks?.replay ?? ''}>
+              Replay in RViz
+            </button>
+            {replayRun && (replayRun.state === 'queued' || replayRun.state === 'running') && (
+              <div className="muted" data-testid="cancel-note">
+                {cancelText(null)}
+              </div>
+            )}
+            {canRun && blocks?.replay && <div className="warn" data-testid="replay-block">Replay unavailable: {blocks.replay}</div>}
+            {rv && (
+              <div className={`replay ${rv.level}`} data-testid="replay-result">
+                <Row k="status">
+                  <b className={rv.level} data-testid="replay-status">{rv.status}</b>
+                </Row>
+                <Row k="final deviation">
+                  <span data-testid="replay-final">{rv.finalDeviationDeg !== null ? `${fmt(rv.finalDeviationDeg, 4)}°` : '—'}</span>
+                </Row>
+                <Row k="max tracking error">
+                  <span data-testid="replay-tracking">{rv.maxTrackingDeg !== null ? `${fmt(rv.maxTrackingDeg, 4)}°` : '—'}</span>
+                </Row>
+                <Row k="segments replayed">{rv.segments}</Row>
+                {rv.message && <div className={rv.level === 'muted' ? 'muted' : 'warn'} data-testid="replay-message">{rv.message}</div>}
+              </div>
+            )}
+            <div className="legend">
+              <span className="swatch" style={{ background: SCENE_COLOUR.world }} /> cell (static)
+              <span className="swatch" style={{ background: SCENE_COLOUR.positioner_flange }} /> turns with θ
+            </div>
           </Panel>
         </aside>
       </main>

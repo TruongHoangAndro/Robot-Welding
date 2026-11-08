@@ -195,3 +195,31 @@ export function jointForEdge(idx: TopologyIndex, edgeId: string): JointInfo | nu
   }
   return null;
 }
+
+/** Display name of a solid: the last element of its CP-60 component path, else its name, else its id. */
+export function solidLabel(topo: Pick<Topology, 'solids'>, solidId: string): string {
+  const s = topo.solids.find((x) => x.solid_id === solidId);
+  if (!s) return solidId;
+  if (s.component_path) return s.component_path.split(' / ').pop() || s.name || solidId;
+  return s.name || solidId;
+}
+
+/**
+ * S2 joint list (close-out m2): joints with the component names of both solids. With CP-60 roles, joints that touch
+ * a solid whose role is not ``part`` are hidden (they cannot be welded, check 5); ``roles`` null = show all.
+ */
+export function jointRows(
+  topo: Pick<Topology, 'solids' | 'joints'>,
+  roles: Map<string, string> | null,
+): { rows: { joint: JointInfo; names: [string, string] }[]; hidden: number } {
+  const rows: { joint: JointInfo; names: [string, string] }[] = [];
+  let hidden = 0;
+  for (const j of topo.joints) {
+    if (roles && (roles.get(j.solid_a) !== 'part' || roles.get(j.solid_b) !== 'part')) {
+      hidden++;
+      continue;
+    }
+    rows.push({ joint: j, names: [solidLabel(topo, j.solid_a), solidLabel(topo, j.solid_b)] });
+  }
+  return { rows, hidden };
+}

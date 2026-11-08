@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from awm_core import cad_roles
 from awm_core.hashing import sha256_file
+from awm_core.staleness import document_state, document_verdict  # noqa: F401 - one staleness rule (G1.17)
 
 from awm_api.problems import ProblemError
 
@@ -96,31 +97,66 @@ def seam_axis_state(job: Path, repo_root: Path) -> str:
     return document_state(job, 'seam_axis.json', repo_root)
 
 
-def document_state(job: Path, name: str, repo_root: Path, doc: Optional[Dict[str, Any]] = None) -> str:
-    """``missing`` | ``ok`` | ``stale`` for a derived job document by its recorded input hashes. Inputs that resolve
-    outside the repository (e.g. a linked head folder) are not ours to check and are skipped."""
+def problems(job: Path, name: str, repo_root: Path, doc: Optional[Dict[str, Any]] = None) -> List[str]:
+    """Reasons why a derived job document is stale (``document_verdict(...).problems``); empty when ok / missing."""
+    return list(document_verdict(job, name, repo_root, doc).problems)
+
+
+OVERRIDE_FIELD = 'cad_check_override'
+OVERRIDE_VOID = 're-check, record a new override and re-plan'
+
+
+def override_problems(job: Path, doc: Dict[str, Any]) -> List[str]:
+    """Review m3: a D09 / D07 that carries a CP-62 ``cad_check_override`` is valid only while the override record and
+    ``cad_check.json`` still have the SHA-256 recorded in it and the document is kinematic only — the same rule as
+    ``awm_program.cli._override_ref``. Empty list = no override or a valid one."""
+    ref = doc.get(OVERRIDE_FIELD)
+    if ref is None:
+        return []
+    if not isinstance(ref, dict):
+        return [f'{OVERRIDE_FIELD}: malformed; {OVERRIDE_VOID}']
+    if doc.get('collision_checked') is not False:
+        return [f'{OVERRIDE_FIELD} on a document that is not kinematic only (collision_checked false); re-plan']
+    out = []
+    for name, sha in ((ref.get('file'), ref.get('sha256')), (cad_roles.CHECK_FILE, ref.get('cad_check_sha256'))):
+        if not isinstance(name, str) or not TOKEN_RE.match(name) or not isinstance(sha, str):
+            out.append(f'CP-62 override reference malformed ({name!r}); {OVERRIDE_VOID}')
+            continue
+        f = job / name
+        if not f.is_file() or sha256_file(f) != sha:
+            out.append(f'CP-62 override void: {name} missing or changed since planning; {OVERRIDE_VOID}')
+    return out
+
+
+def program_verdict(job: Path, rev: str, repo_root: Path,
+                    doc: Optional[Dict[str, Any]] = None) -> Tuple[str, List[str]]:
+    """(state, problems) of a D09: the staleness rule plus a void CP-62 override, which counts as stale (m3)."""
+    name = f'programs/{rev}/program.json'
     if doc is None:
         doc = read_json(job / name)
-    if doc is None:
-        return 'missing'
-    bases = [job, (job / name).parent]  # names are job-relative (jsonio.make_header(..., job)); doc folder fallback
-    root = repo_root.resolve()
-    for item in doc.get('inputs', []):
-        cands = [(b / item.get('name', '')).resolve() for b in bases]
-        path = next((c for c in cands if c.is_file()), cands[0])
-        if root not in path.parents:
-            continue  # outside the repository: not ours to check
-        if not path.is_file() or sha256_file(path) != item.get('sha256'):
-            return 'stale'
-    return 'ok'
+    v = document_verdict(job, name, repo_root, doc)
+    if v.state == 'missing' or doc is None:
+        return 'missing', list(v.problems)
+    problems = list(v.problems) + override_problems(job, doc)
+    return ('stale' if problems else 'ok'), problems
+
+
+def program_info(job: Path, repo_root: Path) -> Optional[Dict[str, Any]]:
+    """Newest program revision with its staleness state and reasons, or None (S2 / S4, close-out M3)."""
+    rev, doc, _state = latest_program(job, repo_root)
+    if rev is None:
+        return None
+    state, found = program_verdict(job, rev, repo_root, doc)
+    return {'rev': rev, 'state': state, 'problems': found}
 
 
 def latest_program(job: Path, repo_root: Path) -> Tuple[Optional[str], Optional[Dict[str, Any]], Optional[str]]:
-    """(rev, D09, state) of the newest program revision with a readable ``program.json``; state ok | stale."""
+    """(rev, D09, state) of the newest program revision with a readable ``program.json``; state ok | stale (incl. a
+    void CP-62 override)."""
     for rev in reversed(program_revs(job)):
         doc = read_json(job / 'programs' / rev / 'program.json')
         if doc is not None:
-            return rev, doc, document_state(job, f'programs/{rev}/program.json', repo_root, doc)
+            return rev, doc, program_verdict(job, rev, repo_root, doc)[0]
     return None, None, None
 
 
@@ -157,6 +193,8 @@ def detail(job: Path, repo_root: Path, active_run: Optional[str]) -> Dict[str, A
         'placement_note': None if placement else no_placement_note(job),
         'seam_axis': seam_axis_state(job, repo_root),
         'path': document_state(job, 'path.json', repo_root),
+        'path_problems': problems(job, 'path.json', repo_root),
+        'program': program_info(job, repo_root),
         'collision_checked': False,  # Goal 1 (CP-58): nothing in this backend checks collision
     })
     return out

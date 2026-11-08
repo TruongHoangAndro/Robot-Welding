@@ -91,3 +91,8 @@ aside.wide { width: 380px; }
 .cadbanner.overridden { background: #3d2a52; border-left: 3px solid #b48cff; }
 .override-form { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; padding: 6px; border: 1px dashed #b48cff; border-radius: 4px; }
 .override-form textarea { width: 100%; box-sizing: border-box; background: #1b1e24; color: inherit; border: 1px solid #444; }
+.overlay-top { position: absolute; left: 12px; top: 12px; font-size: 12px; background: rgba(28, 31, 36, 0.85); padding: 6px 10px; border-radius: 4px; max-width: 70%; }
+.replay { border-left: 3px solid #6f7a88; padding-left: 8px; margin: 6px 0; }
+.replay.ok { border-color: #2ecc71; }
+.replay.warn { border-color: #ff9500; }
+.replay.err { border-color: #ff3b30; }

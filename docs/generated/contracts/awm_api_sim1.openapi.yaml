@@ -12,7 +12,11 @@ info:
     status WebSocket comes with S6 (WP4). Updated 2026-11-06 by the web agent (G1.6) to what the server serves: plan
     travel speed, program runs, S4 simulation payload, placement PUT, robot description + meshes, SeamPick D04 2.1
     fields, JobDetail fields. Updated 2026-11-07 by the web agent (G1.18, CP-62): /jobs/{job_id}/check/override, plan
-    collision field, cell model head.tcp. Paths marked x-awm-implemented false are contract only (not served yet).
+    collision field, cell model head.tcp. Updated 2026-11-08 by the web agent (G1.20, close-out B1 / B2):
+    /jobs/{job_id}/replay (S4 "Replay in RViz" against the user-launched sim_mock; the replay CLI refuses anything but
+    mock hardware), Run.result, simulation replay / path_problems / program_problems, JobDetail path_problems /
+    program, /cell/scene + /cell/meshes/scene/{path} (S4 cell view), cached component / head views (200). Paths
+    marked x-awm-implemented false are contract only (not served yet).
 x-awm-websockets:
   /runs/{run_id}/ws:
     description: >
@@ -263,7 +267,40 @@ paths:
       responses:
         '202': {$ref: '#/components/responses/RunStarted'}
         '403': {$ref: '#/components/responses/Problem'}
-        '409': {$ref: '#/components/responses/Problem', description: 'no-path, path-stale, run-busy'}
+        '409': {$ref: '#/components/responses/Problem', description: 'no-path, path-stale (problems = reasons from awm_core.staleness), run-busy'}
+  /jobs/{job_id}/replay:
+    parameters: [{$ref: '#/components/parameters/JobId'}]
+    post:
+      tags: [jobs, runs]
+      summary: >
+        S4 "Replay in RViz" (G1.20; Engineer). Starts `ros2 run awm_bringup replay_program --program
+        <job>/programs/<rev>/program.json` (G1.7, prefix AWM_REPLAY_CMD) as a run in the cell slot, against the sim_mock
+        the user launched with simulation.replay.launch_command (`sim_mock.launch.py repo:=<repo root>
+        trajectory_controllers:=robot_positioner`). The command line carries --program only. The CLI refuses unless
+        the controller manager reports mock hardware only (nothing sent). Its last line `replay {json}` becomes
+        Run.result (status ok / refused / partial / error, final_deviation_deg, max_tracking_error_deg, segments). A
+        failed run has problem.type /problems/replay-<cause> with cause sim-not-running, controller-absent, not-mock,
+        start-state, error or no-result, replay_status, and a detail that says what to do. Weld events are never
+        executed (motion only). Cancel = DELETE /runs/{run_id}: SIGTERM to the replay CLI; it does not mean
+        stopped — the segment already sent may still run on the sim_mock controller (wait until the robot is at rest
+        before replaying again). Only Run.result.status cancelled (the CLI confirms it cancelled the active goal)
+        means stopped.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                program_rev: {type: string, pattern: '^P[0-9]{3}$', description: default = newest program revision}
+      responses:
+        '202': {$ref: '#/components/responses/RunStarted'}
+        '400': {$ref: '#/components/responses/Problem', description: bad-job-id}
+        '401': {$ref: '#/components/responses/Problem', description: bearer token missing / unknown}
+        '403': {$ref: '#/components/responses/Problem', description: not an Engineer}
+        '404': {$ref: '#/components/responses/Problem', description: 'job-not-found, program-not-found'}
+        '409': {$ref: '#/components/responses/Problem', description: 'no-program; program-stale with extension members problems (reasons from awm_core.staleness, plus a void CP-62 cad_check_override — override record or cad_check.json changed since planning) and program_rev; both refused before any process starts; run-busy'}
+        '422': {$ref: '#/components/responses/Problem'}
   /runs/{run_id}:
     parameters:
       - name: run_id
@@ -318,6 +355,40 @@ paths:
                   view_url: {type: string}
                   robot_description_url: {type: string}
                   notes: {type: array, items: {type: string}}
+                  path_problems: {type: array, items: {type: string}, description: 'why path.json is stale (awm_core.staleness document_verdict problems)'}
+                  program_problems: {type: array, items: {type: string}, description: why the newest program is stale}
+                  replay:
+                    type: object
+                    description: S4 replay block (G1.20)
+                    properties:
+                      launch_command: {type: string, description: 'sim_mock launch line with this server''s repository root'}
+                      ros_domain_id: {type: [string, 'null'], description: ROS_DOMAIN_ID of awm_api (sim_mock must use the same)}
+                      program_rev: {type: [string, 'null']}
+                      program_state: {type: [string, 'null'], enum: [ok, stale, null]}
+                      problems: {type: array, items: {type: string}}
+                      ready: {type: boolean, description: a current program exists (the replay may be requested)}
+                      note: {type: string}
+        '404': {$ref: '#/components/responses/Problem'}
+  /cell/scene:
+    get:
+      tags: [cell]
+      summary: >
+        S4 cell view (all roles, display only; G1.20): the objects of cell/model/scene_manifest.json (export-scene,
+        CP-60) with parent_frame (world = static, positioner_flange = turns with θ), pose_mm at θ = 0 (mm, quat_xyzw)
+        and mesh_url (with ?sha=<manifest mesh SHA-256> when the manifest has one; the browser caches only such URLs).
+        Mesh vertices are in the component frame, mm.
+      responses:
+        '200': {description: '{unit, created_at, note, objects: [{object_id, role, component, parent_frame, pose_mm, collision, mesh_url}]}', content: {application/json: {}}}
+        '404': {$ref: '#/components/responses/Problem', description: no-scene}
+  /cell/meshes/scene/{path}:
+    parameters:
+      - {name: path, in: path, required: true, schema: {type: string}, description: 'a mesh file named by scene_manifest.json'}
+    get:
+      tags: [cell]
+      summary: Read-only cell scene mesh (STL below cell/model, listed in the manifest only; 403 otherwise)
+      responses:
+        '200': {description: File content, content: {application/octet-stream: {}}}
+        '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
   /cell/robot_description:
     get:
@@ -422,6 +493,7 @@ paths:
         required: true
         content: {application/json: {schema: {type: object, required: [component_path], properties: {component_path: {type: string}}}}}
       responses:
+        '200': {description: 'cached view reused: {key, cached: true}, no run. Only when topology.json has the current D20 schema_version, created_by = the current exporter (awm_geometry.cli info), source.file / component / up_axis equal to the request and the input named source.file with the current STEP SHA-256; anything else (incl. malformed inputs) = new export', content: {application/json: {}}}
         '202': {description: 'run started: {run_id} (+ key for a view); Location /api/v1/runs/{run_id}', content: {application/json: {}}}
         '403': {$ref: '#/components/responses/Problem'}
   /cell/model/views/{key}/{file}:
@@ -460,6 +532,7 @@ paths:
         required: true
         content: {application/json: {schema: {type: object, required: [component], properties: {component: {type: string}}}}}
       responses:
+        '200': {description: 'cached view reused: {key, cached: true}, no run. Same conditions as /cell/model/component_view, with source.file head.step, the requested component and up_axis +Z (the head view is always exported +Z)', content: {application/json: {}}}
         '202': {description: 'run started: {run_id} (+ key for a view); Location /api/v1/runs/{run_id}', content: {application/json: {}}}
         '403': {$ref: '#/components/responses/Problem'}
         '409': {$ref: '#/components/responses/Problem'}
@@ -655,7 +728,17 @@ components:
                 - {type: object, properties: {source: {type: string, enum: [study, fixture_cad]}, verified: {type: boolean}}}
             placement_note: {type: [string, 'null'], description: why planning is not available without a placement}
             seam_axis: {type: string, enum: [missing, ok, stale], description: 'seam_axis.json by its input hashes (CP-58 d2)'}
-            path: {type: string, enum: [missing, ok, stale], description: path.json by its input hashes}
+            path: {type: string, enum: [missing, ok, stale], description: 'path.json by awm_core.staleness (input hashes, links / outside inputs refused, D07 record_version)'}
+            path_problems: {type: array, items: {type: string}, description: why path.json is stale}
+            program:
+              oneOf:
+                - {type: 'null'}
+                - type: object
+                  description: newest program revision and its staleness (G1.20)
+                  properties:
+                    rev: {type: string, pattern: '^P[0-9]{3}$'}
+                    state: {type: string, enum: [missing, ok, stale]}
+                    problems: {type: array, items: {type: string}}
             collision_checked: {type: boolean, const: false, description: 'Goal 1 (CP-58): nothing in this backend checks collision'}
     SeamPick:
       type: object
@@ -681,7 +764,7 @@ components:
       properties:
         run_id: {type: string}
         job_id: {type: string}
-        kind: {type: string, enum: [import, plan, program, verify]}
+        kind: {type: string, description: 'import, plan, program, replay, verify, or a cell run (cell-import, cell-view, cell-axis, cell-save, head-view, tcp-teach, job-check …)'}
         state: {type: string, enum: [queued, running, succeeded, failed, cancelled]}
         progress: {type: number, minimum: 0, maximum: 1}
         step: {type: string, description: human-readable current step}
@@ -693,3 +776,6 @@ components:
           description: job-relative output files of a succeeded run with SHA-256
           additionalProperties: {type: string, pattern: '^[0-9a-f]{64}$'}
         problem: {oneOf: [{$ref: '#/components/schemas/Problem'}, {type: 'null'}]}
+        result:
+          type: [object, 'null']
+          description: 'last `<prefix> {json}` line of a step that declares one (replay: the CLI summary), also when the run failed'

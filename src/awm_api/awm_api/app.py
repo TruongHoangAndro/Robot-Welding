@@ -2,8 +2,10 @@
 
 Roles (DES-001 §7.3, §4.5 S1 / S2 / S4, CP-21): every role reads; jobs are created by Engineer or Admin (S1); seams
 and the placement are edited by Engineer only (CP-21, §7.3 "placement study"); planning and program runs are started
-by Engineer (§7.3 "run simulation"); runs are cancelled by Engineer or Admin. Nothing here commands motion, the PLC
-or the laser: S4 playback is display only, computed in the browser from the stored program.
+by Engineer (§7.3 "run simulation"); runs are cancelled by Engineer or Admin. Nothing here commands the PLC or the
+laser: S4 playback is display only, computed in the browser from the stored program. The one motion request is the S4
+"Replay in RViz" (G1.20, Engineer, §7.3 "run simulation and dry run" in simulation): a run of the replay CLI against
+the sim_mock the user launched; the CLI refuses anything but mock hardware and this API cannot bypass it.
 """
 
 from __future__ import annotations
@@ -23,10 +25,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from starlette.websockets import WebSocketDisconnect
 
-from awm_api import adapters, cad_api, jobs, placement as placement_mod
+from awm_api import adapters, cad_api, jobs, placement as placement_mod, replay as replay_mod
 from awm_api.auth import TokenStore, User, forbidden, load_users, unauthorized, verify_password
 from awm_api.problems import ProblemError, install as install_problems
-from awm_api.robot_model import RobotModel
+from awm_api.robot_model import API_MESHES, RobotModel, safe_child
 from awm_api.runner import TERMINAL, RunBusyError, RunFinishedError, RunManager, RunNotFoundError, StepsError
 from awm_api.settings import Settings
 
@@ -126,6 +128,13 @@ class PlacementPut(BaseModel):
 
 class ProgramRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
+
+
+class ReplayRequest(BaseModel):
+    """S4 replay: the newest program revision unless one is named; it is checked for staleness either way."""
+
+    model_config = ConfigDict(extra='forbid')
+    program_rev: Optional[str] = Field(default=None, pattern=r'^P[0-9]{3}$')
 
 
 def _check_picks(picks: List[SeamPick]) -> None:
@@ -415,11 +424,39 @@ def create_app(settings: Settings) -> FastAPI:
         if state == 'missing':
             raise ProblemError(409, 'no-path', 'No path', detail='plan the seams first (path.json, M4)')
         if state == 'stale':
+            found = jobs.problems(job, 'path.json', settings.repo_root)
             raise ProblemError(409, 'path-stale', 'path.json stale',
-                               detail='seams, placement or cell frames changed after planning; re-plan first')
+                               detail='path.json is stale; re-plan first: ' + '; '.join(found), problems=found)
         try:
             run = runs.start(job_id, 'program', lambda d: adapters.program_steps(settings, job),
                              on_success=lambda d: adapters.promote_program(d, job))
+        except RunBusyError as exc:
+            raise _busy(exc) from exc
+        response.headers['Location'] = f'/api/v1/runs/{run["run_id"]}'
+        return {'run_id': run['run_id']}
+
+    @api.post('/jobs/{job_id}/replay', status_code=202)
+    def replay(job_id: str, response: Response, body: Optional[ReplayRequest] = None,
+               _u: User = Depends(require(*PLAN))) -> Dict[str, str]:
+        """Replay a current D09 on the user-launched sim_mock (G1.20). Refused before any process starts when the
+        program is missing or stale (awm_core.staleness); the CLI itself refuses non-mock hardware."""
+        job = jobs.job_dir(settings.jobs_dir, job_id)
+        revs = jobs.program_revs(job)
+        if not revs:
+            raise ProblemError(409, 'no-program', 'No program', detail='generate the program (S4) before replaying it')
+        rev = (body.program_rev if body else None) or revs[-1]
+        if rev not in revs:
+            raise ProblemError(404, 'program-not-found', detail=f'program {rev} not found in job {job_id}')
+        name = f'programs/{rev}/program.json'
+        state, found = jobs.program_verdict(job, rev, settings.repo_root)  # staleness + void CP-62 override (m3)
+        if state == 'missing':
+            raise ProblemError(409, 'no-program', 'No program', detail=f'{name} is missing or unreadable')
+        if state != 'ok':
+            raise ProblemError(409, 'program-stale', f'Program {rev} stale',
+                               detail=f'program {rev} is stale; re-plan / generate again before replaying: '
+                                      + '; '.join(found), problems=found, program_rev=rev)
+        try:
+            run = runs.start(job_id, 'replay', replay_mod.replay_steps(settings, job / name))
         except RunBusyError as exc:
             raise _busy(exc) from exc
         response.headers['Location'] = f'/api/v1/runs/{run["run_id"]}'
@@ -446,11 +483,16 @@ def create_app(settings: Settings) -> FastAPI:
             notes.append(f'program {rev} is stale (the path changed after it was generated): generate the program '
                          'again; playing the path timing instead')
         use_program = program is not None and program_state == 'ok'
+        path_problems = jobs.problems(job, 'path.json', settings.repo_root, path) if path else []
+        program_problems = jobs.program_verdict(job, rev, settings.repo_root, program)[1] if program is not None else []
         checked = [d.get('collision_checked') for d in (path, program if use_program else None) if d is not None]
         return {
             'job_id': job_id, 'source': 'program' if use_program else 'path',
             'program_rev': rev, 'program_state': program_state, 'program': program if use_program else None,
-            'path': path, 'path_state': path_state, 'placement': placement,
+            'path': path, 'path_state': path_state, 'path_problems': path_problems,
+            'program_problems': program_problems,
+            'replay': replay_mod.info(settings, rev, program_state, program_problems),
+            'placement': placement,
             'seams': jobs.read_json(job / 'seams.json'),
             'collision_checked': bool(checked) and all(c is True for c in checked),
             'view_url': f'/api/v1/jobs/{job_id}/view/view.glb',
@@ -466,6 +508,39 @@ def create_app(settings: Settings) -> FastAPI:
     @api.get('/cell/meshes/head/{path:path}')
     def head_mesh(path: str, _u: User = Depends(require(*READ))) -> FileResponse:
         return FileResponse(robot.head_mesh(path), media_type='application/octet-stream')
+
+    def scene_manifest() -> Dict[str, Any]:
+        doc = jobs.read_json(settings.cell_model_dir / 'scene_manifest.json')
+        if doc is None or not isinstance(doc.get('objects'), list):
+            raise ProblemError(404, 'no-scene', 'No cell scene',
+                               detail='cell/model/scene_manifest.json is missing: save the cell model in S10 (CP-60)')
+        return doc
+
+    @api.get('/cell/scene')
+    def cell_scene(_u: User = Depends(require(*READ))) -> Dict[str, Any]:
+        """S4 cell view (display only): the export-scene objects with their parent frame (``world`` = static,
+        ``positioner_flange`` = turns with θ), pose (mm, θ = 0) and a mesh URL. No geometry is changed here."""
+        doc = scene_manifest()
+        objects = []
+        for o in doc['objects']:
+            mesh = (o.get('mesh') or {}).get('file')
+            if not isinstance(mesh, str):
+                continue
+            sha = (o.get('mesh') or {}).get('sha256')
+            # review m5: the manifest hash in the URL keys the browser cache to this exact mesh
+            query = f'?sha={sha}' if isinstance(sha, str) and re.fullmatch(r'[0-9a-f]{64}', sha) else ''
+            objects.append({k: o.get(k) for k in ('object_id', 'role', 'component', 'parent_frame', 'pose_mm',
+                                                   'collision')}
+                           | {'mesh_url': f'{API_MESHES}/scene/{mesh}{query}'})
+        return {'unit': doc.get('unit', 'mm'), 'created_at': doc.get('created_at'), 'note': doc.get('note'),
+                'objects': objects}
+
+    @api.get('/cell/meshes/scene/{path:path}')
+    def scene_mesh(path: str, _u: User = Depends(require(*READ))) -> FileResponse:
+        listed = {(o.get('mesh') or {}).get('file') for o in scene_manifest()['objects']}
+        if path not in listed:
+            raise ProblemError(403, 'forbidden-path', detail=f'{path!r} is not a mesh of the cell scene manifest')
+        return FileResponse(safe_child(settings.cell_model_dir, path), media_type='application/octet-stream')
 
     @api.get('/cell/meshes/package/{package}/{path:path}')
     def package_mesh(package: str, path: str, _u: User = Depends(require(*READ))) -> FileResponse:

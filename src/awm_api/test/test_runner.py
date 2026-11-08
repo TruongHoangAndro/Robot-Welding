@@ -130,3 +130,48 @@ def test_restart_marks_orphaned_runs_failed(tmp_path):
     assert got['state'] == 'failed' and 'restarted' in got['problem']['detail']
     mgr.cancel(run['run_id'])
     wait(mgr, run['run_id'])
+
+
+# -- G1.20: result line and failure explanation (replay run) ------------------------------------------------------
+
+def test_result_line_is_parsed_into_run_result(tmp_path):
+    mgr = RunManager(tmp_path / 'runs')
+    st = Step(label='replay', argv=[sys.executable, FAKE, 'replay', '--program', 'x.json'],
+              env={**os.environ, 'FAKE_REPLAY': 'ok'}, result_prefix='replay')
+    done = wait(mgr, mgr.start('P1_A', 'replay', [st])['run_id'])
+    assert done['state'] == 'succeeded'
+    assert done['result']['status'] == 'ok' and done['result']['final_deviation_deg'] == 0.0
+
+
+def test_run_without_result_line_has_null_result(tmp_path):
+    mgr = RunManager(tmp_path / 'runs')
+    done = wait(mgr, mgr.start('P1_A', 'plan', [step('sleep')])['run_id'])
+    assert done['result'] is None
+
+
+def test_explain_builds_the_problem_of_a_failed_step(tmp_path):
+    mgr = RunManager(tmp_path / 'runs')
+    seen = {}
+
+    def explain(rc, result, tail):
+        seen.update(rc=rc, result=result, tail=list(tail))
+        return {'type': '/problems/replay-refused', 'title': 'Replay refused', 'status': 409,
+                'detail': f'explained {result["status"]}'}
+
+    st = Step(label='replay', argv=[sys.executable, FAKE, 'replay', '--program', 'x.json'],
+              env={**os.environ, 'FAKE_REPLAY': 'nomock'}, result_prefix='replay', explain=explain)
+    done = wait(mgr, mgr.start('P1_A', 'replay', [st])['run_id'])
+    assert done['state'] == 'failed' and seen['rc'] == 2
+    assert done['problem'] == {'type': '/problems/replay-refused', 'title': 'Replay refused', 'status': 409,
+                               'detail': 'explained refused'}
+    assert done['result']['status'] == 'refused'
+
+
+def test_require_result_fails_a_step_that_exits_0_without_result_line(tmp_path):
+    mgr = RunManager(tmp_path / 'runs')
+    st = Step(label='replay', argv=[sys.executable, FAKE, 'sleep'], result_prefix='replay', require_result=True,
+              explain=lambda rc, result, tail: {'type': '/problems/replay-no-result', 'title': 'Replay failed',
+                                                'status': 422, 'detail': f'no result (exit {rc})'})
+    done = wait(mgr, mgr.start('P1_A', 'replay', [st], on_success=lambda d: {'x': '0' * 64})['run_id'])
+    assert done['state'] == 'failed' and done['outputs'] == {}
+    assert done['problem']['type'] == '/problems/replay-no-result' and 'exit 0' in done['problem']['detail']
