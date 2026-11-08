@@ -141,7 +141,10 @@ def test_replay_refuses_stale_program_before_any_process(client, repo, tmp_path,
     assert not log.exists()
 
 
-def test_replay_one_slot_and_cancel_sigterm(client, repo, monkeypatch):
+def test_replay_one_slot_and_cancel_sends_sigterm_to_the_cli(client, repo, monkeypatch):
+    """Cancel = SIGTERM to the replay CLI process group: the run ends ``cancelled`` with no result. This does not
+    mean the robot stopped: a segment already accepted by the sim_mock controller may still run (review I1); only a
+    CLI result with status ``cancelled`` would confirm that the goal was cancelled."""
     h = auth(client, 'eng')
     programmed_job(client, repo, h)
     monkeypatch.setenv('FAKE_SLEEP_S', '20')
@@ -149,7 +152,9 @@ def test_replay_one_slot_and_cancel_sigterm(client, repo, monkeypatch):
     busy = start(client, h)
     assert busy.status_code == 409 and busy.json()['type'] == '/problems/run-busy'
     assert client.delete(f'/api/v1/runs/{rid}', headers=h).status_code == 202
-    assert wait_run(client, h, rid, timeout_s=15)['state'] == 'cancelled'
+    run = wait_run(client, h, rid, timeout_s=15)
+    assert run['state'] == 'cancelled'
+    assert run['result'] is None  # the killed CLI confirmed nothing: not "stopped"
 
 
 def test_simulation_payload_carries_replay_info(client, repo, monkeypatch):

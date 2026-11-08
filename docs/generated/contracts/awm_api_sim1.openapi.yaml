@@ -281,7 +281,10 @@ paths:
         Run.result (status ok / refused / partial / error, final_deviation_deg, max_tracking_error_deg, segments). A
         failed run has problem.type /problems/replay-<cause> with cause sim-not-running, controller-absent, not-mock,
         start-state, error or no-result, replay_status, and a detail that says what to do. Weld events are never
-        executed (motion only). Cancel = DELETE /runs/{run_id} (SIGTERM).
+        executed (motion only). Cancel = DELETE /runs/{run_id}: SIGTERM to the replay CLI; it does not mean
+        stopped — the segment already sent may still run on the sim_mock controller (wait until the robot is at rest
+        before replaying again). Only Run.result.status cancelled (the CLI confirms it cancelled the active goal)
+        means stopped.
       requestBody:
         content:
           application/json:

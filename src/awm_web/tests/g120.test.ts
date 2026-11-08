@@ -122,3 +122,26 @@ describe('jointRows and solidLabel', () => {
     expect(jointRows(topo, null).rows).toHaveLength(2);
   });
 });
+
+describe('replayView cancel (review I1)', () => {
+  const segs = [
+    { id: 'G001', durationS: 17.5 },
+    { id: 'G002', durationS: 0.68 },
+    { id: 'G003', durationS: 37.76 },
+  ];
+  const line = (id: string, kind: string, d: number) => `[INFO] [1.0] [awm_program_replay]: ${id} ${kind}: ${d.toFixed(2)} s planned, ${d.toFixed(2)} s run, max tracking error 0.1 deg (9 feedback), end deviation 0.0 deg`;
+  it('a cancelled run without CLI confirmation is not "stopped": names the segment already sent and its duration', () => {
+    const v = replayView(run({ state: 'cancelled', result: null, log_tail: [line('G001', 'air', 17.5)] }), segs)!;
+    expect(v.status).toBe('cancelled');
+    expect(v.status).not.toBe('stopped');
+    expect(v.message).toContain('Cancel stops the replay CLI; the segment already sent (G002, 0.7 s) may still run on the sim_mock controller');
+    expect(v.message).toContain('wait until the robot is at rest in RViz before you replay again');
+  });
+  it('first segment in flight when nothing was logged yet', () => {
+    expect(replayView(run({ state: 'cancelled', result: null }), segs)!.message).toContain('(G001, 17.5 s)');
+  });
+  it('"stopped" only when the CLI confirms status cancelled', () => {
+    const v = replayView(run({ state: 'cancelled', result: { status: 'cancelled', segments: [{ segment_id: 'G001' }] } }), segs)!;
+    expect(v.status).toBe('stopped');
+  });
+});

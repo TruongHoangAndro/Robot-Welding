@@ -20,7 +20,7 @@ import {
   type Session,
 } from '../lib/api';
 import { loadFromUrl } from '../lib/load';
-import { replayView } from '../lib/replay';
+import { cancelText, replayView } from '../lib/replay';
 import { loadCellScene, SCENE_COLOUR, type CellNode } from '../components/CellScene';
 import { sampleTimeline, timelineFromPath, timelineFromProgram, type Timeline } from '../lib/playback';
 import { authMeshLoader, limitViolations, parseRobot, rootT, setJoints } from '../lib/robot';
@@ -199,7 +199,11 @@ export function SimPage({ session, jobId }: { session: Session; jobId: string })
     startReplay(token, jobId).then(follow).catch((e: Error) => setError(e.message));
   };
   const blocks = sim ? actionBlocks(sim, run, session.role) : null;
-  const rv = replayView(replayRun);
+  const programSegments = useMemo(
+    () => (timeline?.source === 'program' ? timeline.segments.map((g) => ({ id: g.id, durationS: g.t1 - g.t0 })) : []),
+    [timeline],
+  );
+  const rv = replayView(replayRun, programSegments);
   const staleMsgs = sim
     ? [...staleLines('path.json', sim.path_state, sim.path_problems), ...staleLines(`program ${sim.program_rev}`, sim.program_state, sim.program_problems)]
     : [];
@@ -394,6 +398,11 @@ export function SimPage({ session, jobId }: { session: Session; jobId: string })
             <button className="btn small" disabled={!sim || !!blocks?.replay} onClick={replay} data-testid="replay" title={blocks?.replay ?? ''}>
               Replay in RViz
             </button>
+            {replayRun && (replayRun.state === 'queued' || replayRun.state === 'running') && (
+              <div className="muted" data-testid="cancel-note">
+                {cancelText(null)}
+              </div>
+            )}
             {canRun && blocks?.replay && <div className="warn" data-testid="replay-block">Replay unavailable: {blocks.replay}</div>}
             {rv && (
               <div className={`replay ${rv.level}`} data-testid="replay-result">
