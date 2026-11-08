@@ -215,3 +215,37 @@ def test_replay_cmd_with_config_or_segments_refused_at_startup(tmp_path, monkeyp
     monkeypatch.setenv('AWM_REPLAY_CMD', cmd)
     with pytest.raises(ValueError, match='AWM_REPLAY_CMD'):
         Settings.from_env(repo=str(tmp_path))
+
+
+# -- review m3: a program whose CP-62 override is void is refused like a stale one -----------------------------------
+
+def _with_override(job):
+    from awm_core.hashing import sha256_file
+    (job / 'cad_check.json').write_text('{"status": "red"}')
+    (job / 'cad_check_override.json').write_text('{"check_id": 4}')
+    prog = job / 'programs' / 'P001' / 'program.json'
+    doc = json.loads(prog.read_text())
+    doc['cad_check_override'] = {'file': 'cad_check_override.json', 'sha256': sha256_file(job / 'cad_check_override.json'),
+                                 'cad_check_sha256': sha256_file(job / 'cad_check.json'), 'check_id': 4}
+    prog.write_text(json.dumps(doc))
+
+
+@pytest.mark.parametrize('changed', ['cad_check.json', 'cad_check_override.json'])
+def test_replay_refuses_void_cp62_override(client, repo, tmp_path, monkeypatch, changed):
+    log = tmp_path / 'argv.log'
+    h = auth(client, 'eng')
+    job = programmed_job(client, repo, h)
+    _with_override(job)
+    monkeypatch.setenv('FAKE_ARGV_LOG', str(log))
+    r = start(client, h)
+    assert r.status_code == 202, r.text                         # override valid -> replay allowed
+    wait_run(client, h, r.json()['run_id'])
+    (job / changed).write_text('{"changed": true}')
+    r = start(client, h)
+    assert r.status_code == 409 and r.json()['type'] == '/problems/program-stale'
+    assert any('CP-62 override' in p and changed in p for p in r.json()['problems'])
+    d = client.get('/api/v1/jobs/P1_A/simulation', headers=h).json()
+    assert d['replay']['program_state'] == 'stale' and d['replay']['ready'] is False
+    assert any('CP-62 override' in p for p in d['program_problems'])
+    assert client.get('/api/v1/jobs/P1_A', headers=h).json()['program']['state'] == 'stale'
+    assert len(log.read_text().splitlines()) == 1               # only the first replay started a process

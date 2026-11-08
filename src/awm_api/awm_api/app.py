@@ -448,11 +448,10 @@ def create_app(settings: Settings) -> FastAPI:
         if rev not in revs:
             raise ProblemError(404, 'program-not-found', detail=f'program {rev} not found in job {job_id}')
         name = f'programs/{rev}/program.json'
-        verdict = jobs.document_verdict(job, name, settings.repo_root)
-        if verdict.state == 'missing':
+        state, found = jobs.program_verdict(job, rev, settings.repo_root)  # staleness + void CP-62 override (m3)
+        if state == 'missing':
             raise ProblemError(409, 'no-program', 'No program', detail=f'{name} is missing or unreadable')
-        if verdict.state != 'ok':
-            found = list(verdict.problems)
+        if state != 'ok':
             raise ProblemError(409, 'program-stale', f'Program {rev} stale',
                                detail=f'program {rev} is stale; re-plan / generate again before replaying: '
                                       + '; '.join(found), problems=found, program_rev=rev)
@@ -485,8 +484,7 @@ def create_app(settings: Settings) -> FastAPI:
                          'again; playing the path timing instead')
         use_program = program is not None and program_state == 'ok'
         path_problems = jobs.problems(job, 'path.json', settings.repo_root, path) if path else []
-        program_problems = (jobs.problems(job, f'programs/{rev}/program.json', settings.repo_root, program)
-                            if program is not None else [])
+        program_problems = jobs.program_verdict(job, rev, settings.repo_root, program)[1] if program is not None else []
         checked = [d.get('collision_checked') for d in (path, program if use_program else None) if d is not None]
         return {
             'job_id': job_id, 'source': 'program' if use_program else 'path',

@@ -297,7 +297,7 @@ paths:
         '202': {$ref: '#/components/responses/RunStarted'}
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem', description: program-not-found}
-        '409': {$ref: '#/components/responses/Problem', description: 'no-program, program-stale (problems = reasons from awm_core.staleness; refused before any process starts), run-busy'}
+        '409': {$ref: '#/components/responses/Problem', description: 'no-program, program-stale (problems = reasons from awm_core.staleness, plus a void CP-62 cad_check_override — override record or cad_check.json changed since planning; program_rev; refused before any process starts), run-busy'}
         '422': {$ref: '#/components/responses/Problem'}
   /runs/{run_id}:
     parameters:
