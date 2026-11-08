@@ -526,9 +526,12 @@ def create_app(settings: Settings) -> FastAPI:
             mesh = (o.get('mesh') or {}).get('file')
             if not isinstance(mesh, str):
                 continue
+            sha = (o.get('mesh') or {}).get('sha256')
+            # review m5: the manifest hash in the URL keys the browser cache to this exact mesh
+            query = f'?sha={sha}' if isinstance(sha, str) and re.fullmatch(r'[0-9a-f]{64}', sha) else ''
             objects.append({k: o.get(k) for k in ('object_id', 'role', 'component', 'parent_frame', 'pose_mm',
                                                    'collision')}
-                           | {'mesh_url': f'{API_MESHES}/scene/{mesh}'})
+                           | {'mesh_url': f'{API_MESHES}/scene/{mesh}{query}'})
         return {'unit': doc.get('unit', 'mm'), 'created_at': doc.get('created_at'), 'note': doc.get('note'),
                 'objects': objects}
 

@@ -7,7 +7,7 @@
 import { DoubleSide, Group, Mesh, MeshStandardMaterial } from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import type { URDFRobot } from 'urdf-loader';
-import { splitScene, type SceneObject, type ScenePayload } from '../lib/scene';
+import { meshCacheMode, splitScene, type SceneObject, type ScenePayload } from '../lib/scene';
 import { poseMmToMatrix, SCENE_UNITS_PER_MM } from '../lib/units';
 
 export const SCENE_COLOUR = { world: '#9aa3ad', positioner_flange: '#4c8dff' } as const;
@@ -37,7 +37,7 @@ export async function loadCellScene(scene: ScenePayload, headers: Record<string,
   await Promise.all(
     [...world, ...flange].map(async (o) => {
       try {
-        const r = await fetch(o.mesh_url, { headers, cache: 'force-cache' });
+        const r = await fetch(o.mesh_url, { headers, cache: meshCacheMode(o.mesh_url) });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const geo = new STLLoader().parse(await r.arrayBuffer());
         geo.computeVertexNormals();

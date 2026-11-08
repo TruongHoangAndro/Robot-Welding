@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { replayView, type ReplayResult } from '../src/lib/replay';
-import { splitScene, type SceneObject } from '../src/lib/scene';
+import { meshCacheMode, splitScene, type SceneObject } from '../src/lib/scene';
 import { actionBlocks, speedAboveMax, speedRows, staleLines, type SimulationPayload } from '../src/lib/simulation';
 import { jointRows, solidLabel } from '../src/lib/topology';
 import type { Run } from '../src/lib/api';
@@ -174,5 +174,13 @@ describe('replay request (review m4)', () => {
     expect(calls[0].url).toBe('/api/v1/jobs/J_A/replay');
     expect(JSON.parse(calls[0].body)).toEqual({ program_rev: 'P002' });
     expect(replayRequestRev(sim({ replay: { ...sim({}).replay, program_rev: null } }))).toBeUndefined();
+  });
+});
+
+describe('scene mesh cache (review m5)', () => {
+  it('browser cache only for URLs that carry the manifest SHA-256', () => {
+    expect(meshCacheMode(`/api/v1/cell/meshes/scene/a.stl?sha=${'a'.repeat(64)}`)).toBe('force-cache');
+    expect(meshCacheMode('/api/v1/cell/meshes/scene/a.stl')).toBe('no-store');
+    expect(meshCacheMode('/api/v1/cell/meshes/scene/a.stl?sha=abc')).toBe('no-store');
   });
 });

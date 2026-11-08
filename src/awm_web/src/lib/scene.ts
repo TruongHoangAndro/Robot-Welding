@@ -27,3 +27,6 @@ export function splitScene(objects: SceneObject[]): { world: SceneObject[]; flan
   for (const o of objects) (o.parent_frame === 'world' ? out.world : o.parent_frame === 'positioner_flange' ? out.flange : out.unknown).push(o);
   return out;
 }
+
+/** Review m5: a scene mesh may come from the browser cache only when its URL carries the manifest SHA-256. */
+export const meshCacheMode = (url: string): RequestCache => (/[?&]sha=[0-9a-f]{64}(&|$)/.test(url) ? 'force-cache' : 'no-store');

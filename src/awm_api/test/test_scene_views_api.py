@@ -35,7 +35,9 @@ def test_scene_lists_objects_with_frames_and_mesh_urls(client, repo):
     by = {o['object_id']: o for o in d['objects']}
     assert by['frame_1']['parent_frame'] == 'world' and by['holder_1']['parent_frame'] == 'positioner_flange'
     assert by['frame_1']['pose_mm']['position_mm'] == [100.0, -150.0, -500.0]
-    assert by['holder_1']['mesh_url'] == '/api/v1/cell/meshes/scene/holder_1.stl'
+    # review m5: the manifest SHA-256 is part of the URL, so a browser cache never serves an old mesh
+    assert by['holder_1']['mesh_url'] == '/api/v1/cell/meshes/scene/holder_1.stl?sha=' + '1' * 64
+    assert client.get(by['holder_1']['mesh_url'], headers=auth(client, 'op')).status_code == 200
 
 
 def test_scene_missing_404(client):

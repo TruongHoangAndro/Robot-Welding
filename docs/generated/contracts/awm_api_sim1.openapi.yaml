@@ -373,7 +373,8 @@ paths:
       summary: >
         S4 cell view (all roles, display only; G1.20): the objects of cell/model/scene_manifest.json (export-scene,
         CP-60) with parent_frame (world = static, positioner_flange = turns with θ), pose_mm at θ = 0 (mm, quat_xyzw)
-        and mesh_url. Mesh vertices are in the component frame, mm.
+        and mesh_url (with ?sha=<manifest mesh SHA-256> when the manifest has one; the browser caches only such URLs).
+        Mesh vertices are in the component frame, mm.
       responses:
         '200': {description: '{unit, created_at, note, objects: [{object_id, role, component, parent_frame, pose_mm, collision, mesh_url}]}', content: {application/json: {}}}
         '404': {$ref: '#/components/responses/Problem', description: no-scene}
