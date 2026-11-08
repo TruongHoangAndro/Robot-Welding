@@ -399,3 +399,30 @@ def test_refuses_d07_override_voided_by_a_changed_cross_check(tmp_path):
     rc, out, err = _gen(job)
     assert rc == 1 and 'CP-62' in out and 'void' in out
     assert not job.programs_dir.exists()
+
+
+# ---------------------------------------------------------------------------------- review g1-19 M-1
+
+def test_d07_deleted_mid_run_is_refused_not_a_traceback(tmp_path, monkeypatch):
+    from awm_program.core import program7
+    job = _copy_job(tmp_path)
+    orig = program7.build_program
+
+    def build_then_delete(*a, **k):
+        out = orig(*a, **k)
+        job.path_json.unlink()
+        return out
+    monkeypatch.setattr(program7, 'build_program', build_then_delete)
+    rc, out, err = _gen(job)
+    assert rc == 1 and out.strip().splitlines()[-1].startswith('result refused') and 'D07' in out
+    assert 'Traceback' not in err
+    assert not job.programs_dir.exists()
+
+
+def test_d07_hash_in_inputs_and_generator_is_the_hash_of_the_bytes_used(ring):
+    from awm_core.hashing import sha256_bytes
+    job = ring[0]
+    doc = _program(job)
+    sha = sha256_bytes(job.path_json.read_bytes())
+    assert doc['generator']['path']['sha256'] == sha
+    assert {i['name']: i['sha256'] for i in doc['inputs']}['path.json'] == sha

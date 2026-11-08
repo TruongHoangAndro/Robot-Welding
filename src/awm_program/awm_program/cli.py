@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
 from awm_core import jsonio
-from awm_core.hashing import sha256_file, sha256_text
+from awm_core.hashing import sha256_bytes, sha256_file, sha256_text
 from awm_core.repository import JobPaths
 
 CREATED_BY = 'awm_program.cli generate (G1.5 synchronised 7-joint program)'
@@ -141,14 +141,22 @@ def generate(args: argparse.Namespace) -> int:
         raise Refused(f'job folder not found: {job.dir}')
     path_file = Path(args.path).resolve() if args.path else job.path_json
     progress(0.0, f'reading D07 {path_file.name}')
-    path_sha = sha256_file(path_file) if path_file.is_file() else None
+    # D07 is read once: the bytes that are parsed are the bytes that are hashed and recorded (review g1-19 M-1)
     try:
-        path = jsonio.read_json(path_file, 'v2/path', base_dir=job.dir)
+        path_bytes = path_file.read_bytes()
+    except OSError as exc:
+        raise Refused(f'D07 refused: cannot read {path_file}: {exc}') from exc
+    path_sha = sha256_bytes(path_bytes)
+    try:
+        path = json.loads(path_bytes.decode('utf-8'))
+        jsonio.validate(path, 'v2/path')
+    except (ValueError, jsonio.SchemaValidationError) as exc:
+        raise Refused(f'D07 refused: {path_file}: {exc}') from exc
+    try:
+        jsonio.check_inputs(path, job.dir)
     except jsonio.StaleInputError as exc:
         raise Refused(f'D07 is stale (seams, placement, cell frames or head changed since planning): {exc}; '
                       're-plan') from exc
-    except (FileNotFoundError, jsonio.SchemaValidationError) as exc:
-        raise Refused(f'D07 refused: {exc}') from exc
     if not str(path['schema_version']).startswith('2.') or 'sync' not in path['planner'].get('params', {}):
         raise Refused('D07 is not a G1.3 kinematic 7-axis path (planner.params.sync missing); re-plan')
     override = _override_ref(path, job.dir)
@@ -204,7 +212,12 @@ def generate(args: argparse.Namespace) -> int:
         raise Refused(str(exc)) from exc
 
     rev = job.next_program_rev()
-    header = jsonio.make_header(CREATED_BY, inputs, job.dir)
+    try:
+        header = jsonio.make_header(CREATED_BY, inputs[1:], job.dir)
+    except OSError as exc:
+        raise Refused(f'an input disappeared while the program was generated: {exc}; nothing written') from exc
+    d07_name = Path(os.path.relpath(path_file, job.dir)).as_posix()
+    header['inputs'].insert(0, {'name': d07_name, 'sha256': path_sha})  # hash of the bytes used, not a re-read
     gen_params = {'program': params.record(), 'limits': body['limits'],
                   'limit_sources': {'velocity': 'robot description (URDF <limit>, positioner_limits.yaml)',
                                     'acceleration': 'awm_description joint_limits_v2.yaml, positioner_limits.yaml',
@@ -241,8 +254,12 @@ def generate(args: argparse.Namespace) -> int:
     }
     if override is not None:
         doc[OVERRIDE_FIELD] = override   # CP-62: the D09 records the override of the exact D07 it was built from
-    if sha256_file(path_file) != path_sha:
-        raise Refused(f'D07 {path_file.name} changed while the program was generated; nothing written')
+    try:  # guard, not a data read: D07 must still be the file the program records
+        unchanged = sha256_file(path_file) == path_sha
+    except OSError:
+        unchanged = False
+    if not unchanged:
+        raise Refused(f'D07 {path_file.name} was changed or deleted while the program was generated; nothing written')
     out = job.program_json(rev)
     if out.exists():
         raise Refused(f'{out} exists; a program revision is never overwritten')
