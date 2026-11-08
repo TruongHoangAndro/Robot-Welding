@@ -203,3 +203,15 @@ def test_replay_exit_0_without_result_line_fails(client, repo, monkeypatch):
     run = wait_run(client, h, start(client, h).json()['run_id'])
     assert run['state'] == 'failed' and run['result'] is None
     assert run['problem']['type'] == '/problems/replay-no-result' and 'exit 0' in run['problem']['detail']
+
+
+@pytest.mark.parametrize('cmd', ['ros2 run awm_bringup replay_program --config /x.yaml',
+                                 'replay_program --segments G002-G004', 'replay_program --config=/x.yaml',
+                                 'replay_program --segments=G1'])
+def test_replay_cmd_with_config_or_segments_refused_at_startup(tmp_path, monkeypatch, cmd):
+    """Review m2: the API passes --program only; a prefix that changes the config or the segments is refused."""
+    with pytest.raises(ValueError, match='AWM_REPLAY_CMD'):
+        Settings(repo_root=tmp_path, secrets_file=tmp_path / 'u.json', replay_cmd=cmd)
+    monkeypatch.setenv('AWM_REPLAY_CMD', cmd)
+    with pytest.raises(ValueError, match='AWM_REPLAY_CMD'):
+        Settings.from_env(repo=str(tmp_path))

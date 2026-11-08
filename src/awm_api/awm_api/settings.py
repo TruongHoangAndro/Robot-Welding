@@ -27,6 +27,8 @@ from typing import Dict, List, Optional
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_REPLAY_CMD = 'ros2 run awm_bringup replay_program'
 #: sim_mock launch the replay runs against (G1.16 repo:=, G1.7 7-joint controller); the user starts it, never awm_api
+#: replay_program options the API never lets a prefix set (review m2): the API passes ``--program`` only
+REPLAY_FORBIDDEN = ('--config', '--segments')
 SIM_MOCK_LAUNCH = 'ros2 launch awm_bringup sim_mock.launch.py repo:={repo} trajectory_controllers:=robot_positioner'
 DEFAULT_PORT = 8000
 
@@ -77,6 +79,10 @@ class Settings:
         if self.web_dist is not None:
             self.web_dist = Path(self.web_dist)
         self.head_dir = Path(self.head_dir) if self.head_dir else self.repo_root / 'cell' / 'model' / 'head'
+        bad = [a for a in shlex.split(self.replay_cmd) if a.split('=', 1)[0] in REPLAY_FORBIDDEN]
+        if bad:
+            raise ValueError(f'AWM_REPLAY_CMD must not contain {", ".join(bad)}: the replay uses its D16 config and '
+                             'replays the whole program; awm_api passes --program only')
 
     @property
     def cell_model_dir(self) -> Path:
