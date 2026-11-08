@@ -2,7 +2,9 @@
 
 Golden data from the session fixture ``golden`` (``conftest.py``, G1.22: repository rebuilt from the cell STEP by
 ``scripts/golden_rebuild.py``, skipped with ``AWM_CELL_STEP not set`` otherwise) and ``AWM_OCC_PYTHON`` (see
-``awm_path/test/test_golden_g13.py``; the golden files are linked into a temporary repository, never written).
+``awm_path/test/test_golden_g13.py``; the golden files are copied into a temporary repository, never written:
+inputs outside the repository are refused, G1.17). The fixture's own program (2.3 mm/s) is not used here: this
+test plans and generates again in the copy.
 ``AWM_G15_SPEED`` = requested travel speed (default 3.0 mm/s, lead brief).
 
 Flow: plan at the requested speed → generate. If the generator refuses because a weld would break a joint /
