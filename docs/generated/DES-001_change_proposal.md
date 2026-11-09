@@ -800,3 +800,18 @@ for **kinematic-only planning** (`--collision off`, CP-58):
 visible until OI-23 is fixed.
 **DES-001 impact:** §5.2 job package gains the override record (schema `v2/cad_check_override`, lead); §7.3 Admin rights;
 §7.4 `/jobs/{id}/check/override` (POST / DELETE, Admin). No change to release rules (ADR-17).
+
+## CP-63 Admin role includes all Engineer rights (decided by Truong, 2026-11-09)
+
+**Finding (Goal 1 test, 2026-11-09):** logged in as Admin, S2 shows the job read-only ("seam editing is Engineer only,
+CP-21") and hides Save roles / axis pick / seams / Plan, so an Admin must log out and log in as an Engineer.
+**Decision:** roles are hierarchical: **Admin ⊇ Engineer ⊇ Operator** for viewing and editing. An Admin may do everything
+an Engineer may (job roles, axis pick, cross-check, seam picking and editing, process, placement, plan, program, replay,
+release request), plus the Admin-only rights of §7.3 (calibration, cell configuration D16, cell model import A18, users,
+release approval, CP-62 override).
+**Supersedes:** CP-21 "seam picking by Engineer only" (now: Engineer **or Admin**); DES-001 §7.3 table and §4.5 screen
+roles column (S2–S5: Engineer, Admin).
+**Unchanged:** the record of who did what (`created_by`, override `by`); ADR-17 release approval stays Admin; a release
+requested and approved by the same Admin is still recorded with both steps.
+**Impact:** `awm_api` role checks (`require('Engineer')` → Engineer or Admin), `awm_web` `canEdit`, role tests, OpenAPI
+role notes.
