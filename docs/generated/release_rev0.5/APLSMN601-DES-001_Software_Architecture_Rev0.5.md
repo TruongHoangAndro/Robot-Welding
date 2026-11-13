@@ -61,7 +61,7 @@ Phase 1 proof of concept: UR5e on the Pismo frame, **laser welding with an IPG L
 | Job | One part number + revision with its seams, parameters, paths and programs |
 | Workbench | Engineering application used to create and release jobs (offline) |
 | Runtime | Software that runs released jobs on the cell (online) |
-| D01…D21 | Data items of the Function Register Rev 0.5 |
+| D01…D22 | Data items of the Function Register Rev 0.5 (D01…D21); D22 added by CP-64 (not in DES-003 Rev 0.5) |
 | ψ (tool yaw) | Rotation of the weld head about its beam axis — redundant DOF used for reach, collision and singularity avoidance |
 | ACM | Allowed Collision Matrix (MoveIt) |
 | CTWD | Contact-tip-to-work distance (stick-out) |
@@ -140,7 +140,7 @@ The software is organised in four layers. Higher layers depend only on lower lay
 
 | Module | ROS2 package / project | Responsibility | Functions owned | Phase |
 |---|---|---|---|---|
-| M0 Core | `awm_core` | Data classes, JSON schemas (D03–D13, D16–D19), frame transforms, job repository API, mm ↔ m adapter for third-party ROS packages (ADR-14) | — (shared) | 1 |
+| M0 Core | `awm_core` | Data classes, JSON schemas (D03–D13, D16–D19, D22), frame transforms, job repository API, mm ↔ m adapter for third-party ROS packages (ADR-14) | — (shared) | 1 |
 | M1 CAD Import | `awm_cad` | Load STEP AP203/214/242 with OCCT, split solids, normalise units, check and heal, tessellate (glTF display + collision mesh), create part record with file hash, export the 3D view model D20 (glb per face / edge + topology), place part in the virtual cell (D19, source `study` or `fixture_cad`); import the cell / fixture CAD assemblies (D21) into the cell model D14 and the nominal calibration (A18); STL fallback with RANSAC cylinder fit. Runs as a separate process (ADR-15) | A11, A12, A13 (render), A14, A15, A17 (with M4), A18 · A16 (Phase 2) | 1 / 2 |
 | M2 Seam Definition | `awm_seam` | Resolve picked edge IDs to exact B-Rep curves, chain tangent-continuous edges into one seam, seam attributes (joint type, closed / open, side, start point, direction, split, sequence, leg size; tack welds are made by hand, A81), seam list export with face normals; analytical T / L pipe seam generator as test tool | A21, A22, A24, A25 (test) | 1 |
 | M3 Process Parameters | `awm_process` | WPS library maintenance with versioning (released WPS read-only), laser mode per seam (CW / HPP pulse), LightWELD preset and parameter assignment | A31, A32, A33, A34 | 1 |
@@ -226,7 +226,7 @@ The browser picks only IDs; `awm_api` sends the IDs to M2, which resolves them t
 
 ### 5.1 Data items
 
-Data items D01–D21 are those of the Function Register Rev 0.5. All lengths in mm (ADR-14). The as-built merge of D04 and D07 (DES-004) is reversed: seams and paths are separate files.
+Data items D01–D21 are those of the Function Register Rev 0.5; D22 was added by CP-64 (not in DES-003 Rev 0.5). All lengths in mm (ADR-14). The as-built merge of D04 and D07 (DES-004) is reversed: seams and paths are separate files.
 
 | ID | Data item | Producer | Consumers | Format / schema | Storage |
 |---|---|---|---|---|---|
@@ -251,7 +251,7 @@ Data items D01–D21 are those of the Function Register Rev 0.5. All lengths in 
 | D19 | Part placement & collision scene | M1 (A15, A17) | M4, M7 | `placement.schema.json` (incl. `source` = `study` / `fixture_cad`) + meshes | job/`placement.json`, job/`cache/` |
 | D20 | 3D view model | M1 (A13) | UI (S2, S4), M2 | `view.glb` + `topology.json` | job/`cache/view/` |
 | D21 | Cell & fixture CAD | Mechanical design (Fusion) | M1 (A15, A18) | STEP AP214 / AP242 assembly, mm, marker components `REF_*` | cell/`cad/` (cell), job/`fixture.step` (fixture) |
-| D22 | Cell home (taught) | Admin via S11 (M5 cell setup; CP-64) | M4 (IK seed, follow-up), M8 (go home, follow-up) | `home.schema.json`: robot 6 joints + positioner angle, deg; `source` = `taught`; stale when the `frames.yaml` hash in `inputs` is not the current one. Supersedes the nominal SRDF home where read; absent = SRDF nominal | cell/`model/home.json` |
+| D22 | Cell home (taught) | `awm_api` (S11, `PUT /cell/home`; CP-64) | M4 (IK seed, follow-up), M8 (go home, follow-up) | `home.schema.json`: robot 6 joints + positioner angle, deg; `source` = `taught`; stale when the `frames.yaml` hash in `inputs` is not the current one. Supersedes the nominal SRDF home where read; absent = SRDF nominal | cell/`model/home.json` |
 
 ![Figure 3 – Data flow between modules](APLSMN601-DES-001_figures/fig3_dataflow.png)
 
@@ -434,7 +434,7 @@ Ownership rule: the PLC is the only device that switches the LightWELD. The IPC 
 
 Rules:
 
-1. Every motion or process command (start, jog, home, weld) goes through `awm_api` and M8, which check role, cell state and permissives. A UI never talks to the robot or PLC directly (no rosbridge for commands).
+1. Every motion or process command (start, jog, home, weld) goes through `awm_api` and M8, which check role, cell state and permissives. A UI never talks to the robot or PLC directly (no rosbridge for commands). S11 (CP-64) is simulation-only and issues no motion command; this rule applies to any controller-backed jog (OI-29).
 2. A Start from any UI is a request; motion starts only after the physical start button at the cell (outside the guard). E-stop is always hardware.
 3. Status to the UI is pushed at 10–30 Hz over WebSocket — display only, not used for control.
 
@@ -457,7 +457,7 @@ Rules:
 | `/cell/model` | GET / POST | Cell CAD import (D21 → D14), marker check report | Admin |
 | `/cell/fk` | POST | Joints (deg) → `tool0` and `tcp_laser` poses (mm, quaternion); numeric, no controller (CP-64) | Operator / Engineer / Admin (CELL_READ) |
 | `/cell/ik` | POST | Target `tcp_laser` pose + current joints → nearest IK solution (deg); problems `ik-no-tcp` 409, `ik-unreachable` / `ik-singular` 422 (CP-64) | Admin (CELL_WRITE) |
-| `/cell/home` | GET / PUT | Read D22 with staleness (404 `no-home`) / teach D22 from the current joints (409 `no-frames`) (CP-64) | GET CELL_READ; PUT Admin (CELL_WRITE) |
+| `/cell/home` | GET / PUT | Read D22 with staleness (404 `no-home`, 422 `home-invalid`) / teach D22 from the current joints (409 `no-frames`, 422 validation) (CP-64) | GET CELL_READ; PUT Admin (CELL_WRITE) |
 | `/reports/{part}` | GET | Part report D18 | All |
 | `/users` | GET / POST | Users and roles | Admin |
 | `ws://…/status` | WebSocket | Cell state, seam progress, LightWELD status, alarms (10–30 Hz) | All |
