@@ -377,6 +377,73 @@ paths:
                       ready: {type: boolean, description: a current program exists (the replay may be requested)}
                       note: {type: string}
         '404': {$ref: '#/components/responses/Problem'}
+  /cell/fk:
+    post:
+      tags: [cell]
+      summary: >
+        CP-64 jog page (S11): analytic UR5e forward kinematics, numeric only (no controller, no ROS). Roles: Operator,
+        Engineer, Admin (CELL_READ). Joints in degrees, poses in mm in base_link, quaternion xyzw. tcp_laser is
+        null when head.yaml has no tool0_T_tcp_mm.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [joints_deg]
+              additionalProperties: false
+              properties:
+                joints_deg: {type: array, items: {type: number}, minItems: 6, maxItems: 6}
+      responses:
+        '200':
+          description: Poses
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tool0, tcp_laser]
+                properties:
+                  tool0: {type: object, description: '{xyz_mm: [3], quat_xyzw: [4]}'}
+                  tcp_laser: {type: [object, 'null'], description: '{xyz_mm: [3], quat_xyzw: [4]} or null'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+  /cell/ik:
+    post:
+      tags: [cell]
+      summary: >
+        CP-64 jog page (S11): analytic UR5e inverse kinematics for a tcp_laser target (Admin only, CELL_WRITE; an
+        Engineer gets 403). Wrist / elbow / shoulder singular solutions (planner F6 margins) are dropped and the
+        solution nearest to current_joints_deg (sum of |dq|) is returned, in degrees.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_tcp_laser, current_joints_deg]
+              additionalProperties: false
+              properties:
+                target_tcp_laser:
+                  type: object
+                  required: [xyz_mm, quat_xyzw]
+                  additionalProperties: false
+                  properties:
+                    xyz_mm: {type: array, items: {type: number}, minItems: 3, maxItems: 3}
+                    quat_xyzw: {type: array, items: {type: number}, minItems: 4, maxItems: 4}
+                current_joints_deg: {type: array, items: {type: number}, minItems: 6, maxItems: 6}
+      responses:
+        '200':
+          description: Joint solution
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [joints_deg]
+                properties:
+                  joints_deg: {type: array, items: {type: number}, minItems: 6, maxItems: 6}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem', description: ik-no-tcp (head.yaml has no tool0_T_tcp_mm)}
+        '422': {$ref: '#/components/responses/Problem', description: 'ik-unreachable (no IK solution) or ik-singular (every solution inside the F6 singularity margin) or validation'}
   /cell/scene:
     get:
       tags: [cell]
