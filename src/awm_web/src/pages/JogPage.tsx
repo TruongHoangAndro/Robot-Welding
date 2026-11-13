@@ -7,6 +7,7 @@ import { loadCellScene, type CellNode } from '../components/CellScene';
 import {
   ApiError,
   authHeaders,
+  cellFk,
   cellIk,
   getCellHome,
   getRobotDescription,
@@ -15,8 +16,8 @@ import {
   type Session,
 } from '../lib/api';
 import { canEditJog } from '../lib/access';
-import { matrixToPoseMm, stepTarget, type JogAxis, type JogFrame, type JogKind } from '../lib/jog';
-import { JOG_JOINTS, cartesianEnabled, ikProblemText, poseFromInputs, readoutRows, teachHomeBody } from '../lib/jogpage';
+import type { JogAxis, JogFrame, JogKind } from '../lib/jog';
+import { BASE_LINK, JOG_JOINTS, applyIk, cartesianEnabled, inBase, jogTargetInBase, poseFromInputs, readoutRows, teachHomeBody } from '../lib/jogpage';
 import { authMeshLoader, limitViolations, parseRobot, rootT, setJoints, TCP_LINK } from '../lib/robot';
 
 const IDENTITY = { position_mm: [0, 0, 0], quat_xyzw: [0, 0, 0, 1] };
@@ -43,6 +44,8 @@ export function JogPage({ session }: { session: Session }) {
   const [frame, setFrame] = useState<JogFrame>('tool');
   const [target, setTarget] = useState<string[]>(['0', '0', '0', '0', '0', '0']);
   const [busy, setBusy] = useState(false);
+  /** true when /cell/fk reports a taught TCP (tcp_laser not null) */
+  const [tcpTaught, setTcpTaught] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -51,12 +54,16 @@ export function JogPage({ session }: { session: Session }) {
         if (!live) return;
         const r = parseRobot(d.urdf, authMeshLoader(authHeaders(token)), false);
         const k = parseRobot(d.urdf, undefined, false);
+        if (!k.links[BASE_LINK]) throw new Error(`no ${BASE_LINK} link`);
         setRobot(r);
         setKin(k);
+        const fkAns = await cellFk(token, JOG_JOINTS.slice(0, 6).map(() => 0)).catch(() => null);
+        if (live) setTcpTaught(cartesianEnabled(fkAns));
         const h = await getCellHome(token).catch(() => null);
+        if (live && h?.state === 'stale') setMsg({ level: 'warn', text: 'The taught home is stale (the cell model changed since it was taught): check it, then teach it again.' });
         if (live && h) setQ([...JOG_JOINTS.slice(0, 6).map((n) => Number(h.home.robot_joints_deg[n] ?? 0)), Number(h.home.positioner_joint_deg)]);
       })
-      .catch((e: Error) => live && setNoCell(`No robot description: import and save the cell model in S10 first (${e.message}).`));
+      .catch((e: Error) => live && setNoCell(`No robot model: complete the cell model (S10: import, roles, axis, head and TCP files, save) first (${e.message}).`));
     getScene(token)
       .then((sc) => (sc ? loadCellScene(sc, authHeaders(token)).then(({ nodes }) => live && setCell(nodes)) : undefined))
       .catch(() => undefined);
@@ -65,14 +72,21 @@ export function JogPage({ session }: { session: Session }) {
     };
   }, [token]);
 
-  const hasTcp = !!kin?.links[TCP_LINK];
-  const cartesian = cartesianEnabled(hasTcp);
+  const hasTcp = tcpTaught && !!kin?.links[TCP_LINK];
+  const cartesian = hasTcp;
   // browser FK of the current values on the kinematics-only copy
   const fk = useMemo(() => {
     if (!kin) return null;
     setJoints(kin, JOG_JOINTS, q);
-    return { tool0: rootT(kin, 'tool0'), tcp: kin.links[TCP_LINK] ? rootT(kin, TCP_LINK) : null };
-  }, [kin, q]);
+    // everything in base_link, the frame of /cell/fk and /cell/ik (not the URDF root = world)
+    const base = rootT(kin, BASE_LINK);
+    return {
+      base,
+      rootTcp: kin.links[TCP_LINK] ? rootT(kin, TCP_LINK) : null,
+      tool0: inBase(base, rootT(kin, 'tool0')),
+      tcp: tcpTaught && kin.links[TCP_LINK] ? inBase(base, rootT(kin, TCP_LINK)) : null,
+    };
+  }, [kin, q, tcpTaught]);
   const rows = fk ? readoutRows(fk.tool0, fk.tcp) : [];
   const violations = kin ? limitViolations(kin, JOG_JOINTS, q) : [];
 
@@ -101,21 +115,28 @@ export function JogPage({ session }: { session: Session }) {
   };
   /** IK at tcp_laser, then the model moves only if IK succeeded and the result is within the limits. */
   const solve = async (pose: { xyz_mm: number[]; quat_xyzw: number[] }) => {
+    if (!kin) return;
     setBusy(true);
     try {
-      const j = await cellIk(token, pose, q.slice(0, 6));
-      accept([...j, q[6]]);
+      const out = applyIk(q, { joints_deg: await cellIk(token, pose, q.slice(0, 6)) }, (c) => limitViolations(kin, JOG_JOINTS, c));
+      if (out.moved) {
+        setQ(out.q7);
+        setMsg(null);
+      } else setMsg({ level: 'err', text: out.message });
     } catch (e) {
-      setMsg({ level: 'err', text: e instanceof ApiError ? ikProblemText(e.problem, e.status) : (e as Error).message });
+      if (e instanceof ApiError) {
+        const out = applyIk(q, { problem: e.problem, status: e.status }, () => []);
+        if (!out.moved) setMsg({ level: 'err', text: out.message });
+      } else setMsg({ level: 'err', text: (e as Error).message });
     } finally {
       setBusy(false);
     }
   };
   const jogCart = (axis: JogAxis, kind: JogKind, sign: 1 | -1) => {
-    if (!fk?.tcp) return;
+    if (!fk?.rootTcp) return;
     const amount = Number(kind === 'lin' ? linStep : rotStep) * sign;
     if (!Number.isFinite(amount)) return setMsg({ level: 'err', text: 'step is not a number' });
-    solve(matrixToPoseMm(stepTarget(fk.tcp, axis, kind, amount, frame)));
+    solve(jogTargetInBase(fk.base, fk.rootTcp, axis, kind, amount, frame));
   };
   const moveTo = () => {
     const v = target.map(Number);
@@ -125,7 +146,7 @@ export function JogPage({ session }: { session: Session }) {
   const fillTarget = () => {
     if (!fk?.tcp) return;
     const r = readoutRows(fk.tool0, fk.tcp)[1];
-    setTarget([...r.xyz.split(', '), ...r.rpy.split(', ')]);
+    setTarget([...r.xyzNum, ...r.rpyNum].map((v) => String(Math.round(v * 1e6) / 1e6)));
   };
   const teach = () => {
     if (!window.confirm('Teach the current joint values as the cell home? The nominal SRDF home is superseded.')) return;
@@ -162,7 +183,7 @@ export function JogPage({ session }: { session: Session }) {
           )}
         </section>
         <aside className="wide">
-          <Panel title="Pose (browser model, mm / deg)">
+          <Panel title="Pose in base_link (browser model, mm / deg)">
             <table>
               <thead>
                 <tr>
@@ -183,7 +204,7 @@ export function JogPage({ session }: { session: Session }) {
                 ))}
               </tbody>
             </table>
-            {!hasTcp && robot && <div className="warn">No TCP in this cell (head.yaml): Cartesian jog and move-to are off; joint jog and teach home still work.</div>}
+            {!hasTcp && robot && <div className="warn">No taught TCP in this cell (head.yaml tool0_T_tcp_mm): Cartesian jog and move-to are off; joint jog and teach home still work.</div>}
             {violations.length > 0 && <div className="warn">beyond a limit: {violations.join('; ')}</div>}
           </Panel>
           <Panel title="Joint jog (6 UR joints + positioner)">

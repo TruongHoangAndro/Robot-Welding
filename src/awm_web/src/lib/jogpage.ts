@@ -3,7 +3,7 @@ import { Euler, Matrix4, Quaternion } from 'three';
 import type { Problem } from './api';
 import { problemMessage } from './api';
 import type { JogPoseMm } from './jog';
-import { matrixToPoseMm } from './jog';
+import { matrixToPoseMm, stepTarget, type JogAxis, type JogFrame, type JogKind } from './jog';
 import { degToRad, radToDeg } from './units';
 
 /** 6 UR joints + positioner, order and names as D07 / playback.ts. */
@@ -17,25 +17,58 @@ export const JOG_JOINTS = [
   'positioner_joint',
 ];
 
-/** Cartesian jog and move-to act at tcp_laser, so they need a cell TCP (head.yaml). */
-export const cartesianEnabled = (hasTcp: boolean): boolean => hasTcp;
+/** Link the backend FK / IK are expressed in (jog.py: base_link_T_tool0). */
+export const BASE_LINK = 'base_link';
+
+/** Cartesian jog and move-to act at tcp_laser: enabled only when /cell/fk reports a taught TCP (tcp_laser not null). */
+export const cartesianEnabled = (fk: { tcp_laser: unknown | null } | null | undefined): boolean => !!fk && fk.tcp_laser !== null && fk.tcp_laser !== undefined;
+
+/** Pose of a link in the base_link frame from the two root-relative matrices (scene units): rootBase^-1 · rootLink. */
+export const inBase = (rootBase: Matrix4, rootLink: Matrix4): Matrix4 => rootBase.clone().invert().multiply(rootLink);
+
+/** API target (base_link frame, mm) of one Cartesian jog step taken from the TCP pose given as root-relative matrices. */
+export function jogTargetInBase(rootBase: Matrix4, rootTcp: Matrix4, axis: JogAxis, kind: JogKind, amount: number, frame: JogFrame): JogPoseMm {
+  return matrixToPoseMm(stepTarget(inBase(rootBase, rootTcp), axis, kind, amount, frame));
+}
+
+export type IkOutcome = { moved: true; q7: number[] } | { moved: false; message: string };
+
+/**
+ * Decide what an IK answer does to the model. A problem or a result beyond a soft limit never moves it.
+ * ``violations`` is the limit check of the candidate (limitViolations).
+ */
+export function applyIk(
+  current: number[],
+  result: { joints_deg: number[] } | { problem: Problem | null; status?: number },
+  violations: (q7: number[]) => string[],
+): IkOutcome {
+  if (!('joints_deg' in result)) return { moved: false, message: ikProblemText(result.problem, result.status) };
+  const next = [...result.joints_deg, current[6]];
+  const v = violations(next);
+  if (v.length) return { moved: false, message: `Refused, beyond a soft limit: ${v.join('; ')}` };
+  return { moved: true, q7: next };
+}
 
 export interface ReadoutRow {
   label: 'tool0' | 'tcp_laser';
   xyz: string;
   rpy: string;
+  /** numbers behind the display strings (mm, deg); empty without a pose */
+  xyzNum: number[];
+  rpyNum: number[];
 }
 
 const f = (v: number) => (Number.isFinite(v) ? v.toFixed(2) : '—');
 
 function row(label: ReadoutRow['label'], m: Matrix4 | null): ReadoutRow {
-  if (!m) return { label, xyz: '—', rpy: '—' };
+  if (!m) return { label, xyz: '—', rpy: '—', xyzNum: [], rpyNum: [] };
   const p = matrixToPoseMm(m);
   const e = new Euler().setFromQuaternion(new Quaternion(...(p.quat_xyzw as [number, number, number, number])), 'ZYX');
-  return { label, xyz: p.xyz_mm.map(f).join(', '), rpy: [e.x, e.y, e.z].map((v) => f(radToDeg(v))).join(', ') };
+  const rpyNum = [e.x, e.y, e.z].map(radToDeg);
+  return { label, xyz: p.xyz_mm.map(f).join(', '), rpy: rpyNum.map(f).join(', '), xyzNum: p.xyz_mm, rpyNum };
 }
 
-/** Both frames side by side: tool0 and tcp_laser (null without a cell TCP). Matrices in scene units, shown in mm / deg. */
+/** Both frames side by side (base_link frame, the caller passes inBase matrices): tool0 and tcp_laser (null without a cell TCP). Matrices in scene units, shown in mm / deg. */
 export function readoutRows(tool0: Matrix4, tcp: Matrix4 | null): ReadoutRow[] {
   return [row('tool0', tool0), row('tcp_laser', tcp)];
 }
