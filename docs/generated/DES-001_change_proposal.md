@@ -815,3 +815,27 @@ roles column (S2–S5: Engineer, Admin).
 requested and approved by the same Admin is still recorded with both steps.
 **Impact:** `awm_api` role checks (`require('Engineer')` → Engineer or Admin), `awm_web` `canEdit`, role tests, OpenAPI
 role notes.
+
+## CP-64 Manual jog page (S11) and taught cell home (D22) (decided by Truong, 2026-11-13)
+
+**Finding / intent:** "go home" and the planner IK seed use a nominal SRDF home (`awm_cell_v2.srdf.xacro` group_state
+"home", `initial_positions_v2.yaml`), an Assumption. The user needs a teach-pendant / RViz-like way to move the robot by
+hand and teach a home that fits the cell, declared with the cell (same spirit as teach TCP, CP-61).
+**Decision:** a new Admin screen **S11 "Manual control (Jog)"** jogs the UR5e (joint + Cartesian) and the positioner
+(joint) **in the browser** (model + analytic UR IK/FK in `awm_api` via `UrAnalyticKinematics`; no MoveIt, no controller,
+no hardware), offers move-to a typed pose, and **teaches the cell home** (6 robot joints + positioner angle) into
+`cell/model/home.json` (new data item **D22**). The Cartesian readout shows both `tcp_laser` and `tool0`; Cartesian jog
+acts at `tcp_laser` using the taught cell TCP offset (`head.yaml`, nominal — not D08). New API `/cell/fk`, `/cell/ik`,
+`/cell/home` (GET/PUT). Design: `docs/superpowers/specs/2026-11-13-jog-teach-home-design.md`.
+**Scope boundary (safety):** simulation only — S11 never opens a ROS control graph or commands mock/URSim/real hardware.
+Controller-backed / real-robot jog is OUT of scope and needs its own safety design (enabling device/deadman, reduced
+speed, Remote, hardwired E-stop, REQ-002) before it may drive any controller — new open item. The jog page does not
+check collisions (no planning scene); joint-limit and reach checks only.
+**Supersedes:** the SRDF nominal home as the only home source (consumers that read D22 use it; absent D22 keeps the SRDF
+nominal — no change for existing jobs).
+**Unchanged:** offline/online split (ADR-05, S11 is a setup tool, not runtime); ADR-13 (driver behind an interface);
+units mm/deg (ADR-14); teach home stores joint angles only (frame-independent).
+**Follow-up (not in this slice, Truong 2026-11-13):** wire D22 into the planner IK seed (`ChainParams.home_joints_rad`)
+and the runtime "go home" (Sim-2 state machine).
+**Impact:** §4.5 (new screen S11), §5.1/§5.2 (D22 `cell/model/home.json`), §7.3 (S11 Admin), §7.4 (new endpoints),
+§13 (OI: real-robot jog safety; D22 → planner seed / "go home").
