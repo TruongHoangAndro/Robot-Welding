@@ -462,6 +462,7 @@ paths:
                   home: {type: object}
                   state: {type: string, enum: [ok, stale]}
         '404': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem', description: home-invalid (home.json corrupt or schema-invalid)}
     put:
       tags: [cell]
       summary: >

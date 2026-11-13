@@ -15,7 +15,6 @@ import numpy as np
 from awm_api import cad_api, jobs
 from awm_api.settings import Settings
 from awm_core import frames, jsonio
-from awm_core.hashing import sha256_file
 from awm_path.core.kinematics import wrap_deg
 from awm_path.core.states import SingularityThresholds, singular_reason, singularity_metrics
 from awm_path.core.sweep import UR5E_JOINT_LIMITS_DEG, PlannerParams
