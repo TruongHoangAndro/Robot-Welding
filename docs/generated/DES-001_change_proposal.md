@@ -839,3 +839,29 @@ units mm/deg (ADR-14); teach home stores joint angles only (frame-independent).
 and the runtime "go home" (Sim-2 state machine).
 **Impact:** §4.5 (new screen S11), §5.1/§5.2 (D22 `cell/model/home.json`), §7.3 (S11 Admin), §7.4 (new endpoints),
 §13 (OI: real-robot jog safety; D22 → planner seed / "go home").
+
+## CP-65 Collision granularity of multi-part fixtures: one hull per direct child (proposed 2026-11-13, Truong — for approval)
+
+**Finding (test of 2026-11-13, job with a holder of several parts):** a role assigned to a parent assembly is inherited by
+all its children (`awm_core.cad_roles.effective_roles`). For collision, the cell import (A18, `awm_geometry.scene`)
+makes **one object per top-most node with the role** and offers two modes in `cad_map.yaml` `collision:`:
+`hull` (default — one convex hull over the tessellation nodes of every child solid) or `mesh` (the real solid meshes,
+welded per solid and stacked in one STL; no boolean union). A single hull is fast but fills the slots / forks of a
+holder that grips the part, so the part or the head may be reported in collision (false red in check 4 or planning);
+`mesh` is exact but heavier and needs closed solids. In the job import (`awm_geometry.job_placement`), components that
+exist only in the job file get **one hull per leaf**, not per top-most node — inconsistent with the cell import.
+**Proposal:**
+1. New collision mode **`hull_children`**: one convex hull per **direct child** of the node that carries the role
+   (a child that is itself an assembly gives one hull over its whole subtree). All hulls belong to the same scene object
+   (same parent frame, same padding, same role), so the fixture stays one entry in D19 / the scene manifest with several
+   meshes. No boolean union, no new dependency; meshing stays once per import (cached).
+2. The same three modes (`hull`, `hull_children`, `mesh`) for job fixtures, chosen per component in the job roles
+   (default `hull_children` for an assembly, `hull` for a single part); job-only components grouped by their top-most
+   role node like the cell import (removes the per-leaf rule).
+3. S10 / S2 role table: a collision-mode column next to the role (Admin / Engineer), default as above; the cross-check
+   and the scene report show the mode and the hull / solid volume ratio so a coarse hull is visible.
+**Unchanged:** role inheritance; the part itself keeps its exact mesh with `face_id` (§5.4); padding values (D16);
+FCL works on meshes only (§5.4).
+**Impact:** §5.4 collision table (fixture / holders: "convex hulls per child, or mesh"), D19 / scene manifest schema
+(an object may carry several meshes), `cad_map.yaml` `collision:` values, `awm_geometry.scene` and `job_placement`,
+`awm_web` S10 / S2 role table, tests (hull per child, subtree hull, job-only grouping).
