@@ -567,9 +567,7 @@ def create_app(settings: Settings) -> FastAPI:
         if not ok:
             raise ProblemError(422, 'ik-singular', 'Target on a singularity',
                                detail='every joint solution is within the wrist / elbow / shoulder singularity margin')
-        cur = np.asarray(body.current_joints_deg, dtype=float)
-        best = min(ok, key=lambda q: float(np.abs(np.asarray(q) - cur).sum()))
-        return {'joints_deg': [float(v) for v in best]}
+        return {'joints_deg': jog.nearest_solution(ok, body.current_joints_deg)}
 
     # -- cell model for the browser (display only) ------------------------------------------------------------------
     @api.get('/cell/robot_description')

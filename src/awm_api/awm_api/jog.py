@@ -13,8 +13,9 @@ import numpy as np
 from awm_api import cad_api
 from awm_api.settings import Settings
 from awm_core import frames
+from awm_path.core.kinematics import wrap_deg
 from awm_path.core.states import SingularityThresholds, singular_reason, singularity_metrics
-from awm_path.core.sweep import PlannerParams
+from awm_path.core.sweep import UR5E_JOINT_LIMITS_DEG, PlannerParams
 
 #: Same F6 thresholds as the planner (``PlannerParams`` defaults), so S11 and the planner agree on "singular".
 THRESHOLDS: SingularityThresholds = PlannerParams().singularity_thresholds
@@ -46,3 +47,19 @@ def tool0_T_tcp(settings: Settings) -> Optional[np.ndarray]:
 def wrist_singular(q_deg: Sequence[float]) -> Optional[str]:
     """Planner F6 reason (``singular_wrist`` / ``singular_elbow`` / ``singular_shoulder``) or None when clear."""
     return singular_reason(singularity_metrics(q_deg), THRESHOLDS)
+
+
+def nearest_solution(solutions: Sequence[Sequence[float]], current_deg: Sequence[float]) -> List[float]:
+    """Solution closest to ``current_deg`` by wrapped joint distance, unwrapped toward the current pose.
+
+    Distance = sum |wrap_deg(q - current)|. Each joint is returned as ``current + wrap_deg(q - current)`` (no full-turn
+    spin) unless that leaves the UR5e joint limit, then the in-range solution value is kept.
+    """
+    cur = np.asarray(current_deg, dtype=float)
+    best = min((np.asarray(q, dtype=float) for q in solutions),
+               key=lambda q: float(np.abs(wrap_deg(q - cur)).sum()))
+    out = cur + wrap_deg(best - cur)
+    for i, (lo, hi) in enumerate(UR5E_JOINT_LIMITS_DEG):
+        if not lo <= out[i] <= hi:
+            out[i] = best[i]
+    return [float(v) for v in out]
