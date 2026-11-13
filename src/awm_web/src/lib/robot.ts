@@ -12,18 +12,18 @@ import { degToRad, poseMmToMatrix, radToDeg, type PoseMm } from './units';
 
 export type MeshLoader = (url: string, manager: LoadingManager, material: Material, done: (obj: Object3D, err?: Error) => void) => void;
 
-const TCP_LINK = 'tcp_laser';
-const FLANGE_LINK = 'positioner_flange';
+export const TCP_LINK = 'tcp_laser';
+export const FLANGE_LINK = 'positioner_flange';
 
-/** Parse a URDF string; without ``loadMesh`` no visual geometry is loaded (kinematics only, tests). */
-export function parseRobot(urdf: string, loadMesh?: MeshLoader): URDFRobot {
+/** Parse a URDF string (``requireTcp`` false: a cell without head.yaml has no tcp_laser link, S11); without ``loadMesh`` no visual geometry is loaded (kinematics only, tests). */
+export function parseRobot(urdf: string, loadMesh?: MeshLoader, requireTcp = true): URDFRobot {
   const loader = new URDFLoader();
   loader.parseVisual = !!loadMesh;
   loader.parseCollision = false;
   loader.loadMeshCb = loadMesh ?? ((_u, _m, _mat, done) => done(new Group()));
   const robot = loader.parse(urdf);
   for (const j of Object.values(robot.joints)) j.ignoreLimits = true;
-  for (const l of [TCP_LINK, FLANGE_LINK]) if (!robot.links[l]) throw new Error(`robot description has no link ${l}`);
+  for (const l of requireTcp ? [TCP_LINK, FLANGE_LINK] : [FLANGE_LINK]) if (!robot.links[l]) throw new Error(`robot description has no link ${l}`);
   return robot;
 }
 

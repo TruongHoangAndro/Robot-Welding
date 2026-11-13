@@ -9,3 +9,8 @@
 export function canEditJobs(role: string): boolean {
   return role === 'Engineer' || role === 'Admin';
 }
+
+/** S11 manual control (jog, move-to, teach home; CP-64): Admin only. The server enforces the same (CELL_WRITE). */
+export function canEditJog(role: string): boolean {
+  return role === 'Admin';
+}

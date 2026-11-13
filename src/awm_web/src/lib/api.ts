@@ -371,3 +371,31 @@ export const deleteOverride = async (t: string, id: string) => {
 export const deleteJob = async (t: string, id: string) => {
   await call<null>(`/jobs/${enc(id)}`, t, { method: 'DELETE' });
 };
+
+// -- CP-64: manual control (S11, Admin): FK / IK of the saved cell model and the taught home ----------------------
+
+export interface JogPoseApi {
+  xyz_mm: number[];
+  quat_xyzw: number[];
+}
+export interface CellHome {
+  robot_joints_deg: Record<string, number>;
+  positioner_joint_deg: number;
+  [k: string]: unknown;
+}
+export const cellFk = async (t: string, jointsDeg: number[]) =>
+  (await call<{ tool0: JogPoseApi; tcp_laser: JogPoseApi | null }>('/cell/fk', t, json('POST', { joints_deg: jointsDeg }))).body;
+/** Nearest IK branch for a tcp_laser target; throws ApiError with the problem (ik-no-tcp / ik-unreachable / ik-singular). */
+export const cellIk = async (t: string, target: JogPoseApi, currentJointsDeg: number[]) =>
+  (await call<{ joints_deg: number[] }>('/cell/ik', t, json('POST', { target_tcp_laser: target, current_joints_deg: currentJointsDeg }))).body.joints_deg;
+/** Taught cell home and its state, or null when none is taught (404 no-home). */
+export async function getCellHome(t: string): Promise<{ home: CellHome; state: 'ok' | 'stale' } | null> {
+  try {
+    return (await call<{ home: CellHome; state: 'ok' | 'stale' }>('/cell/home', t)).body;
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404 && e.problem?.type === '/problems/no-home') return null;
+    throw e;
+  }
+}
+export const putCellHome = async (t: string, body: { robot_joints_deg: Record<string, number>; positioner_joint_deg: number }) =>
+  (await call<CellHome>('/cell/home', t, json('PUT', body))).body;

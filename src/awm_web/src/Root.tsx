@@ -3,12 +3,13 @@ import { App as FileViewer } from './App';
 import { CellPage } from './pages/CellPage';
 import { loadSession, saveSession, type Session } from './lib/api';
 import { parseRoute, type Route } from './lib/route';
+import { JogPage } from './pages/JogPage';
 import { JobList } from './pages/JobList';
 import { JobPage } from './pages/JobPage';
 import { Login } from './pages/Login';
 import { SimPage } from './pages/SimPage';
 
-/** Routes: #/jobs (S1-min), #/jobs/<id> (S2), #/jobs/<id>/sim (S4-lite), #/cell (S10), #/viewer or ?data= (D20 file viewer, no login). */
+/** Routes: #/jobs (S1-min), #/jobs/<id> (S2), #/jobs/<id>/sim (S4-lite), #/cell (S10), #/jog (S11, Admin), #/viewer or ?data= (D20 file viewer, no login). */
 export function Root() {
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash, window.location.search));
   const [session, setSession] = useState<Session | null>(() => loadSession());
@@ -35,6 +36,7 @@ export function Root() {
   if (route.page === 'job') return <JobPage key={route.jobId} session={session} jobId={route.jobId} />;
   if (route.page === 'sim') return <SimPage key={route.jobId} session={session} jobId={route.jobId} />;
   if (route.page === 'cell') return <CellPage session={session} />;
+  if (route.page === 'jog' && session.role === 'Admin') return <JogPage session={session} />;
   return (
     <div className="app">
       <header>
@@ -47,6 +49,11 @@ export function Root() {
         {session.role === 'Admin' && (
           <a className="btn" href="#/cell">
             S10 cell model
+          </a>
+        )}
+        {session.role === 'Admin' && (
+          <a className="btn" href="#/jog">
+            S11 jog
           </a>
         )}
         <a className="btn" href="#/viewer">
