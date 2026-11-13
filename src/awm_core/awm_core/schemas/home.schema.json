@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "home.schema.json",
+  "title": "home",
+  "description": "D22 taught cell home. Joint values in degrees (ADR-14); source is always 'taught'.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "created_by",
+    "created_at",
+    "inputs",
+    "source",
+    "robot_joints_deg",
+    "positioner_joint_deg"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "created_by": {
+      "$ref": "common.schema.json#/$defs/created_by"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/created_at"
+    },
+    "inputs": {
+      "$ref": "common.schema.json#/$defs/inputs"
+    },
+    "source": {
+      "const": "taught"
+    },
+    "robot_joints_deg": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shoulder_pan_joint",
+        "shoulder_lift_joint",
+        "elbow_joint",
+        "wrist_1_joint",
+        "wrist_2_joint",
+        "wrist_3_joint"
+      ],
+      "properties": {
+        "shoulder_pan_joint": {
+          "type": "number"
+        },
+        "shoulder_lift_joint": {
+          "type": "number"
+        },
+        "elbow_joint": {
+          "type": "number"
+        },
+        "wrist_1_joint": {
+          "type": "number"
+        },
+        "wrist_2_joint": {
+          "type": "number"
+        },
+        "wrist_3_joint": {
+          "type": "number"
+        }
+      }
+    },
+    "positioner_joint_deg": {
+      "type": "number"
+    }
+  }
+}
