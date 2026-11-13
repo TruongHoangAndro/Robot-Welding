@@ -67,6 +67,13 @@ class JogFk(BaseModel):
     joints_deg: List[float] = Field(min_length=6, max_length=6)
 
 
+class HomeBody(BaseModel):
+    """PUT /cell/home: joint set and positioner angle are checked by the ``home`` schema (422 on mismatch)."""
+    model_config = ConfigDict(extra='forbid')
+    robot_joints_deg: Dict[str, Any]
+    positioner_joint_deg: Any
+
+
 class JogIk(BaseModel):
     model_config = ConfigDict(extra='forbid')
     target_tcp_laser: JogPose
@@ -568,6 +575,23 @@ def create_app(settings: Settings) -> FastAPI:
             raise ProblemError(422, 'ik-singular', 'Target on a singularity',
                                detail='every joint solution is within the wrist / elbow / shoulder singularity margin')
         return {'joints_deg': jog.nearest_solution(ok, body.current_joints_deg)}
+
+    @api.get('/cell/home')
+    def cell_home_get(_u: User = Depends(require(*cad_api.CELL_READ))) -> Dict[str, Any]:
+        rec = jog.read_home(settings)
+        if rec is None:
+            raise ProblemError(404, 'no-home', 'No taught home', detail='cell/model/home.json is missing: teach it in S11')
+        return rec
+
+    @api.put('/cell/home')
+    def cell_home_put(body: HomeBody, u: User = Depends(require(*cad_api.CELL_WRITE))) -> Dict[str, Any]:
+        try:
+            return jog.write_home(settings, u.username, body.robot_joints_deg, body.positioner_joint_deg)
+        except cad_api.jsonio.SchemaValidationError as exc:
+            raise ProblemError(422, 'validation', 'Home invalid', detail=str(exc)) from exc
+        except FileNotFoundError as exc:
+            raise ProblemError(409, 'no-frames', 'No cell frames',
+                               detail='cell/model/frames.yaml is missing: export the cell scene (S10) first') from exc
 
     # -- cell model for the browser (display only) ------------------------------------------------------------------
     @api.get('/cell/robot_description')

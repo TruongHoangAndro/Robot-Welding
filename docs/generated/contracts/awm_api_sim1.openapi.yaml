@@ -444,6 +444,52 @@ paths:
         '403': {$ref: '#/components/responses/Problem'}
         '409': {$ref: '#/components/responses/Problem', description: ik-no-tcp (head.yaml has no tool0_T_tcp_mm)}
         '422': {$ref: '#/components/responses/Problem', description: 'ik-unreachable (no IK solution) or ik-singular (every solution inside the F6 singularity margin) or validation'}
+  /cell/home:
+    get:
+      tags: [cell]
+      summary: >
+        CP-64 taught cell home (D22, cell/model/home.json). state is stale when the frames.yaml hash recorded in
+        inputs is not the current one. 404 /problems/no-home when none is taught.
+      responses:
+        '200':
+          description: Home record and state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [home, state]
+                properties:
+                  home: {type: object}
+                  state: {type: string, enum: [ok, stale]}
+        '404': {$ref: '#/components/responses/Problem'}
+    put:
+      tags: [cell]
+      summary: >
+        CP-64 teach the cell home (Admin only, CELL_WRITE). Joints in degrees; the record is validated through the
+        home schema and written with created_by = caller, source taught, inputs = frames.yaml hash.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [robot_joints_deg, positioner_joint_deg]
+              additionalProperties: false
+              properties:
+                robot_joints_deg:
+                  type: object
+                  description: exactly shoulder_pan_joint, shoulder_lift_joint, elbow_joint, wrist_1_joint, wrist_2_joint, wrist_3_joint
+                  additionalProperties: {type: number}
+                positioner_joint_deg: {type: number}
+      responses:
+        '200':
+          description: The written D22 record
+          content:
+            application/json:
+              schema: {type: object}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem', description: no-frames (cell/model/frames.yaml missing)}
+        '422': {$ref: '#/components/responses/Problem'}
   /cell/scene:
     get:
       tags: [cell]

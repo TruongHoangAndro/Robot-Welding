@@ -6,13 +6,16 @@ frames are ``base_link``; the unit conversion to metres / radians lives inside `
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 
 from awm_api import cad_api
 from awm_api.settings import Settings
-from awm_core import frames
+from awm_core import frames, jsonio
+from awm_core.hashing import sha256_file
 from awm_path.core.kinematics import wrap_deg
 from awm_path.core.states import SingularityThresholds, singular_reason, singularity_metrics
 from awm_path.core.sweep import UR5E_JOINT_LIMITS_DEG, PlannerParams
@@ -63,3 +66,37 @@ def nearest_solution(solutions: Sequence[Sequence[float]], current_deg: Sequence
         if not lo <= out[i] <= hi:
             out[i] = best[i]
     return [float(v) for v in out]
+
+
+HOME_SCHEMA = 'home'
+
+
+def home_path(settings: Settings) -> Path:
+    """D22 cell home: ``cell/model/home.json``."""
+    return settings.cell_model_dir / 'home.json'
+
+
+def write_home(settings: Settings, created_by: str, robot_joints_deg: Dict[str, Any],
+               positioner_joint_deg: Any) -> Dict[str, Any]:
+    """Build the D22 record (input = ``frames.yaml``), validate through the ``home`` schema and write it atomically.
+
+    Raises ``FileNotFoundError`` (no frames.yaml) or ``jsonio.SchemaValidationError``.
+    """
+    doc = jsonio.make_header(created_by, [settings.frames_yaml], settings.repo_root)
+    doc['source'] = 'taught'
+    doc['robot_joints_deg'] = robot_joints_deg
+    doc['positioner_joint_deg'] = positioner_joint_deg
+    jsonio.write_json(home_path(settings), doc, HOME_SCHEMA)
+    return doc
+
+
+def read_home(settings: Settings) -> Optional[Dict[str, Any]]:
+    """``{home, state}`` or None when absent; ``stale`` when the recorded frames.yaml hash is not the current one."""
+    path = home_path(settings)
+    if not path.is_file():
+        return None
+    doc = json.loads(path.read_text(encoding='utf-8'))
+    frames_name = settings.frames_yaml.relative_to(settings.repo_root).as_posix()
+    recorded = next((i.get('sha256') for i in doc.get('inputs', []) if i.get('name') == frames_name), None)
+    current = sha256_file(settings.frames_yaml) if settings.frames_yaml.is_file() else None
+    return {'home': doc, 'state': 'ok' if recorded is not None and recorded == current else 'stale'}
