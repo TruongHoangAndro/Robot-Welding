@@ -21,17 +21,19 @@ import shutil
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
+import numpy as np
 from fastapi import APIRouter, Depends, FastAPI, File, Form, Header, Request, Response, UploadFile, WebSocket
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from starlette.websockets import WebSocketDisconnect
 
-from awm_api import adapters, cad_api, jobs, placement as placement_mod, replay as replay_mod
+from awm_api import adapters, cad_api, jobs, jog, placement as placement_mod, replay as replay_mod
 from awm_api.auth import TokenStore, User, forbidden, load_users, unauthorized, verify_password
 from awm_api.problems import ProblemError, install as install_problems
 from awm_api.robot_model import API_MESHES, RobotModel, safe_child
 from awm_api.runner import TERMINAL, RunBusyError, RunFinishedError, RunManager, RunNotFoundError, StepsError
 from awm_api.settings import Settings
+from awm_path.core.kinematics import UrAnalyticKinematics
 
 LOG = logging.getLogger('awm_api')
 
@@ -51,6 +53,24 @@ STEP_SUFFIXES = ('.step', '.stp')
 
 SeamId = Annotated[str, Field(pattern=r'^S[0-9]{2,3}$')]
 EdgeId = Annotated[str, Field(pattern=r'^E[0-9]+$')]
+
+
+class JogPose(BaseModel):
+    """Pose in mm / unit quaternion (CP-64)."""
+    model_config = ConfigDict(extra='forbid')
+    xyz_mm: List[float] = Field(min_length=3, max_length=3)
+    quat_xyzw: List[float] = Field(min_length=4, max_length=4)
+
+
+class JogFk(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    joints_deg: List[float] = Field(min_length=6, max_length=6)
+
+
+class JogIk(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    target_tcp_laser: JogPose
+    current_joints_deg: List[float] = Field(min_length=6, max_length=6)
 
 
 class Login(BaseModel):
@@ -175,6 +195,7 @@ def create_app(settings: Settings) -> FastAPI:
     tokens = TokenStore(settings.token_ttl_s)
     runs = RunManager(settings.runs_dir, kill_grace_s=settings.kill_grace_s)
     robot = RobotModel(settings)
+    kin = UrAnalyticKinematics()  # CP-64 jog page: in-process analytic FK / IK (mm / deg)
     settings.jobs_dir.mkdir(parents=True, exist_ok=True)
 
     @contextlib.asynccontextmanager
@@ -519,6 +540,36 @@ def create_app(settings: Settings) -> FastAPI:
             'robot_description_url': '/api/v1/cell/robot_description',
             'notes': notes,
         }
+
+    # -- CP-64 jog page kinematics (S11): analytic FK / IK, numeric only, no controller ------------------------------
+    @api.post('/cell/fk')
+    def cell_fk(body: JogFk, _u: User = Depends(require(*cad_api.CELL_READ))) -> Dict[str, Any]:
+        t0 = kin.fk(body.joints_deg)
+        tcp = jog.tool0_T_tcp(settings)
+        return {'tool0': jog.matrix_to_pose(t0),
+                'tcp_laser': None if tcp is None else jog.matrix_to_pose(t0 @ tcp)}
+
+    @api.post('/cell/ik')
+    def cell_ik(body: JogIk, _u: User = Depends(require(*cad_api.CELL_WRITE))) -> Dict[str, Any]:
+        tcp = jog.tool0_T_tcp(settings)
+        if tcp is None:
+            raise ProblemError(409, 'ik-no-tcp', 'No taught TCP',
+                               detail='head.yaml has no tool0_T_tcp_mm; teach the TCP (S10) first')
+        try:
+            target = jog.pose_to_matrix(body.target_tcp_laser.model_dump())
+            raw = kin.ik(target @ np.linalg.inv(tcp))
+        except ValueError as exc:
+            raise ProblemError(422, 'validation', detail=str(exc)) from exc
+        if not raw:
+            raise ProblemError(422, 'ik-unreachable', 'Target out of reach',
+                               detail='no joint solution puts the TCP at the target pose')
+        ok = [q for q in raw if jog.wrist_singular(q) is None]
+        if not ok:
+            raise ProblemError(422, 'ik-singular', 'Target on a singularity',
+                               detail='every joint solution is within the wrist / elbow / shoulder singularity margin')
+        cur = np.asarray(body.current_joints_deg, dtype=float)
+        best = min(ok, key=lambda q: float(np.abs(np.asarray(q) - cur).sum()))
+        return {'joints_deg': [float(v) for v in best]}
 
     # -- cell model for the browser (display only) ------------------------------------------------------------------
     @api.get('/cell/robot_description')
