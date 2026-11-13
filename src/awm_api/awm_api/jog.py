@@ -6,13 +6,13 @@ frames are ``base_link``; the unit conversion to metres / radians lives inside `
 
 from __future__ import annotations
 
-import json
+import math
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 
-from awm_api import cad_api
+from awm_api import cad_api, jobs
 from awm_api.settings import Settings
 from awm_core import frames, jsonio
 from awm_core.hashing import sha256_file
@@ -82,6 +82,10 @@ def write_home(settings: Settings, created_by: str, robot_joints_deg: Dict[str, 
 
     Raises ``FileNotFoundError`` (no frames.yaml) or ``jsonio.SchemaValidationError``.
     """
+    values = list(robot_joints_deg.values()) if isinstance(robot_joints_deg, dict) else []
+    values.append(positioner_joint_deg)
+    if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in values):
+        raise jsonio.SchemaValidationError('joint values must be finite numbers')
     doc = jsonio.make_header(created_by, [settings.frames_yaml], settings.repo_root)
     doc['source'] = 'taught'
     doc['robot_joints_deg'] = robot_joints_deg
@@ -91,12 +95,18 @@ def write_home(settings: Settings, created_by: str, robot_joints_deg: Dict[str, 
 
 
 def read_home(settings: Settings) -> Optional[Dict[str, Any]]:
-    """``{home, state}`` or None when absent; ``stale`` when the recorded frames.yaml hash is not the current one."""
+    """``{home, state}`` or None when absent. State comes from the shared staleness rule (``awm_core.staleness``,
+    input names are repo-root relative). Raises ``ValueError`` when home.json is unreadable or fails the schema."""
     path = home_path(settings)
     if not path.is_file():
         return None
-    doc = json.loads(path.read_text(encoding='utf-8'))
-    frames_name = settings.frames_yaml.relative_to(settings.repo_root).as_posix()
-    recorded = next((i.get('sha256') for i in doc.get('inputs', []) if i.get('name') == frames_name), None)
-    current = sha256_file(settings.frames_yaml) if settings.frames_yaml.is_file() else None
-    return {'home': doc, 'state': 'ok' if recorded is not None and recorded == current else 'stale'}
+    doc = jobs.read_json(path)
+    if not isinstance(doc, dict):
+        raise ValueError('cell/model/home.json is not a readable JSON object')
+    try:
+        jsonio.validate(doc, HOME_SCHEMA)
+    except jsonio.SchemaValidationError as exc:
+        raise ValueError(f'cell/model/home.json does not match the home schema: {exc}') from exc
+    rel = path.relative_to(settings.repo_root).as_posix()
+    state = jobs.document_state(settings.repo_root, rel, settings.repo_root, doc)
+    return {'home': doc, 'state': 'ok' if state == 'ok' else 'stale'}

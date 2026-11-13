@@ -57,3 +57,28 @@ def test_home_requires_admin(client, frames):
     for user in ('op', 'eng'):
         assert client.put(HOME, headers=auth(client, user), json=BODY).status_code == 403
     assert client.put(HOME, headers=auth(client, 'adm'), json=BODY).status_code != 403
+
+
+def test_put_home_rejects_nan(client, frames):
+    h = auth(client, 'adm')
+    for bad in ('NaN', 'Infinity'):
+        raw = ('{"robot_joints_deg": {' + ', '.join(f'"{j}": 0.0' for j in JOINTS[:5]) + f', "wrist_3_joint": {bad}}}, '
+               '"positioner_joint_deg": 0.0}')
+        r = client.put(HOME, headers={**h, 'Content-Type': 'application/json'}, content=raw)
+        assert r.status_code == 422, r.text
+    assert client.get(HOME, headers=h).status_code == 404
+
+
+def test_put_home_no_frames_409(client):
+    r = client.put(HOME, headers=auth(client, 'adm'), json=BODY)
+    assert r.status_code == 409
+    assert r.json()['type'].endswith('/problems/no-frames')
+
+
+def test_get_home_corrupt_is_problem(client, frames, repo):
+    h = auth(client, 'adm')
+    (repo / 'cell' / 'model' / 'home.json').write_text('{not json')
+    r = client.get(HOME, headers=h)
+    assert r.status_code == 422 and r.json()['type'].endswith('/problems/home-invalid')
+    (repo / 'cell' / 'model' / 'home.json').write_text('{"inputs": "x"}')
+    assert client.get(HOME, headers=h).status_code == 422

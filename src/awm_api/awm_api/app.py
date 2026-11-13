@@ -578,7 +578,10 @@ def create_app(settings: Settings) -> FastAPI:
 
     @api.get('/cell/home')
     def cell_home_get(_u: User = Depends(require(*cad_api.CELL_READ))) -> Dict[str, Any]:
-        rec = jog.read_home(settings)
+        try:
+            rec = jog.read_home(settings)
+        except ValueError as exc:
+            raise ProblemError(422, 'home-invalid', 'Home file invalid', detail=str(exc)) from exc
         if rec is None:
             raise ProblemError(404, 'no-home', 'No taught home', detail='cell/model/home.json is missing: teach it in S11')
         return rec
