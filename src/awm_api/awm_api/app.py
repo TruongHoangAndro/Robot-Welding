@@ -17,6 +17,7 @@ import json
 import logging
 import re
 import secrets
+import shutil
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
@@ -33,6 +34,11 @@ from awm_api.runner import TERMINAL, RunBusyError, RunFinishedError, RunManager,
 from awm_api.settings import Settings
 
 LOG = logging.getLogger('awm_api')
+
+# Role ranks: roles are hierarchical, Admin ⊇ Engineer ⊇ Operator (CP-63, Truong 2026-11-09). A route lists the
+# lowest role it needs; a higher role is always allowed (see ``require``). An Admin-only route still lists only
+# ('Admin',), so an Engineer cannot reach it.
+RANK = {'Operator': 0, 'Engineer': 1, 'Admin': 2}
 
 READ = ('Operator', 'Engineer', 'Admin')
 CREATE_JOB = ('Engineer', 'Admin')
@@ -190,8 +196,12 @@ def create_app(settings: Settings) -> FastAPI:
         return user
 
     def require(*roles: str):
+        # Allow any role at or above the lowest listed role (CP-63: Admin ⊇ Engineer ⊇ Operator). An Admin-only route
+        # lists only ('Admin',), so the threshold is Admin and lower roles stay out.
+        threshold = min(RANK[r] for r in roles)
+
         def dep(user: User = Depends(current_user)) -> User:
-            if user.role not in roles:
+            if RANK[user.role] < threshold:
                 raise forbidden(user, roles)
             return user
         return dep
@@ -271,6 +281,16 @@ def create_app(settings: Settings) -> FastAPI:
         active = runs.active()
         return jobs.detail(job, settings.repo_root,
                            active['run_id'] if active and active['job_id'] == job_id else None)
+
+    @api.delete('/jobs/{job_id}', status_code=204)
+    def delete_job(job_id: str, _u: User = Depends(require(*CREATE_JOB))) -> Response:
+        job = jobs.job_dir(settings.jobs_dir, job_id)  # 400 bad id / 404 not found
+        active = runs.active()
+        if active and active['job_id'] == job_id:  # never delete the folder under a running job
+            raise _busy(RunBusyError(active['run_id']))
+        shutil.rmtree(job)
+        LOG.info('job %s deleted by %s', job_id, _u.username)
+        return Response(status_code=204)
 
     @api.get('/jobs/{job_id}/view/{file}')
     def get_view(job_id: str, file: Literal['view.glb', 'topology.json'],

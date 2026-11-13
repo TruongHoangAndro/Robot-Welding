@@ -225,7 +225,8 @@ def test_placement_roles_and_view_needed(client, repo):
     make_job(repo)
     make_job(repo, 'P3_A', view=False)
     assert client.put('/api/v1/jobs/P1_A/placement', headers=auth(client, 'op'), json=manual()).status_code == 403
-    assert client.put('/api/v1/jobs/P1_A/placement', headers=auth(client, 'adm'), json=manual()).status_code == 403
+    # CP-63: Admin ⊇ Engineer — Admin may edit placement (not the role-gate 403).
+    assert client.put('/api/v1/jobs/P1_A/placement', headers=auth(client, 'adm'), json=manual()).status_code != 403
     r = client.put('/api/v1/jobs/P3_A/placement', headers=auth(client, 'eng'), json=manual())
     assert r.status_code == 409 and r.json()['type'] == '/problems/no-view'
 

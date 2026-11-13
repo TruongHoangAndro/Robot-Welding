@@ -1,5 +1,7 @@
 /** S4 data rules: kinematic banner, per-arc travel speed rows, seam point markers by status. Pure functions. */
 
+import { canEditJobs } from './access';
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Doc = any;
 
@@ -83,7 +85,10 @@ export function actionBlocks(
   run: { state: string } | null,
   role: string,
 ): { generate: string | null; replay: string | null } {
-  if (role !== 'Engineer') return { generate: 'Generate and Replay are requested by an Engineer.', replay: 'Generate and Replay are requested by an Engineer.' };
+  if (!canEditJobs(role)) {
+    const msg = 'Generate and Replay are requested by an Engineer or Admin.';
+    return { generate: msg, replay: msg };
+  }
   if (run && (run.state === 'queued' || run.state === 'running')) return { generate: 'A run is active.', replay: 'A run is active.' };
   const stalePath = sim.path_state === 'stale' ? `path.json is stale: ${(sim.path_problems ?? []).join('; ') || 'inputs changed'} — re-plan.` : null;
   let generate: string | null = null;

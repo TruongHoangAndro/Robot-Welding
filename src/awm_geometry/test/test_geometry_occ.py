@@ -14,6 +14,18 @@ def _edges(job):
     return json.loads(job.edges_json.read_text())['edges']
 
 
+def test_face_area_is_never_negative(occ, monkeypatch):
+    """A degenerate / null-triangulation face can make OCC's surface mass a tiny negative number
+    (floating-point noise). Area is a magnitude and ``edges.schema`` requires ``area_m2 >= 0``, so
+    ``face_area`` must clamp the sign. Regression for the whole-cell import of 2026-11-11
+    (faces 14553 / 14634, area ~ -1e-10 m²) that failed schema validation at A21."""
+    from awm_geometry import topology
+    monkeypatch.setattr(topology, '_surface_mass', lambda face: -1.0076573337254434e-10)
+    assert topology.face_area(object()) >= 0.0
+    monkeypatch.setattr(topology, '_surface_mass', lambda face: 1.5e-4)
+    assert topology.face_area(object()) == pytest.approx(1.5e-4)
+
+
 def test_part_record(imported_parts):
     job = imported_parts['plate_tjoint']
     part = jsonio.read_json(job.part_json, 'part', base_dir=job.dir)

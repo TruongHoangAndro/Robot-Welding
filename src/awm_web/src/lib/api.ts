@@ -367,3 +367,7 @@ export const postOverride = async (t: string, id: string, reason: string) =>
 export const deleteOverride = async (t: string, id: string) => {
   await call<null>(`/jobs/${enc(id)}/check/override`, t, { method: 'DELETE' });
 };
+/** Engineer / Admin: delete a job and all its data (permanent, no undo). */
+export const deleteJob = async (t: string, id: string) => {
+  await call<null>(`/jobs/${enc(id)}`, t, { method: 'DELETE' });
+};

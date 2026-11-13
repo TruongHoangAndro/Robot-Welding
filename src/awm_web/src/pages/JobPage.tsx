@@ -29,6 +29,7 @@ import {
   type Run,
   type Session,
 } from '../lib/api';
+import { canEditJobs } from '../lib/access';
 import { cadGate, checkBanner, type CadCheck, type OverrideState } from '../lib/cadcheck';
 import { loadFromUrl, type Model } from '../lib/load';
 import { JOB_ROLES, ROLE_COLOUR, relPaths, solidRoles, type Assignable, type Assignment, type TreeNode } from '../lib/roles';
@@ -60,7 +61,7 @@ const fmt = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : String(v)
  */
 export function JobPage({ session, jobId }: { session: Session; jobId: string }) {
   const token = session.token;
-  const canEdit = session.role === 'Engineer';
+  const canEdit = canEditJobs(session.role);
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [model, setModel] = useState<Model | null>(null);
   const [saved, setSaved] = useState<SeamDoc | null>(null);
@@ -589,7 +590,7 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
                     New seam unavailable: {cadBlock}
                   </div>
                 )}
-                {!canEdit && <div className="muted">New seams are picked by an Engineer (CP-21).</div>}
+                {!canEdit && <div className="muted">New seams are picked by an Engineer or Admin (CP-63).</div>}
               </>
             )}
             {note && <div className="warn">{note}</div>}
@@ -619,7 +620,7 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
           </Panel>
 
           <Panel title={`Seams (${picks.length})${dirty ? ' · unsaved' : ''}`}>
-            {!canEdit && <div className="muted">Role {session.role}: read only (seam editing is Engineer only, CP-21).</div>}
+            {!canEdit && <div className="muted">Role {session.role}: read only (seam editing is Engineer or Admin, CP-63).</div>}
             {picks.map((p, i) => (
               <SeamCard
                 key={i}
@@ -697,7 +698,7 @@ export function JobPage({ session, jobId }: { session: Session; jobId: string })
 }
 
 function planBlocker(d: JobDetail | null, saved: SeamDoc | null, dirty: boolean, canEdit: boolean, run: Run | null): string | null {
-  if (!canEdit) return 'Planning is requested by an Engineer.';
+  if (!canEdit) return 'Planning is requested by an Engineer or Admin.';
   if (!d) return 'Loading …';
   if (run && (run.state === 'queued' || run.state === 'running')) return 'A run is active.';
   if (!saved || saved.seams.length === 0) return 'Save at least one seam first.';

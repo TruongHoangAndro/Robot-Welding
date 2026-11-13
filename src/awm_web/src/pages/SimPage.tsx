@@ -19,6 +19,7 @@ import {
   type Run,
   type Session,
 } from '../lib/api';
+import { canEditJobs } from '../lib/access';
 import { loadFromUrl } from '../lib/load';
 import { cancelText, replayView } from '../lib/replay';
 import { loadCellScene, SCENE_COLOUR, type CellNode } from '../components/CellScene';
@@ -54,7 +55,7 @@ function buildTrail(kin: URDFRobot, tl: Timeline): TrailPoint[] {
  */
 export function SimPage({ session, jobId }: { session: Session; jobId: string }) {
   const token = session.token;
-  const canRun = session.role === 'Engineer';
+  const canRun = canEditJobs(session.role);
   const [sim, setSim] = useState<SimulationPayload | null | undefined>(undefined);
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [robot, setRobot] = useState<URDFRobot | null>(null);

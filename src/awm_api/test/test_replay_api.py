@@ -111,8 +111,9 @@ def test_replay_refusals_reach_the_run_problem(client, repo, monkeypatch, case, 
 def test_replay_roles(client, repo):
     h = auth(client, 'eng')
     programmed_job(client, repo, h)
-    for user in ('op', 'adm'):
-        assert start(client, auth(client, user)).status_code == 403
+    # Operator may not start a replay; Admin may (CP-63: Admin ⊇ Engineer).
+    assert start(client, auth(client, 'op')).status_code == 403
+    assert start(client, auth(client, 'adm')).status_code != 403
 
 
 def test_replay_needs_a_program(client, repo):

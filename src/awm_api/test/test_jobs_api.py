@@ -30,7 +30,7 @@ def test_create_job_runs_import_and_export_view(client, repo, tmp_path, monkeypa
     calls = [json.loads(line) for line in log.read_text().splitlines()]
     assert [c[0] for c in calls] == ['import', 'export-view']
     assert calls[0][calls[0].index('--component') + 1] == 'Assy-1'
-    assert calls[1][calls[1].index('--up-axis') + 1] == '+Y'
+    assert '--up-axis=+Y' in calls[1]
     # no staging leftovers are listed as jobs
     assert [p.name for p in (repo / 'jobs').iterdir() if not p.name.startswith('.')] == ['P9_A']
 
@@ -170,6 +170,37 @@ def test_released_status(client, repo):
     d = client.get('/api/v1/jobs/P3_A', headers=auth(client, 'eng')).json()
     assert d['status'] == 'released_simulation' and d['programs'] == ['P001']
     assert d['active']['simulation'] == 'P001'
+
+
+def test_delete_job_removes_it(client, repo):
+    make_job(repo, 'P5_A')
+    h = auth(client, 'eng')
+    assert [j['job_id'] for j in client.get('/api/v1/jobs', headers=h).json()] == ['P5_A']
+    r = client.delete('/api/v1/jobs/P5_A', headers=h)
+    assert r.status_code == 204, r.text
+    assert not (repo / 'jobs' / 'P5_A').exists()
+    assert client.get('/api/v1/jobs', headers=h).json() == []
+
+
+def test_delete_job_operator_forbidden(client, repo):
+    make_job(repo, 'P5_A')
+    r = client.delete('/api/v1/jobs/P5_A', headers=auth(client, 'op'))
+    assert r.status_code == 403
+    assert (repo / 'jobs' / 'P5_A').exists()
+
+
+def test_delete_job_not_found_404(client, repo):
+    r = client.delete('/api/v1/jobs/P5_A', headers=auth(client, 'eng'))
+    assert r.status_code == 404 and r.json()['type'] == '/problems/job-not-found'
+
+
+def test_delete_job_busy_409(client, repo):
+    make_job(repo, 'P5_A')
+    h = auth(client, 'eng')
+    with client.app.state.runs.slot('plan', 'P5_A'):
+        r = client.delete('/api/v1/jobs/P5_A', headers=h)
+    assert r.status_code == 409 and r.json()['type'] == '/problems/run-busy'
+    assert (repo / 'jobs' / 'P5_A').exists()
 
 
 def test_static_front_end_served_with_spa_fallback(settings, tmp_path):

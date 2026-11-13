@@ -130,10 +130,17 @@ def edge_length(edge: TopoDS_Edge) -> float:
     return props.Mass()
 
 
-def face_area(face: TopoDS_Face) -> float:
+def _surface_mass(face: TopoDS_Face) -> float:
     props = GProp_GProps()
     brepgprop.SurfaceProperties(face, props)
-    return props.Mass()
+    return float(props.Mass())
+
+
+def face_area(face: TopoDS_Face) -> float:
+    # A degenerate / null-triangulation face can give a tiny negative surface mass (floating-point
+    # noise); area is a magnitude and edges.schema requires area_m2 >= 0, so clamp the sign
+    # (cf. scene._face_area). Without this a single bad face fails the whole edge catalogue (A21).
+    return abs(_surface_mass(face))
 
 
 def _pnt(p: gp_Pnt) -> List[float]:

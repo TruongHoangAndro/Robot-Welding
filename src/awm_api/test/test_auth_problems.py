@@ -66,14 +66,16 @@ def test_every_role_can_read_the_job_list(client):
         assert client.get('/api/v1/jobs', headers=auth(client, user)).status_code == 200
 
 
-def test_seam_editing_is_engineer_only(client, repo):
+def test_seam_editing_is_engineer_or_admin(client, repo):
     make_job(repo)
     body = {'seams': [{'seam_id': 'S01', 'edges': ['E1'], 'reversed': False, 'joint_type': 'butt',
                        'sequence': 1}]}
-    for user in ('op', 'adm'):
-        r = client.put('/api/v1/jobs/P1_A/seams', json=body, headers=auth(client, user))
-        assert r.status_code == 403, user
-        assert r.headers['content-type'].startswith('application/problem+json')
+    # Operator is forbidden; Admin is not (CP-63: Admin ⊇ Engineer). Admin may hit a later guard (e.g. CAD check)
+    # but never the role gate 403.
+    r = client.put('/api/v1/jobs/P1_A/seams', json=body, headers=auth(client, 'op'))
+    assert r.status_code == 403
+    assert r.headers['content-type'].startswith('application/problem+json')
+    assert client.put('/api/v1/jobs/P1_A/seams', json=body, headers=auth(client, 'adm')).status_code != 403
 
 
 def test_operator_cannot_create_jobs_or_plan(client, repo):
@@ -83,6 +85,16 @@ def test_operator_cannot_create_jobs_or_plan(client, repo):
                     files={'step': ('x.step', b'ISO', 'application/octet-stream')})
     assert r.status_code == 403
     assert client.post('/api/v1/jobs/P1_A/plan', headers=h, json={}).status_code == 403
+
+
+def test_admin_may_create_jobs_and_plan(client, repo):
+    # CP-63: Admin ⊇ Engineer. Admin passes the role gate for create and plan (a later precondition may still apply).
+    make_job(repo, placement=True)
+    h = auth(client, 'adm')
+    r = client.post('/api/v1/jobs', headers=h, data={'part_no': 'X', 'part_rev': 'A'},
+                    files={'step': ('x.step', b'ISO', 'application/octet-stream')})
+    assert r.status_code != 403
+    assert client.post('/api/v1/jobs/P1_A/plan', headers=h, json={}).status_code != 403
 
 
 def test_unknown_api_path_is_problem_404(client):

@@ -57,10 +57,11 @@ def test_roles_prefilled_from_template(client, repo):
     assert got == {'assignments': [{'path': 'Pos:1', 'role': 'rotary_fixture'}], 'prefilled': True}
 
 
-def test_roles_engineer_only_and_validated(client, repo):
+def test_roles_engineer_or_admin_and_validated(client, repo):
     cad_job(repo)
-    for user in ('op', 'adm'):
-        assert client.put('/api/v1/jobs/J1_A/roles', headers=auth(client, user), json=ROLES).status_code == 403
+    # Operator may not edit job roles; Admin may (CP-63: Admin ⊇ Engineer).
+    assert client.put('/api/v1/jobs/J1_A/roles', headers=auth(client, 'op'), json=ROLES).status_code == 403
+    assert client.put('/api/v1/jobs/J1_A/roles', headers=auth(client, 'adm'), json=ROLES).status_code == 200
     h = auth(client, 'eng')
     r = client.put('/api/v1/jobs/J1_A/roles', headers=h,
                    json={'assignments': [{'path': 'Pos:1', 'role': 'rotary_fixture'}]})
@@ -78,7 +79,7 @@ def test_axis_put_runs_pick_with_components(client, repo, tmp_path, monkeypatch)
     assert wait_run(client, h, r.json()['run_id'])['state'] == 'succeeded'
     (argv,) = argv_lines(log)
     assert argv[0] == 'pick-circle' and '--components' in argv and '--reverse' in argv
-    assert argv[argv.index('--up-axis') + 1] == '+Y'
+    assert '--up-axis=+Y' in argv
 
 
 def test_check_needs_roles_and_axis(client, repo):

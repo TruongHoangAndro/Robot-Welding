@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mesh, Hull & Fallback</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+  :root{
+    --bg:#f3f5f8; --panel:#ffffff; --fg:#141a22; --muted:#5a6676;
+    --line:#dde3ea; --accent:#0e8f9e; --accent2:#e08a1e; --danger:#d6453a;
+    --viewport:#0d1620; --ok:#1f9d6b; --r:14px;
+    --f-head:"Space Grotesk",system-ui,sans-serif; --f-body:"Inter",system-ui,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#0b1016; --panel:#121a23; --fg:#e7edf4; --muted:#93a1b2;
+    --line:#223040; --accent:#2fc0d0; --accent2:#f0a63e; --danger:#ff6b5e;
+    --viewport:#070c12; --ok:#39c98c; color-scheme:dark;
+  }}
+  *{box-sizing:border-box} html,body{margin:0}
+  body{background:var(--bg);color:var(--fg);font-family:var(--f-body);line-height:1.5}
+  img{max-width:100%} [hidden]{display:none!important}
+  .wrap{max-width:1040px;margin:0 auto;padding:22px 16px 40px}
+  header h1{font-family:var(--f-head);font-size:clamp(1.3rem,4vw,1.9rem);margin:0 0 4px;letter-spacing:-.01em;text-wrap:balance}
+  header p{margin:0;color:var(--muted);max-width:60ch}
+  .grid{display:grid;grid-template-columns:1.35fr 1fr;gap:16px;margin-top:20px;align-items:start}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .stage{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .stage button{font-family:var(--f-body);font-size:.82rem;font-weight:600;cursor:pointer;
+    border:1px solid var(--line);background:var(--panel);color:var(--muted);
+    padding:7px 11px;border-radius:999px;transition:.15s;display:flex;align-items:center;gap:6px}
+  .stage button .n{font-family:var(--f-head);font-size:.72rem;width:18px;height:18px;border-radius:50%;
+    display:grid;place-items:center;background:var(--line);color:var(--fg)}
+  .stage button[aria-pressed="true"]{border-color:var(--accent);color:var(--fg);background:color-mix(in srgb,var(--accent) 12%,var(--panel))}
+  .stage button[aria-pressed="true"] .n{background:var(--accent);color:#fff}
+  .viewport{position:relative;background:var(--viewport);border-radius:var(--r);overflow:hidden;
+    border:1px solid var(--line);aspect-ratio:4/3;min-height:300px;touch-action:none}
+  .viewport canvas{display:block;width:100%;height:100%}
+  .hint{position:absolute;left:10px;bottom:9px;font-size:.68rem;color:#8ea0b4;
+    background:rgba(7,12,18,.55);padding:3px 8px;border-radius:7px;pointer-events:none}
+  .legend{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:5px;
+    font-size:.68rem;color:#cdd8e4;background:rgba(7,12,18,.5);padding:8px 10px;border-radius:8px;pointer-events:none}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .dot{width:10px;height:10px;border-radius:3px;flex:none}
+  .err-overlay{position:absolute;inset:0;display:none;place-items:center;text-align:center;padding:20px;
+    background:radial-gradient(circle,rgba(214,69,58,.12),rgba(7,12,18,.55))}
+  .err-overlay div{color:#ffd9d4;max-width:30ch}
+  .err-overlay .big{font-family:var(--f-head);font-size:2.4rem;color:var(--danger);line-height:1}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+  .card .tag{font-family:var(--f-head);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+  .card h2{font-family:var(--f-head);font-size:1.12rem;margin:3px 0 8px;letter-spacing:-.01em}
+  .card p{margin:0 0 10px;font-size:.92rem}
+  .card .analogy{font-size:.84rem;color:var(--muted);border-left:3px solid var(--accent2);padding:2px 0 2px 11px;margin-top:4px}
+  .stats{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 2px}
+  .pill{font-size:.74rem;font-weight:600;border:1px solid var(--line);border-radius:8px;padding:5px 9px;
+    display:flex;gap:6px;align-items:baseline;font-variant-numeric:tabular-nums}
+  .pill b{font-family:var(--f-head);color:var(--fg)}
+  .pill.warn{border-color:var(--danger);color:var(--danger)}
+  .pill.good{border-color:var(--ok);color:var(--ok)}
+  .pill span{color:var(--muted);font-weight:500}
+  .slider{margin-top:14px}
+  .slider[hidden]{display:none}
+  .slider label{display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted);margin-bottom:6px}
+  .slider input{width:100%;accent-color:var(--accent)}
+  .ends{display:flex;justify-content:space-between;font-size:.68rem;color:var(--muted);margin-top:2px}
+  footer{margin-top:22px;font-size:.78rem;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}
+  footer code{background:color-mix(in srgb,var(--muted) 16%,transparent);padding:1px 5px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Lưới va chạm: Mesh, Hull & fallback "nodes-only"</h1>
+    <p>Vì sao một mặt CAD hỏng làm <code style="font-size:.9em">export-scene</code> báo <em>"face 1 has no triangulation"</em> — minh hoạ 3D theo 5 bước. Xoay bằng chuột / chạm.</p>
+  </header>
+  <div class="grid">
+    <div>
+      <div class="stage" id="stage" role="group" aria-label="Các bước">
+        <button data-s="1" aria-pressed="true"><span class="n">1</span>Mặt cong CAD</button>
+        <button data-s="2"><span class="n">2</span>Chia tam giác</button>
+        <button data-s="3"><span class="n">3</span>Bọc lồi (hull)</button>
+        <button data-s="4"><span class="n">4</span>Fallback điểm</button>
+        <button data-s="5"><span class="n">5</span>Ca lỗi</button>
+      </div>
+      <div class="viewport" id="vp">
+        <div class="legend" id="legend"></div>
+        <div class="hint">Kéo để xoay • lăn chuột để zoom</div>
+        <div class="err-overlay" id="err">
+          <div><div class="big">0 điểm</div><p style="margin:.5em 0 0">Không có gì để bọc → buộc báo lỗi</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tag" id="c-tag">Bước 1 / 5</div>
+      <h2 id="c-title"></h2>
+      <p id="c-body"></p>
+      <div class="analogy" id="c-analogy"></div>
+      <div class="stats" id="stats"></div>
+      <div class="slider" id="sliderBox" hidden>
+        <label><span>Độ mịn lưới (chord)</span><span id="sv"></span></label>
+        <input type="range" id="res" min="3" max="22" value="7">
+        <div class="ends"><span>thô · chord lớn</span><span>mịn · chord nhỏ</span></div>
+      </div>
+    </div>
+  </div>
+  <footer>
+    Gắn với lỗi thật trong APLSMN601: FCL chỉ kiểm tra va chạm trên <b>tam giác</b>, không trên mặt cong B-Rep. Mặt hỏng → 0 tam giác → fallback cần ít nhất vài điểm; <code>PartHolder:1</code> face 1 cho <b>0 điểm</b> → lỗi. Cách sửa: thay bằng hình trụ sạch trong Fusion.
+  </footer>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+  "use strict";
+  var THREE = window.THREE;
+  var vp = document.getElementById('vp');
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var scene = new THREE.Scene(); scene.background = new THREE.Color(0x0d1620);
+  var camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+  var renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+  vp.appendChild(renderer.domElement);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  var key = new THREE.DirectionalLight(0xffffff, 0.9); key.position.set(5,8,6); scene.add(key);
+  var fill = new THREE.DirectionalLight(0x88aaff, 0.35); fill.position.set(-6,3,-4); scene.add(fill);
+  var W=4.4, D=4.4, H=2.3;
+  function surf(u,v){ return [ (u-0.5)*W, H*Math.sin(Math.PI*u)*Math.sin(Math.PI*v), (v-0.5)*D ]; }
+  function gridGeom(N){
+    var pos=[], idx=[];
+    for(var i=0;i<N;i++) for(var j=0;j<N;j++){ var p=surf(i/(N-1), j/(N-1)); pos.push(p[0],p[1],p[2]); }
+    for(var a=0;a<N-1;a++) for(var b=0;b<N-1;b++){
+      var v00=a*N+b, v10=(a+1)*N+b, v01=a*N+(b+1), v11=(a+1)*N+(b+1);
+      idx.push(v00,v10,v01, v10,v11,v01);
+    }
+    var g=new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+    g.setIndex(idx); g.computeVertexNormals(); return g;
+  }
+  var C_ACCENT=0x2fc0d0, C_PT=0xf0a63e, C_DANGER=0xff6b5e;
+  var smooth = new THREE.Mesh(gridGeom(44),
+    new THREE.MeshStandardMaterial({color:C_ACCENT, roughness:.45, metalness:.1, side:THREE.DoubleSide}));
+  var tessMat = new THREE.MeshStandardMaterial({color:C_ACCENT, roughness:.6, metalness:.05,
+    flatShading:true, side:THREE.DoubleSide, transparent:true, opacity:.9});
+  var tess=null, wire=null, pts=null, tris=0, verts=0;
+  function buildTess(N){
+    [tess,wire,pts].forEach(function(o){ if(o){scene.remove(o); if(o.geometry)o.geometry.dispose();} });
+    var g=gridGeom(N);
+    tess=new THREE.Mesh(g, tessMat); scene.add(tess);
+    wire=new THREE.LineSegments(new THREE.WireframeGeometry(g),
+      new THREE.LineBasicMaterial({color:0xbfe9ef, transparent:true, opacity:.55})); scene.add(wire);
+    var pp=[]; for(var i=0;i<N;i++)for(var j=0;j<N;j++){var p=surf(i/(N-1),j/(N-1));pp.push(p[0],p[1],p[2]);}
+    var pg=new THREE.BufferGeometry(); pg.setAttribute('position',new THREE.Float32BufferAttribute(pp,3));
+    pts=new THREE.Points(pg, new THREE.PointsMaterial({color:C_PT, size:0.16, sizeAttenuation:true}));
+    scene.add(pts);
+    tris = 2*(N-1)*(N-1); verts = N*N;
+  }
+  var NH=9, hull = new THREE.Group();
+  (function(){
+    var top=gridGeom(NH);
+    var m=new THREE.MeshStandardMaterial({color:C_ACCENT, transparent:true, opacity:.18,
+      roughness:.3, metalness:0, side:THREE.DoubleSide, depthWrite:false});
+    hull.add(new THREE.Mesh(top,m));
+    var bg=new THREE.BufferGeometry();
+    bg.setAttribute('position', new THREE.Float32BufferAttribute([
+      -W/2,0,-D/2,  W/2,0,-D/2,  W/2,0,D/2,  -W/2,0,D/2],3));
+    bg.setIndex([0,1,2, 0,2,3]); bg.computeVertexNormals();
+    hull.add(new THREE.Mesh(bg,m.clone()));
+    var eg=new THREE.EdgesGeometry(top, 30);
+    hull.add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({color:C_ACCENT, transparent:true, opacity:.5})));
+  })();
+  var errLine=(function(){
+    var g=new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute([
+      -W/2,0,-D/2,  W/2,0,-D/2,  W/2,0,D/2,  -W/2,0,D/2,  -W/2,0,-D/2],3));
+    return new THREE.Line(g, new THREE.LineDashedMaterial({color:C_DANGER, dashSize:.3, gapSize:.2}));
+  })();
+  errLine.computeLineDistances();
+  scene.add(smooth); scene.add(hull); scene.add(errLine);
+  var theta=0.7, phi=1.02, radius=10;
+  function cam(){ var sp=Math.sin(phi);
+    camera.position.set(radius*sp*Math.sin(theta), radius*Math.cos(phi), radius*sp*Math.cos(theta));
+    camera.lookAt(0,0.55,0); }
+  var drag=false, lx=0, ly=0;
+  renderer.domElement.addEventListener('pointerdown',function(e){drag=true;lx=e.clientX;ly=e.clientY;renderer.domElement.setPointerCapture(e.pointerId);});
+  renderer.domElement.addEventListener('pointermove',function(e){ if(!drag)return;
+    theta-=(e.clientX-lx)*0.008; phi-=(e.clientY-ly)*0.008;
+    phi=Math.max(0.25,Math.min(Math.PI-0.15,phi)); lx=e.clientX; ly=e.clientY; });
+  function end(){drag=false;}
+  renderer.domElement.addEventListener('pointerup',end);
+  renderer.domElement.addEventListener('pointercancel',end);
+  renderer.domElement.addEventListener('wheel',function(e){e.preventDefault();
+    radius=Math.max(5,Math.min(20,radius+ (e.deltaY>0?0.8:-0.8))); },{passive:false});
+  function resize(){ var w=vp.clientWidth, h=vp.clientHeight;
+    renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
+  window.addEventListener('resize',resize);
+  function loop(){ requestAnimationFrame(loop);
+    if(!drag && !reduce) theta+=0.0022; cam(); renderer.render(scene,camera); }
+  var TEXT={
+    1:{tag:'Mặt cong CAD (B-Rep)',
+       body:'CAD lưu bề mặt bằng công thức toán chính xác (mặt cong, trụ, NURBS). Bộ kiểm tra va chạm FCL <b>không đọc được công thức cong</b> — nó chỉ làm việc với mặt phẳng tam giác.',
+       an:'Giống hàm sin liên tục: vi xử lý không xử lý được đường cong, phải chuyển thành bảng tra rời rạc.',
+       stats:['<span>Dạng</span><b>mặt cong</b>','<span>Tam giác</span><b>0</b>'], slider:false, legend:[['accent','Mặt cong CAD']]},
+    2:{tag:'Chia lưới tam giác (tessellation)',
+       body:'BRepMesh phủ mặt bằng các tam giác phẳng sao cho lệch không quá dung sai <b>chord</b>. Kéo thanh trượt: mịn = nhiều tam giác, bám sát; thô = ít, thô hơn. Mặt <b>hỏng</b> → ra 0 tam giác, kể cả khi để thô nhất (coarse retry).',
+       an:'Giống chọn độ phân giải ADC: lấy mẫu dày bám sát, lấy mẫu thưa thô hơn.',
+       stats:[], slider:true, legend:[['accent','Tam giác'],['pt','Điểm (nodes)']]},
+    3:{tag:'Bọc lồi (convex hull)',
+       body:'Cách khác để tạo hình va chạm: bọc một lớp <b>"màng co" lồi</b> quanh toàn bộ các điểm — hình lồi nhỏ nhất chứa hết. Mấu chốt: hull <b>chỉ cần toạ độ các ĐIỂM</b>, không cần tam giác của từng mặt.',
+       an:'Giống quấn dây thun quanh các chân linh kiện cắm trên board.',
+       stats:['<span>Dùng để dựng</span><b>chỉ các điểm</b>'], slider:false,
+       legend:[['pt','Điểm (nodes)'],['hull','Vỏ bọc lồi'],['accent','Tam giác (không bắt buộc)']]},
+    4:{tag:'Fallback "nodes-only"',
+       body:'Một mặt <b>không chia được tam giác</b> (0 tam giác) nhưng vẫn lấy được các điểm góc → chế độ hull <b>vứt phần tam giác, chỉ giữ các điểm</b> → vỏ bọc vẫn dựng được, không cần báo lỗi. Đây là fallback "nodes-only".',
+       an:'Mất các đoạn nối giữa các chân, nhưng vẫn biết toạ độ các chân → vẫn quấn dây thun được.',
+       stats:['<span>Tam giác</span><b>0</b>','<span>Điểm</span><b>còn</b>','<span>Hull</span><b>OK</b>'], slider:false, slGood:true,
+       legend:[['pt','Điểm (nodes)'],['hull','Vỏ bọc vẫn kín']]},
+    5:{tag:'Ca lỗi: 0 điểm — face 1 của PartHolder',
+       body:'Fallback chỉ cứu được khi còn ít nhất vài điểm. Nhưng face 1 cho <b>0 tam giác VÀ 0 điểm</b> → màng co không có gì để bọc → buộc báo lỗi <em>"face 1 has no triangulation: its collision geometry would have a hole"</em>.',
+       an:'Mặt hỏng thật ở mức CAD, không phải do cài đặt. Phần mềm chặn đúng (không cho tạo hình va chạm bị thủng).',
+       stats:['<span>Tam giác</span><b>0</b>','<span>Điểm</span><b>0</b>','<span>Hull</span><b>LỖI</b>'], slider:false, slBad:true,
+       legend:[['danger','Mặt hỏng — không có dữ liệu']]},
+  };
+  var LEGCOL={accent:'var(--accent)', pt:'var(--accent2)', hull:'color-mix(in srgb,var(--accent) 45%,#fff)', danger:'var(--danger)'};
+  function show(o,on){ if(o) o.visible=on; }
+  function setStage(s){
+    Array.prototype.forEach.call(document.querySelectorAll('#stage button'),function(b){
+      b.setAttribute('aria-pressed', b.dataset.s==String(s));});
+    var t=TEXT[s];
+    document.getElementById('c-tag').textContent='Bước '+s+' / 5';
+    document.getElementById('c-title').textContent=t.tag;
+    document.getElementById('c-body').innerHTML=t.body;
+    document.getElementById('c-analogy').innerHTML=t.an;
+    var cls = t.slGood?' good':(t.slBad?' warn':'');
+    document.getElementById('stats').innerHTML = t.stats.map(function(x){return '<div class="pill'+cls+'">'+x+'</div>';}).join('');
+    document.getElementById('legend').innerHTML = t.legend.map(function(p){
+      return '<span><i class="dot" style="background:'+LEGCOL[p[0]]+'"></i>'+p[1]+'</span>';}).join('');
+    document.getElementById('sliderBox').hidden = !t.slider;
+    document.getElementById('err').style.display = (s==5?'grid':'none');
+    if(s==2){ buildTess(parseInt(document.getElementById('res').value,10)); updateSV(); }
+    else if(s==3||s==4){ buildTess(NH); }
+    show(smooth, s==1);
+    show(tess, s==2 || s==3); show(wire, s==2 || s==3);
+    show(pts,  s==2 || s==3 || s==4); show(hull, s==3 || s==4); show(errLine, s==5);
+  }
+  function updateSV(){ document.getElementById('sv').textContent = tris+' tam giác · '+verts+' điểm'; }
+  document.getElementById('res').addEventListener('input',function(){
+    buildTess(parseInt(this.value,10)); updateSV(); });
+  Array.prototype.forEach.call(document.querySelectorAll('#stage button'),function(b){
+    b.addEventListener('click',function(){ setStage(parseInt(b.dataset.s,10)); }); });
+  resize(); setStage(1); loop();
+})();
+</script>
+</body>
+</html>

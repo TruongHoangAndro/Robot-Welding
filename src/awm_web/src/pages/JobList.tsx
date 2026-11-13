@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RunView, ProgressBar } from '../components/Common';
-import { cancelRun, getCellStatus, listJobs, uploadStep, watchRun, type JobSummary, type Run, type Session } from '../lib/api';
+import { cancelRun, deleteJob, getCellStatus, listJobs, uploadStep, watchRun, type JobSummary, type Run, type Session } from '../lib/api';
+import { canEditJobs } from '../lib/access';
 import { defaultUpAxis, upAxisNote } from '../lib/cellinfo';
 import { UP_AXES } from '../lib/topology';
 
@@ -19,7 +20,13 @@ export function JobList({ session }: { session: Session }) {
       .catch((e: Error) => setError(e.message));
   }, [session.token]);
   useEffect(refresh, [refresh]);
-  const canCreate = session.role === 'Engineer' || session.role === 'Admin';
+  const canCreate = canEditJobs(session.role);
+  const remove = (j: JobSummary) => {
+    if (!window.confirm(`Delete job ${j.job_id}? This permanently removes all its data and cannot be undone.`)) return;
+    deleteJob(session.token, j.job_id)
+      .then(refresh)
+      .catch((e: Error) => setError(e.message));
+  };
   return (
     <div className="page">
       <h2>Jobs</h2>
@@ -38,6 +45,7 @@ export function JobList({ session }: { session: Session }) {
                 <td>Rev</td>
                 <td>Status</td>
                 <td>Updated (UTC)</td>
+                {canCreate && <td />}
               </tr>
             </thead>
             <tbody>
@@ -50,6 +58,17 @@ export function JobList({ session }: { session: Session }) {
                   <td>{j.part_rev}</td>
                   <td>{j.status}</td>
                   <td>{j.updated_at}</td>
+                  {canCreate && (
+                    <td>
+                      <button
+                        className="btn small"
+                        disabled={j.status === 'importing'}
+                        onClick={(e) => (e.stopPropagation(), remove(j))}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

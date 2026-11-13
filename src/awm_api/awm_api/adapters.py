@@ -68,7 +68,7 @@ def import_steps(settings: Settings, run_dir: Path, step_file: Path, part_no: st
         Step('import', prefix + ['import', '--job', str(stage), '--step', str(step_file), '--part-no', part_no,
                                  '--part-rev', part_rev] + comp, env=env, weight=3.0),
         Step('export-view', prefix + ['export-view', '--step', str(stage / 'model.step'), '--job', str(stage)]
-             + comp + ['--up-axis', up_axis, '--out', str(stage / 'cache' / 'view')], env=env, weight=1.0),
+             + comp + [f'--up-axis={up_axis}', '--out', str(stage / 'cache' / 'view')], env=env, weight=1.0),
     ] + tree
 
 
@@ -276,7 +276,7 @@ def cell_import_steps(settings: Settings, step_file: Path, out_dir: Path, up_axi
         Step('inspect-assembly', prefix + ['inspect-assembly', '--step', str(step_file), '--out', str(tree)],
              env=env, weight=2.0),
         Step('export-cell-view', prefix + ['export-cell-view', '--step', str(step_file), '--components', str(tree),
-                                           '--out', str(out_dir / 'view'), '--up-axis', up_axis], env=env, weight=2.0),
+                                           '--out', str(out_dir / 'view'), f'--up-axis={up_axis}'], env=env, weight=2.0),
     ]
 
 
@@ -289,7 +289,7 @@ def component_view_steps(settings: Settings, step_file: Path, component: str, up
                          out_dir: Path) -> List[Step]:
     """D20 edge view of one component (for a circle pick on it)."""
     return [Step('export-view', _occ_prefix(settings) + ['export-view', '--step', str(step_file), '--component',
-                                                         component, '--up-axis', up_axis, '--out', str(out_dir)],
+                                                         component, f'--up-axis={up_axis}', '--out', str(out_dir)],
                  env=_occ_env())]
 
 
@@ -298,7 +298,7 @@ def pick_circle_steps(settings: Settings, step_file: Path, edge_id: str, up_axis
     """Circle pick with the same load arguments as the view the edge id came from."""
     argv = _occ_prefix(settings) + ['pick-circle', '--step', str(step_file)]
     argv += ['--components'] if components else ['--component', component] if component else []
-    argv += ['--edge', edge_id, '--up-axis', up_axis, '--out', str(out)] + (['--reverse'] if reverse else [])
+    argv += ['--edge', edge_id, f'--up-axis={up_axis}', '--out', str(out)] + (['--reverse'] if reverse else [])
     return [Step('pick-circle', argv, env=_occ_env())]
 
 

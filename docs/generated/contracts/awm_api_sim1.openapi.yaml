@@ -108,6 +108,14 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/JobDetail'}
         '404': {$ref: '#/components/responses/Problem'}
+    delete:
+      tags: [jobs]
+      summary: Delete a job and all its data (Engineer / Admin; permanent). 409 if a run is active on the job
+      responses:
+        '204': {description: Deleted}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
   /jobs/{job_id}/view/{file}:
     parameters:
       - {$ref: '#/components/parameters/JobId'}

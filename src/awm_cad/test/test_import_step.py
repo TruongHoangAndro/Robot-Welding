@@ -110,7 +110,7 @@ def test_export_view_validates_topology(tmp_path, monkeypatch):
     assert args[args.index('--job') + 1] == str(job)
     assert args[args.index('--out') + 1] == str(job / 'cache' / 'view')
     assert args[args.index('--component') + 1] == 'C'
-    assert args[args.index('--up-axis') + 1] == '+Y'
+    assert '--up-axis=+Y' in args
 
 
 def test_export_view_rejects_stale_input(tmp_path, monkeypatch):

@@ -108,7 +108,7 @@ def test_component_view_and_axis_put(client, repo, tmp_path, monkeypatch):
     view_argv, pick_argv = argv_lines(log)
     assert view_argv[0] == 'export-view' and view_argv[view_argv.index('--component') + 1] == 'Disc:1'
     assert pick_argv[0] == 'pick-circle' and '--reverse' in pick_argv
-    assert pick_argv[pick_argv.index('--edge') + 1] == 'E7' and pick_argv[pick_argv.index('--up-axis') + 1] == '+Y'
+    assert pick_argv[pick_argv.index('--edge') + 1] == 'E7' and '--up-axis=+Y' in pick_argv
     assert client.get(CELL, headers=h).json()['axis']['edge_id'] == 'E7'
 
 

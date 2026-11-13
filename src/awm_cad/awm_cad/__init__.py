@@ -61,7 +61,7 @@ def export_view(job_dir: PathLike, component: Optional[str] = None, up_axis: str
     step = Path(step_file) if step_file is not None else job.model_step
     out = Path(out_dir) if out_dir is not None else job.cache_dir / 'view'
     args = ['export-view', '--step', str(step), '--job', str(job.dir), '--out', str(out),
-            '--up-axis', up_axis]
+            f'--up-axis={up_axis}']
     if component is not None:
         args += ['--component', component]
     proc = occ_bridge.run_geometry_cli(args, occ_python_cmd=occ_python_cmd)
