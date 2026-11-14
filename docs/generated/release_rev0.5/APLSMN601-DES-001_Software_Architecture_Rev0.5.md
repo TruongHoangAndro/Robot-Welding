@@ -30,7 +30,7 @@ This document defines the software architecture of the APLSMN601 Automated Weldi
 
 ### 1.2 Scope
 
-Phase 1 proof of concept: UR5e on the Pismo frame, **laser welding with an IPG LightWELD 1000** (CW 1000 W, wobble head, wire feeder), **1-axis rotary positioner controlled by ROS 2** (decision 2026-10-27), STEP import, cell and fixture geometry from the mechanical CAD (Fusion), manual seam selection in the 3D simulator view, offline path generation, simulation, calibration, PLC-controlled laser, Web UI. Phase 2 items (MIG process, STL fallback A16, multi-pass A46, continuous 7-axis motion with the positioner, pause / resume A86, seam tracking A94) are shown only as extension points. Automatic seam detection is not part of the product scope (decision 2026-10-22).
+Phase 1 proof of concept: UR5e on the Pismo frame, **laser welding with an IPG LightWELD 1000** (CW 1000 W, wobble head, wire feeder), **1-axis rotary positioner controlled by ROS 2** (decision 2026-10-27), STEP import, cell and fixture geometry from the mechanical CAD (Fusion), manual seam selection in the 3D simulator view, offline path generation, simulation, calibration, PLC-controlled laser, Web UI. Synchronised 7-axis motion of robot and positioner (`positioner_mode: sync`) is planned and simulated in Phase 1 (CP-59, decision 2026-11-05); on real hardware it stays behind the gates of Section 6.3. Phase 2 items (MIG process, STL fallback A16, multi-pass A46, pause / resume A86, seam tracking A94) are shown only as extension points. Automatic seam detection is not part of the product scope (decision 2026-10-22).
 
 ### 1.3 References
 
@@ -66,7 +66,7 @@ Phase 1 proof of concept: UR5e on the Pismo frame, **laser welding with an IPG L
 | ACM | Allowed Collision Matrix (MoveIt) |
 | CTWD | Contact-tip-to-work distance (stick-out) |
 | Positioner | 1-axis rotary positioner (7th, external axis) carrying fixture and part — Phase 1, controlled by ROS 2 (ADR-11) |
-| Mode B / Mode C | Positioner motion modes of Phase 1 (6.3): B = rotate, stop, weld; C = robot at rest, positioner turns during emission (seam coaxial with the positioner axis) |
+| Mode B / Mode C | Positioner motion modes of Phase 1 (6.3): B = rotate, stop, weld; C = robot at rest, positioner turns during emission (seam coaxial with the positioner axis). `sync` (default, CP-59) = robot and positioner move together during emission as one 7-joint trajectory; B and C are its special cases, selectable per seam |
 | Marker component | Small named component in a CAD assembly whose origin and axes define a frame (`REF_*`, ADR-16) |
 | Release scope | `simulation` or `production` (ADR-17) |
 | ADS | Beckhoff Automation Device Specification protocol (TCP 48898) |
@@ -144,7 +144,7 @@ The software is organised in four layers. Higher layers depend only on lower lay
 | M1 CAD Import | `awm_cad` | Load STEP AP203/214/242 with OCCT, split solids, normalise units, check and heal, tessellate (glTF display + collision mesh), create part record with file hash, export the 3D view model D20 (glb per face / edge + topology), place part in the virtual cell (D19, source `study` or `fixture_cad`); import the cell / fixture CAD assemblies (D21) into the cell model D14 and the nominal calibration (A18); STL fallback with RANSAC cylinder fit. Runs as a separate process (ADR-15) | A11, A12, A13 (render), A14, A15, A17 (with M4), A18 · A16 (Phase 2) | 1 / 2 |
 | M2 Seam Definition | `awm_seam` | Resolve picked edge IDs to exact B-Rep curves, chain tangent-continuous edges into one seam, seam attributes (joint type, closed / open, side, start point, direction, split, sequence, leg size; tack welds are made by hand, A81), seam list export with face normals; analytical T / L pipe seam generator as test tool | A21, A22, A24, A25 (test) | 1 |
 | M3 Process Parameters | `awm_process` | WPS library maintenance with versioning (released WPS read-only), laser mode per seam (CW / HPP pulse), LightWELD preset and parameter assignment | A31, A32, A33, A34 | 1 |
-| M4 Path Planner | `awm_path` | Seam discretisation and seam frame, head orientation and focus offset (wobble is a head parameter, no robot weave), approach / retract and air moves, IK with tool-yaw and IK-branch graph search (ADR-12), collision check, time parameterisation at WPS travel speed in the part frame, wrist-3 soft limit / cable-wrap check, positioner mode and angles (Modes C / B); multi-pass in Phase 2 | A41–A45, A47–A49 · A46 (Phase 2) | 1 / 2 |
+| M4 Path Planner | `awm_path` | Seam discretisation and seam frame, head orientation and focus offset (wobble is a head parameter, no robot weave), approach / retract and air moves, IK with tool-yaw and IK-branch graph search (ADR-12), collision check, time parameterisation at WPS travel speed in the part frame, wrist-3 soft limit / cable-wrap check, positioner mode and angles (`sync` / C / B, CP-59); multi-pass in Phase 2 | A41–A45, A47–A49 · A46 (Phase 2) | 1 / 2 |
 | M5 Calibration | `awm_calib` | TCP calibration (4–6 orientations, least squares), fixture frame (3-point), part location (fixed-jig check, touch sensing later), error budget, positioner axis, calibration records | A51–A55 | 1 |
 | M6 Program Generator | `awm_program` | Transform path to base frame, build executable program (joint trajectory segments + weld events), store with revision | A61, A62, A63, A64 | 1 |
 | M7 Verification & Release | `awm_verify` | Run program in URSim, playback in the Web simulation view, reach / collision / cycle-time report, dry-run and trial-weld records, release workflow (scopes `simulation` / `production`, ADR-17) and lock | A71, A72, A73, A74 | 1 |
@@ -171,9 +171,9 @@ M4 process-motion algorithm (ADR-12, validated by TST-002):
 
 1. Discretise the seam by arc length (1–3 mm); seam frame X = tangent, Z = bisector of the face normals pointing out of the material (up, towards the head; for a butt joint between tubes n1 = n2 and Z is the surface normal), Y = Z × X; the beam axis is −Z (A41).
 2. Apply work / travel angle and focus offset (wobble is set in the LightWELD preset, not by the robot) and the 360° closing overlap (A42).
-3. Per point, sample tool yaw ψ (e.g. 10° steps) × the 8 UR5e IK branches; drop states in collision, beyond joint limits or near a wrist / shoulder / elbow singularity (A44, A45). With the positioner (A49): seams coaxial with its axis use Mode C (one robot pose, the positioner turns; the head is checked against the rotating part and holders over the full turn); other seams use Mode B (a positioner angle per arc segment, searched together with ψ and the IK branch; robot-only first).
+3. Per point, sample tool yaw ψ (e.g. 10° steps) × the 8 UR5e IK branches; drop states in collision, beyond joint limits or near a wrist / shoulder / elbow singularity (A44, A45). With the positioner (A49, CP-59): the positioner angle θ is a 7th planned joint. In the default mode `sync` the planner chooses (θ, ψ, IK branch) per point so that all 7 joints move continuously while the TCP follows the seam relative to the part; the cost adds θ travel and the deviation of the seam Z from `world` +Z (weld position, soft preference, weights in D16 — Assumption). Mode C (seam coaxial with the axis: one robot pose, the positioner turns; the head is checked against the rotating part and holders over the full turn) and Mode B (a fixed positioner angle per arc segment) remain selectable per seam.
 4. Layered graph (layer = point, node = valid joint state, edges only within one IK branch with |Δq| ≤ 5° per step), edge cost = joint change + clearance and singularity penalties + wrist-3 travel; shortest path gives a continuous chain without configuration flips.
-5. Smooth, time-parameterise at the WPS travel speed in the part frame (A47), check wrist-3: ±270° absolute soft limit and ±180° travel within one seam (A48). Mode C: positioner speed = travel speed / seam radius.
+5. Smooth, time-parameterise at the WPS travel speed in the part frame (A47), check wrist-3: ±270° absolute soft limit and ±180° travel within one seam (A48). Mode C: positioner speed = travel speed / seam radius. `sync`: the travel speed is held relative to the part with a moving θ; it is an Engineer input, and a requested speed above the feasible maximum (joint and positioner speed and acceleration limits, never raised) is refused with that maximum shown — never slowed down silently (heat input; CP-59 follow-up 2026-11-06).
 6. Approach / retract 30–50 mm along the beam axis; OMPL air moves between seams from the chosen joint states and positioner index moves with the robot parked; every segment checked densely (≤ 0.02 rad joint step) (A43).
 
 A seam that fails any step is rejected with the failing points listed (shown red in the simulation view); the engineer then changes direction, start point, head angles or part placement (A15, A17, A22, A42).
@@ -198,9 +198,9 @@ The browser picks only IDs; `awm_api` sends the IDs to M2, which resolves them t
 | # | Screen | Main actions | Roles |
 |---|---|---|---|
 | S1 | Job library | Create job from STEP, open, copy, revision list, status (draft / simulated / released) | Engineer, Admin; Operator read |
-| S2 | Seam picker (3D simulator) | Click edge → auto-chain tangent edges → seam; select / deselect, reverse direction, start point, split, order, joint type; cell, fixture, positioner and robot shown in the same scene | Engineer |
-| S3 | Process | Assign WPS / LightWELD preset per seam, focus offset, travel speed, wobble values (display of preset) | Engineer |
-| S4 | Simulation | Plan request, trajectory playback with scrubber, points coloured by status (OK / collision / out of reach / near singularity / joint limit), robot configuration (shoulder / elbow / wrist −1 / 0 / +1) and tool-yaw override per seam, positioner mode (B / C) and angles, placement study (candidates with coverage, A17), cycle time | Engineer |
+| S2 | Seam picker (3D simulator) | Click edge → auto-chain tangent edges → seam; select / deselect, reverse direction, start point, split, order, joint type; cell, fixture, positioner and robot shown in the same scene | Engineer, Admin (CP-63) |
+| S3 | Process | Assign WPS / LightWELD preset per seam, focus offset, travel speed, wobble values (display of preset) | Engineer, Admin |
+| S4 | Simulation | Plan request, trajectory playback with scrubber, points coloured by status (OK / collision / out of reach / near singularity / joint limit), robot configuration (shoulder / elbow / wrist −1 / 0 / +1) and tool-yaw override per seam, positioner mode (`sync` / B / C) and angles, placement study (candidates with coverage, A17), cycle time | Engineer, Admin |
 | S5 | Release | Review report D15, dry-run and trial-weld records, approve → lock | Engineer request, Admin approve |
 | S6 | Production HMI | Select released job, Start request, Stop, Reset, seam progress, live LightWELD status, alarms EN / VN | Operator |
 | S7 | Calibration | Guided TCP, fixture and positioner-axis calibration, error budget, history | Admin |
@@ -357,7 +357,7 @@ The PLC keeps its own mirror of the cycle state and can force FAULT at any time 
 
 ![Figure 6 – One seam: sequence](APLSMN601-DES-001_figures/fig6_sequence.png)
 
-Design rule: **process events happen only while the robot is at rest at segment boundaries** (approach end, weld end). This removes the need for hard real-time coupling between ROS2 trajectory execution and laser switching in Phase 1, and works for both MIG and laser:
+Design rule: **process events happen only while the robot and the positioner are at rest at segment boundaries** (approach end, weld end). This removes the need for hard real-time coupling between ROS2 trajectory execution and laser switching in Phase 1, and works for both MIG and laser:
 
 1. M9 moves to the approach pose, then the weld start pose (stored trajectory segments).
 2. M8 → M10 → PLC: `WeldStart(seam_id, wps_id, preset)`. PLC checks interlocks (door, E-stop, external interlock loops, workpiece-clamp contact), selects the LightWELD preset, gas pre-flow, wire-feed ready, then trigger → emission.
@@ -366,30 +366,32 @@ Design rule: **process events happen only while the robot is at rest at segment 
 5. At weld end: `WeldEnd` → power ramp-down / dwell (if the preset supports it), emission off, wire-feed stop / retract, post-flow; PLC confirms `EmissionOff`. Closed 360° seams end with the overlap planned in A42.
 6. M9 retracts and moves to the next seam (collision-checked air move).
 
-**Mode C (positioner weld, seam coaxial with the positioner axis).** Steps 1–3 as above with the robot at the weld start pose and the positioner at rest; step 4 is a positioner weld segment executed by M9 (robot at rest, positioner turns at ω = travel speed / seam radius plus the closing overlap); step 5 starts when the positioner is at rest again. **Mode B:** the positioner index move to the planned angle is made with emission off, before step 1. Rule: WeldStart and WeldEnd only while robot **and** positioner are at rest.
+**Mode C (positioner weld, seam coaxial with the positioner axis).** Steps 1–3 as above with the robot at the weld start pose and the positioner at rest; step 4 is a positioner weld segment executed by M9 (robot at rest, positioner turns at ω = travel speed / seam radius plus the closing overlap); step 5 starts when the positioner is at rest again. **Mode B:** the positioner index move to the planned angle is made with emission off, before step 1. **Mode `sync` (CP-59):** steps 1–3 and 5–6 as above; step 4 is one 7-joint weld segment in which robot and positioner move together. Rule for every mode: WeldStart and WeldEnd only while robot **and** positioner are at rest; only the motion between them may be synchronised.
 
-Speed-scaling rule: `scaled_joint_trajectory_controller` slows the robot when the UR speed slider or safety scaling is below 100 %, which changes the travel speed and the heat input. M9 monitors the speed-scaling value; weld segments start only at 100 % and any change during a weld segment → `WeldEnd` + FAULT. Air moves may run with override. The same rule applies to a Mode C positioner weld segment: it starts only at 100 % (no override on weld segments). In Phase 1 the robot and the positioner never move together during emission, so no common scaling is needed; continuous 7-axis motion (Phase 2) must apply one scaling to both or stop (ADR-11).
+Speed-scaling rule: `scaled_joint_trajectory_controller` slows the robot when the UR speed slider or safety scaling is below 100 %, which changes the travel speed and the heat input. M9 monitors the speed-scaling value; weld segments start only at 100 % and any change during a weld segment → `WeldEnd` + FAULT. Air moves may run with override. The same rule applies to a Mode C positioner weld segment: it starts only at 100 % (no override on weld segments). In Modes B and C the robot and the positioner never move together during emission, so no common scaling is needed. In `sync` mode (CP-59) one speed-scaling value must act on all 7 joints through one trajectory, or the weld segment stops (`WeldEnd` + FAULT); how `scaled_joint_trajectory_controller` behaves with a 7th joint is not verified yet (OI-31). Until that rule and the timing spike of Section 6.3 pass, a `sync` program is valid in simulation only (scope `simulation`, ADR-17).
 
 LightWELD faults, wire-feeder faults, gas faults, positioner drive faults (hard-wired ready / fault) and interlock openings are handled by the PLC (emission off) and raised to M8 as FAULT (A84). Exact LightWELD status signals depend on the IPG automation interface (OI-2).
 
 Phase 2 option: if a flying start or a laser power ramp along the path is needed, move the event timing into the UR controller (URScript I/O at waypoints) — see ADR-01.
 
-### 6.3 Positioner synchronisation (Phase 1 Modes B / C, Phase 2 continuous motion, ADR-11)
+### 6.3 Positioner synchronisation (Phase 1: `sync` in simulation, Modes B / C; ADR-11, CP-59)
 
 **Fact.** The UR5e (PolyScope 5) has no external-axis support: unlike KUKA or Fanuc controllers it cannot interpolate a 7th axis. `ur_robot_driver` streams joint set-points at 500 Hz through the External Control URCap. `scaled_joint_trajectory_controller` slows trajectory progress with one speed-scaling value. `passthrough_trajectory_controller` hands the whole trajectory to the UR controller and therefore cannot include a 7th joint. Synchronisation must be done in ROS2.
 
 | Option | Method | Main error source | Assessment |
 |---|---|---|---|
-| A1 | One `controller_manager`, two hardware components (UR + positioner servo), one joint trajectory controller for 7 joints at 500 Hz, PREEMPT_RT kernel | Cycle jitter + UR servo look-ahead delay | Standard ros2_control pattern. **Interpretation:** if the positioner joint is in the same scaled controller, the speed-scaling value also slows the positioner — to be verified in the spike |
+| A1 | One `controller_manager`, two hardware components (UR + positioner servo), one joint trajectory controller for 7 joints at 500 Hz, PREEMPT_RT kernel | Cycle jitter + UR servo look-ahead delay | Standard ros2_control pattern. **Interpretation:** if the positioner joint is in the same scaled controller, the speed-scaling value also slows the positioner — to be verified in the spike. **Phase 1 planning and simulation (`sync`, CP-59)** |
 | A2 | Robot follows the measured positioner angle (electronic cam): positioner turns at constant ω (PLC / NC); a custom controller reads θ and interpolates robot set-points as a function of θ | Encoder read latency × ω | Most robust against lag and speed scaling; custom controller needed |
 | B | Rotate – stop – weld (fixed table angle per arc segment) | None (no simultaneous motion) | Simple; joints between segments. **Phase 1 (Mode B)** |
 | C | Coaxial seams (pipe-to-flange): robot static, only the positioner turns | None | Covers most round seams. **Phase 1 (Mode C)** |
 
 **Estimate (Assumption, to be measured).** Position error ≈ travel speed × timing error. At 20 mm/s: 2 ms jitter (RT kernel) gives about 0.04 mm; 10 ms (non-RT) gives about 0.2 mm. A constant lag can be calibrated out; only jitter remains. Against the laser band of 0.1–0.2 mm this is feasible with an RT kernel but must be proven.
 
-**Positioner drive (decision 2026-10-27: ROS 2 controls the positioner).** The drive is a ros2_control hardware component (`awm_positioner`) in the same controller manager as the UR driver. Proposed: closed-loop drive with encoder on EtherCAT (CiA 402, `ethercat_driver_ros2`) on its own IPC port, PREEMPT_RT kernel (OI-14). This serves Modes B / C now and keeps Option A1 open for Phase 2. A drive behind the Beckhoff PLC over ADS was rejected: not deterministic, and it would block A1. Safety stays in hardware: drive STO from the safety chain; drive ready / fault hard-wired to the PLC, which switches emission off on a drive fault.
+**Positioner drive (decision 2026-10-27: ROS 2 controls the positioner).** The drive is a ros2_control hardware component (`awm_positioner`) in the same controller manager as the UR driver. Proposed: closed-loop drive with encoder on EtherCAT (CiA 402, `ethercat_driver_ros2`) on its own IPC port, PREEMPT_RT kernel (OI-14). This serves Modes B / C and Option A1 (`sync`). A drive behind the Beckhoff PLC over ADS was rejected: not deterministic, and it would block A1. Safety stays in hardware: drive STO from the safety chain; drive ready / fault hard-wired to the PLC, which switches emission off on a drive fault.
 
 **Phase 1 decision (2026-10-27).** The mechanical design contains a 1-axis positioner (motor, coupling, shaft, two timing-belt stages, holders on the jig; horizontal axis). It is part of Phase 1 (OI-20 closed). On the golden part 564082, joint J1 (pipe nipple ↔ solid) is coaxial with the axis → Mode C; J2 (solid ↔ elbow) is 76.6 mm off the axis with its axis perpendicular to it → robot alone or Mode B. Accuracy: an angular error δ gives r·δ at the seam; at r = 13.3 mm, 0.1 mm ⇔ 0.43°, so backlash and encoder resolution must be checked (OI-25).
+
+**Decision 2026-11-05 (CP-59).** Synchronised motion (Option A1: one joint trajectory for 7 joints, `positioner_mode: sync`, default) is planned and simulated in Phase 1; it covers seams that Mode B with fixed angles cannot (J2 of the golden part). Gates before real hardware: (1) timing spike — path error ≤ the weld tolerance with one controller manager, one 7-joint trajectory and PREEMPT_RT; (2) common speed-scaling rule (6.2, OI-31); (3) positioner drive and encoder data (OI-14, OI-25). Until these pass, a `sync` program is released with scope `simulation` only (ADR-17).
 
 ## 7. Interface viewpoint
 
@@ -406,6 +408,7 @@ Phase 2 option: if a flying start or a laser power ramp along the path is needed
 | MoveIt2 `compute_ik`, `compute_cartesian_path`, `check_state_validity` | services | move_group → M4 | planning (Workbench graph only) |
 | ur_robot_driver `scaled_joint_trajectory_controller`, `io_and_status_controller`, `speed_scaling_state_broadcaster`, dashboard | actions / services / topics | UR driver → M9, M5 | motion, speed-scaling value, program state, robot mode (topic names to be confirmed on the installed driver version) |
 | `positioner_trajectory_controller/follow_joint_trajectory` | action | `awm_positioner` controller → M9 | positioner segments (joint `positioner_joint`); state in `/joint_states` |
+| `robot_positioner_trajectory_controller/follow_joint_trajectory` | action | 7-joint controller (same controller manager) → M9 | `sync` segments: one trajectory for the 6 UR5e joints + `positioner_joint` (CP-59; mock hardware in Sim-1) |
 
 ### 7.2 Hardware / field interfaces (summary — detail in DES-002)
 
@@ -429,8 +432,8 @@ Ownership rule: the PLC is the only device that switches the LightWELD. The IPC 
 | Role | Allowed |
 |---|---|
 | Operator | Select and run released jobs; load, clamp and tack parts; start / stop / reset; view status and alarms |
-| Engineer | Create and edit jobs, pick and edit seams (only this role, decision 2026-10-27), placement study, run simulation and dry run, request release |
-| Admin | Calibration, cell configuration D16, cell model import (A18), manual jog and teach home on S11 (cell-setup screen, CP-64), user management, approve release |
+| Engineer | Create and edit jobs, pick and edit seams (Engineer or Admin, CP-63; supersedes "Engineer only" of 2026-10-27), placement study, run simulation and dry run, request release |
+| Admin | All Engineer rights (roles are hierarchical: Admin ⊇ Engineer ⊇ Operator, CP-63), plus: calibration, cell configuration D16, cell model import (A18), manual jog and teach home on S11 (cell-setup screen, CP-64), user management, approve release |
 
 Rules:
 
@@ -488,7 +491,7 @@ Network (proposal, to be fixed in DES-002): isolated cell LAN 192.168.10.0/24 �
 | ADR-08 | **Python for engineering modules, C++ for real-time-relevant ROS2 nodes (M9)** | Proposed | Python is fastest for OCCT / geometry work; executor reuses welder_action_server C++ code |
 | ADR-09 | **Web UI for Workbench and Operator HMI**: React + TypeScript + react-three-fiber + urdf-loader front-end (`awm_web`), FastAPI + rclpy backend (`awm_api`) on the IPC; design in Section 4.5, API in 7.4 | Decided 2026-10-22 | Seam picking in 3D by engineers and operators, headless Linux IPC, access from panel PC / tablet / customer. Rejected: Qt + OCCT (desktop only, robot simulation needs RViz separately); TwinCAT HMI (far from job and 3D data). Risk: 3D front-end effort — mitigated by picking IDs only (D20) and reusing urdf-loader |
 | ADR-10 | **ROS 2 distribution: Ubuntu 24.04 + ROS 2 Jazzy from Phase 1**, developed inside the Docker image of the Tac demo; host WSL Ubuntu 22.04 stays unchanged | Changed in Rev 0.3 (2026-10-22) — replaces the Rev 0.2 Humble decision | The demo Docker image already runs Jazzy and TST-002 uses it, so no Humble environment is needed. Humble EOL May 2027 vs Jazzy EOL May 2029 (REP 2000); no Humble → Jazzy migration later (OI-9 closed) |
-| ADR-11 | **1-axis rotary positioner in Phase 1, controlled by ROS 2**: `awm_positioner` ros2_control hardware component in the same controller manager as the UR driver, own joint trajectory controller; Phase 1 motion Modes C (robot at rest, positioner turns during emission, coaxial seams) and B (rotate – stop – weld); continuous 7-axis motion (Options A1 / A2) in Phase 2; safety in hardware (STO, drive fault to the PLC). Analysis in Section 6.3 | Decided 2026-10-27 (replaces the Phase 2 slot of 2026-10-22) | The mechanical design already contains the positioner; 360° seams coaxial with its axis need no robot orbit. PLC-driven positioner rejected: not deterministic and it blocks Option A1. Hardware open (OI-14, OI-25) |
+| ADR-11 | **1-axis rotary positioner in Phase 1, controlled by ROS 2**: `awm_positioner` ros2_control hardware component in the same controller manager as the UR driver, own joint trajectory controller; Phase 1 motion Modes C (robot at rest, positioner turns during emission, coaxial seams) and B (rotate – stop – weld); synchronised 7-axis motion (Option A1, `positioner_mode: sync`, default) planned and simulated in Phase 1 and released with scope `simulation` only until the hardware gates of Section 6.3 pass (CP-59); Option A2 in Phase 2; safety in hardware (STO, drive fault to the PLC). Analysis in Section 6.3 | Decided 2026-10-27 (replaces the Phase 2 slot of 2026-10-22); amended 2026-11-05 (CP-59) | The mechanical design already contains the positioner; 360° seams coaxial with its axis need no robot orbit. PLC-driven positioner rejected: not deterministic and it blocks Option A1. Hardware open (OI-14, OI-25) |
 | ADR-12 | **Process-motion planner: MoveIt2 + custom tool-yaw / IK-branch graph search** (Section 4.3), as tested in TST-002. Tesseract + tesseract_planning (Descartes, TrajOpt, OMPL) is the fallback if TST-002 ends in Pivot / No-Go | Proposed — decide after TST-002 (29 Oct 2026) | pick_ik (Tac demo) returns one IK solution and is not used for the sweep; analytic UR IK gives all 8 branches; Tesseract is widely used in ROS-Industrial welding apps but adds a second planning stack [R9 5.6] |
 | ADR-13 | **Simulated drivers behind the same interfaces**: URSim / UR fake hardware for the robot, `sim` mode of M10 for PLC + LightWELD, `mock_components` positioner joint (Phase 1) | Proposed | Hardware arrives late (LightWELD on loan, automation interface open, OI-2); lets the full runtime chain run in CI and simulation from day one [R9] |
 | ADR-14 | **mm for all project data**: schemas, `awm_interfaces` messages (fields named `*_mm`), UI, reports. One adapter in M0 converts to metres where project code calls third-party ROS packages | Decided 2026-10-22 | Engineers and drawings work in mm. Third-party packages (URDF, TF, MoveIt2, ur_robot_driver) stay in metres per REP 103 and cannot be rescaled safely; risk of unit mistakes is contained by the single adapter and unit tests on it |
@@ -540,7 +543,7 @@ Releases from the charter: R1 Manual Path MVP · R2 First MIG Weld · R3 Smart P
 | A46 | Generate multi-pass offsets | M4 | Phase 2 |
 | A47 | Time-parameterize at travel speed | M4 | R1 (nominal), R2 (verified on weld) |
 | A48 | Check joint soft limits & cable wrap | M4 | R1 |
-| A49 | Coordinate positioner angle | M4 | R1 (Modes C / B) |
+| A49 | Coordinate positioner angle | M4 | R1 (`sync` / C / B) |
 | A51 | Calibrate TCP | M5 | R2 |
 | A52 | Calibrate fixture frame | M5 | R2 |
 | A53 | Locate part | M5 | R2 (fixed jig), R4 (touch sensing) |
@@ -616,6 +619,7 @@ Releases from the charter: R1 Manual Path MVP · R2 First MIG Weld · R3 Smart P
 | OI-28 | ~~Function owners~~ — closed 2026-10-29: all functions owned by the software agent (Claude Code); direction and simulation tests by Truong Hoang; execution on hardware (calibration, dry run, trial weld, inspection) assigned before the hardware stage | — | — |
 | OI-29 | Controller-backed / real-robot jog from S11: enabling device (deadman), reduced speed, Remote mode, hardwired E-stop, REQ-002 hazard analysis. S11 is simulation only (CP-64); this must be designed before S11 may drive any controller (mock, URSim or real) | S11, ADR-13, REQ-002 | Software + safety engineer |
 | OI-30 | Wire D22 into the planner IK seed (`ChainParams.home_joints_rad`) and the runtime "go home" (Sim-2 state machine, 6.1); until then the SRDF nominal home stays in use. Also: default step sizes and positioner soft-limit source (URDF limits) | M4, M8, D22 | Software |
+| OI-31 | `sync` mode on real hardware (CP-59 gates): timing spike (path error ≤ weld tolerance), one speed-scaling value on all 7 joints or stop, behaviour of `scaled_joint_trajectory_controller` with a 7th joint, PLC rule for emission while two axes move, positioner-lag monitoring | 6.2, 6.3, ADR-11, M9 | Software + PLC & safety engineer |
 
 ## Appendix A. Cross-reference to the UR5e Welding Robot Project Tracker [R9]
 
@@ -634,13 +638,13 @@ Review date 2026-10-22. Status: **Adopted** = added to this document and to DES-
 | Step 5 / 5.9 WPS library with versioning | Adopted | A34, M3 |
 | Step 6 / 5.4 Seam frame, torch angles, stick-out, weave patterns | Adopted (weave replaced by LightWELD wobble) | A41, A42 |
 | 5.4 Multi-pass offsets | Slot | A46 |
-| Step 7 / 5.5 Positioner angle, 7-axis coordination, Options A / B | Adopted for Phase 1 (Modes B / C); continuous A1 / A2 = Slot | A49, ADR-11 |
+| Step 7 / 5.5 Positioner angle, 7-axis coordination, Options A / B | Adopted for Phase 1 (A1 `sync` in simulation, Modes B / C); A2 = Slot | A49, ADR-11 |
 | Step 8 / 5.6 IK with redundant tool yaw, graph search, singularities | Adopted | A44, 4.3, ADR-12, TST-002 |
 | 5.6 Wrist-3 soft limit / cable wrap | Adopted | A48 |
 | 5.6 Collision model (torch neck + cable, ACM wire tip) | Adopted | A45, D14 |
 | Step 9 / 5.6 Freespace planning, approach / retract 30–50 mm | Adopted | A43 |
 | 5.5 Time parameterisation in the part frame | Adopted | A47 |
-| 5.5 Speed-scaling trap | Adopted (robot only in Phase 1) | 6.2, M9, A83 |
+| 5.5 Speed-scaling trap | Adopted; 7-joint rule for `sync` open (OI-31) | 6.2, M9, A83 |
 | Step 10 Simulation with failing points in red; dry run checklist | Adopted | A71, A72, UI-W |
 | Step 11 / 5.7 Weld sequence, watchdog | Adopted in PLC / M10, adapted to laser (pre-flow, emission-on check, ramp-down, wire stop, post-flow) | A63, 6.2, ADR-04 |
 | 5.7 ROS2 `weld_controller` as single welder owner via UR I/O | Not adopted — PLC owns welder / laser (ADR-04) | ADR-04 |

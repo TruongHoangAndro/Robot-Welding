@@ -865,3 +865,145 @@ FCL works on meshes only (§5.4).
 **Impact:** §5.4 collision table (fixture / holders: "convex hulls per child, or mesh"), D19 / scene manifest schema
 (an object may carry several meshes), `cad_map.yaml` `collision:` values, `awm_geometry.scene` and `job_placement`,
 `awm_web` S10 / S2 role table, tests (hull per child, subtree hull, job-only grouping).
+
+# Review of 2026-11-14 (PM / QA / Dev review against the restated output goal)
+
+Record: `docs/generated/doc_review_2026-11-14.md`. Output goal restated by Truong on 2026-11-14: one software product
+that uses the robot, the welding source and the rotary positioner to weld any part (frames, pipe sections, …) designed
+in 3D with SolidWorks or Fusion.
+
+**Applied on 2026-11-14 (decided items, no design change):** CP-59 and CP-63 written into DES-001 Rev 0.5
+(`docs/generated/release_rev0.5/`): §1.2, §1.4, §4.2 M4, §4.3 steps 3 and 5, §4.5 S2–S4, §6.2, §6.3, §7.1, §7.3, ADR-11,
+§11 A49, Appendix A; new OI-31 (`sync` on real hardware: timing spike, one speed scaling on 7 joints, PLC rule, lag
+monitoring). CP-66…CP-71 below are **proposed, not decided**.
+
+## CP-66 Product goal statement and operating envelope of "any part" (proposed 2026-11-14 — for Truong's decision)
+
+**Finding:** the goal "weld any part designed in SolidWorks / Fusion" is not written as a requirement anywhere
+(REQ-001 is only planned; DES-001 §12 says "≥ [TBD] jobs"), and no document states the limits inside which "any part"
+holds.
+**Proposal:** add to DES-001 §1.2 / §2.1 one goal statement and an operating envelope kept as cell data (D16, Admin):
+1. *Input:* one STEP AP214 / AP242 assembly per part number (part solids + fixture + positioner flange, CP-60), exported
+   from SolidWorks or Fusion; solids closed; joint gap ≤ the joint-detection tolerance (CP-52, value in D16).
+2. *Part envelope:* maximum swing radius about the positioner axis, maximum length along it and maximum mass of
+   part + fixture — values from the mechanical design (OI-14, OI-27); checked at job import (extends cross-check 4).
+   Fact: the UR5e has 850 mm reach and 5 kg payload; the head (1.3 kg) and mount are on the flange.
+3. *Seam classes in Phase 1:* butt, fillet, lap on edges between two part solids, open or closed; pipe-to-pipe saddle
+   seams included; single pass; tacks by hand (CP-19).
+4. *Outcome per seam:* a path that is 100 % reachable and collision-free, or a rejection with the failing points and
+   the colliding objects (rule 4). "Any part" means: no code change per part — not that every seam is weldable.
+5. *Not in the goal:* fixture design, distortion control, multi-pass (A46), automatic seam detection (ADR-03).
+**DES-001 impact:** §1.2, §2.1 (AD2), §12 Multi-product row; D16; job cross-check. **Needs:** envelope numbers from
+mechanical; Truong's confirmation of items 3–5.
+
+## CP-67 Validation part set as the measure of "any part" (proposed 2026-11-14 — for Truong's decision)
+
+**Finding:** every planning result so far is on one part (564082: two closed butt joints, Ø 26.67 mm). Design rule 2
+(no part-specific code) is not proven by a second part; no fillet, lap or saddle seam and no SolidWorks export has been
+through the chain; E-08 (demo part 564082 or 152056) is open.
+**Proposal:** a small part set, each with a job STEP, picked seams and an expected verdict, run by one script with no
+source change between parts:
+| Part | Purpose | Source |
+|---|---|---|
+| 564082 (golden) | closed butt joints on tube, coaxial and off-axis | cell CAD (have) |
+| Pipe-to-pipe T (saddle) | 3D seam curve, fillet, changing work angle | A25 analytical generator + one CAD model |
+| Small tube frame (4 members) | many seams, access between members, sequence and air moves, fillet / T joints | to be supplied (Tac Huynh / mechanical) |
+| Plate T / lap joint | open straight seams, lap and fillet | generated test part |
+| One of the above exported from SolidWorks | STEP dialect, assembly names, up axis, multi-body weldment | to be supplied |
+Acceptance for "multi-product" in simulation: N parts of the set (proposal N = 4, incl. the SolidWorks export) through
+import → pick → plan → program → simulation report with zero source changes; every seam ends as PASS or as a rejection
+with a cause.
+**Impact:** PLAN.md (new tasks), DES-001 §12, test data (the STEP files stay out of git, as today).
+
+## CP-68 Sim-1 / Sim-2 exits and dates (proposed 2026-11-14 — for Truong's decision)
+
+**Finding:** the Sim-1 exit in PLAN.md (J1 Mode C, J2 robot-only, 2026-11-20) predates CP-58 / CP-59. Goal 1 results
+are collision off and cannot be released; Sim-1 ends at a simulation release (CP-17), so it cannot close before Goal 2.
+Goal 2 has no plan; on 564082 it is blocked by cross-check 4 (OI-23). Sim-2 (2026-12-04) has none of its prerequisites
+(runtime packages, URSim in the image, `awm_interfaces` v1, DES-002 weld-event table).
+**Options:**
+- A (recommended): split Sim-1 — **Sim-1a "kinematic"** = Goal 1 as built (browser import → pick → `sync` plan →
+  7-joint program → playback and mock replay, `collision_checked: false`, no release), closed now with a short report;
+  **Sim-1b "collision"** = Goal 2 on the golden part + simulation release, new date after the Goal 2 design (CP-70);
+  **Sim-2** re-dated from Sim-1b with its own acceptance list. Phase 1 date and deliverable go to Tac Huynh / Linh Tran
+  (E-04).
+- B: keep 2026-11-20 and 2026-12-04, reduce scope (J1 Mode C only with collision; no J2; Sim-2 = replay of J1 only).
+- C: keep scope and dates (not credible per the PM and Dev reviews).
+**Also needed:** a due date for OI-23 (cell CAD: bearings / belts separated) before Sim-1b; PLAN.md rebased on
+Goal 1 / Goal 2; measurable exit lists moved from the R06 draft into the baseline.
+
+## CP-69 TST-002 outcome and ADR-12 status (proposed 2026-11-14 — for Truong and Linh Tran)
+
+**Finding:** TST-002 Rev 0.3 DRAFT §11 is empty and no Go / Pivot / No-Go was recorded (E-01). Records in
+`docs/generated/spike/`: C1 PASS; J2 robot-only C2 FAIL (arc 1 0 %, arc 2 38.3 %), C3 FAIL, C5 557 s (not a valid
+measurement per the S.5 review), C8 0 %; no 2- or 3-angle Mode B set covers J2 (best 56.5 %); C4 and C6 not run; all with
+the box head model (H-BOX, Ø 20 nozzle, work / travel angle 0). CP-58 / CP-59 then changed the approach.
+**Proposal:** record the outcome as **Pivot** (TST-002 §6: C2 fails), with the pivot path actually taken: positioner
+as a planned 7th joint (`sync`, CP-59) + real head CAD and taught TCP (CP-61) instead of the box model; the method of
+ADR-12 (MoveIt2 + ψ × IK-branch graph) is kept and extended by θ. ADR-12 status → "Kept after Pivot; collision
+feasibility on J2 to be shown in Goal 2 (CP-70); Tesseract fallback not started". C4, C6 and a valid C5 move into the
+Goal 2 acceptance. Fill §11 of the TST-002 Rev 0.3 draft accordingly (the `docs/reference/` copy is added only from the
+Drive master).
+
+## CP-70 Goal 2 design questions: collision with a moving positioner (proposed 2026-11-14 — needs a spec before any code)
+
+**Finding:** DES-001 §4.3 describes collision checking for a static part (ψ × 8 branches per point). With `sync` the
+part, holders and fixture move with θ at every point, and:
+1. *State space and time:* θ lattice (5°) × ψ (36) × 8 branches per point; the `move_group` service backend measured
+   557 s per seam and 77 min for 12 θ classes. No time budget is defined (TST-002 C5 was ≤ 30 s). Options: batched
+   in-process FCL backend (PLAN T1.8), kinematic pre-filter then collision only on surviving states, GPU pre-filter
+   (CP-57, undecided).
+2. *ψ resolution:* ψ step 10° > \|Δq\| ≤ 5° per step, so ψ cannot change along an arc (CP-53 record). Options: ψ step
+   ≤ Δq_max near the solution, or continuous ψ refinement; the filler-wire ψ window (B-05) depends on E-05.
+3. *Contact and clearance:* confirm the F9 rule as built (no ACM, stand-off, contact by `face_id`; CP-56) against
+   DES-001 §5.4 (ACM for `nozzle_tip`); clearances 5 / 10 mm measured on unpadded geometry (R06) — state it in §5.4;
+   a head with nozzle length 0 has no contact link.
+4. *Between points:* dense check of the 7-joint motion with the rotating set re-posed (rule ≤ 0.02 rad or the
+   displacement bound of R06); check that the joint-space spline stays on the seam and holds the TCP speed between
+   knots; closing overlap and closure of 360° seams in `sync`; air and index moves collision-checked and stored once.
+5. *Data:* `point_status` values `collision`, `clearance`, `nozzle`; CP-65 hull granularity (proposed).
+6. *Levers when a seam still fails* (TST-002 §7): work / travel angle sweep, mount tilt, part orientation on the
+   fixture, seam start; placement study A17.
+**Proposal:** one design spec (`docs/superpowers/specs/`) answering 1–5 with a measurable acceptance on the golden part
+(C2 100 %, C4 ≥ 10 mm, C6 placement perturbation, planning time target), reviewed by Truong before a plan is written.
+
+## CP-71 One baseline document (proposed 2026-11-14 — for Truong's decision)
+
+**Finding:** DES-001 Rev 0.5 (working baseline) holds CP-9…CP-23, CP-64 and now CP-59 / CP-63; the Rev 0.6 draft holds
+the board decisions B-01…B-25 (stages, ADR-18…23, state space, unpadded clearance, D09 as exact trajectory, no emission
+retry) but none of CP-52…CP-65, and was never issued; PLAN.md is built on the draft. OI-29 / OI-30 mean jog safety /
+D22 wiring in Rev 0.5 and TST-002 decision / error budget in the draft and in this file (CP-24…35 section).
+**Options:** A (recommended) issue one DES-001 Rev 0.6 = draft + CP-52…CP-65 + the accepted parts of CP-66…CP-70, with
+the Rev 0.5 OI-29…OI-31 renumbered after OI-44, and DES-003 Rev 0.6 with the impacts listed above (plus D22 and the
+CP-60 data items); B keep Rev 0.5 as the baseline and drop the draft, moving only the accepted board decisions into it.
+**Also for decision with it:** LaserReady timeout — "one automatic retry" (Rev 0.5 §6.2) or "no retry" (B-17);
+B-01…B-25 accepted or vetoed; `CLAUDE.md` refresh (Rev numbers, launch names, base branch, test-skip rule).
+
+## CP-72 Head access map: tool ↔ part accessibility computed in the part frame before the robot search (direction decided by Truong, 2026-11-14 — details for approval)
+
+**Finding:** in the collision-on spike (S.5, S.5b; H-BOX, work / travel angle 0) the dominant blockers on J2 are head ↔
+part and head ↔ rotating holders (`part<->nozzle_tip`, `part2_1<->head_body`, `jig_1<->head_body`); s ≈ 2–40 mm has no
+valid state at any of 12 positioner angle classes (about 77 min of `move_group` calls). Part and holders turn with the
+positioner, so the head ↔ rotating-set check depends only on the head pose relative to the part — not on θ, the IK
+branch or the robot. The sweep of DES-001 §4.3 step 3 repeats that check for every θ and branch and cannot report that
+the cause is outside the robot.
+**Decision (Truong 2026-11-14):** build "level 1" first: per seam point, the set of head orientations (tool yaw ψ, work
+angle, travel angle) for which the head set is clear of the part and the rotating fixture (collision, weld clearance on
+unpadded geometry, nozzle contact rule F9), computed in `positioner_flange` with an in-process mesh checker; output
+`access_map.json` (derived job file) + report with coverage, blocked s ranges and blocking objects / faces, and the
+tilt needed. It is a pre-computation in front of the ADR-12 ladder graph (ADR-12 kept); a pose rejected here is
+rejected for every θ and IK branch. Design: `docs/superpowers/specs/2026-11-14-head-access-map-design.md`; branch
+`g2-1-head-access-map`.
+**Planned follow-up levels (not decided, own specs):** 2 = robot + positioner states only for accessible head poses,
+fast distance-field checker; 3 = ladder search with a travel-speed (bottleneck) objective, finer ψ, continuous
+refinement of the redundant variables with joints from analytic IK; 4 = independent certification of the final
+trajectory (exact meshes, displacement-bounded sampling, TCP deviation between knots against the B-Rep seam,
+clearance ≥ error budget, stored air moves). Alternatives reviewed 2026-11-14: Tesseract (Descartes + TrajOpt),
+cuRobo (CP-57), constrained RRT*, null-space velocity control, learned seeds — choice between own levels 2–3 and
+Tesseract deferred until the level 1 result on J2.
+**Open for approval (spec §11):** allowed work / travel angle band (welding engineer); nozzle geometry of the real
+head (head.yaml `nozzle_len_mm` 0 → F9 refused today, OI-15); collision library in `awm_dev`; whether "not accessible"
+blocks Plan; running on a job whose cross-check 4 is red (proposed: allowed, override id recorded).
+**DES-001 impact (after approval):** §4.3 new step before step 3; §5.1 / §5.2 new derived file `access_map.json`
+(schema `v2/access_map`); §5.4 clearance stated on unpadded geometry; A44 / A45 descriptions; S4 later. Replaces
+items 1–3 of the proposed CP-70 for the head ↔ rotating-set part.
